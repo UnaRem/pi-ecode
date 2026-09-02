@@ -430,7 +430,6 @@ export class AgentService {
     this.unsubscribe?.();
     this.contextEstimate = this.nativeCompaction.storedEstimatedTokensAfter(session);
     this.streamContinuity.install(session);
-    this.nativeCompaction.installPayloadInjection(session);
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";

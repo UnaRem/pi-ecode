@@ -1,19 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type {
-  AgentSession,
-  ExtensionAPI,
-  ExtensionContext,
-  SessionBeforeCompactEvent,
-} from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { NativeCompaction } from "./native-compaction.js";
-
-type CompactHandler = (
-  event: SessionBeforeCompactEvent,
-  context: ExtensionContext,
-) => Promise<{
-  compaction?: { summary: string; firstKeptEntryId: string; details?: unknown };
-} | undefined>;
 
 const model = {
   api: "openai-responses",
@@ -21,142 +9,146 @@ const model = {
   id: "model-1",
   baseUrl: "https://provider.example/v1",
   headers: { "x-provider": "ecode" },
+  input: ["text", "image"],
 } as unknown as Model<Api>;
 
-function compactEvent(): SessionBeforeCompactEvent {
+interface Handlers {
+  compact?: (event: any, context: ExtensionContext) => Promise<any>;
+  provider?: (event: any, context: ExtensionContext) => Promise<unknown>;
+}
+
+function register(nativeCompaction: NativeCompaction): Handlers {
+  const handlers: Handlers = {};
+  const pi = {
+    on: (name: string, callback: (event: any, context: ExtensionContext) => Promise<unknown>) => {
+      if (name === "session_before_compact") handlers.compact = callback;
+      if (name === "before_provider_request") handlers.provider = callback;
+    },
+  } as unknown as ExtensionAPI;
+  const extension = nativeCompaction.asExtension();
+  if (typeof extension === "function") void extension(pi);
+  else void extension.factory(pi);
+  return handlers;
+}
+
+function fakeSession(branch: SessionEntry[] = []): AgentSession {
+  return {
+    sessionId: "session-1",
+    modelRuntime: {
+      getAuth: vi.fn().mockResolvedValue({
+        auth: { apiKey: "secret", baseUrl: "https://gateway.example/v1", headers: { "x-auth": "yes" } },
+      }),
+    },
+    sessionManager: { getBranch: () => branch },
+  } as unknown as AgentSession;
+}
+
+function context(branch: SessionEntry[] = [], activeModel: Model<Api> = model): ExtensionContext {
+  return {
+    model: activeModel,
+    getSystemPrompt: () => "project instructions",
+    abort: vi.fn(),
+    sessionManager: {
+      getBranch: () => branch,
+      buildSessionContext: () => ({
+        messages: [{ role: "user", content: [{ type: "text", text: "old question" }], timestamp: 1 }],
+      }),
+    },
+  } as unknown as ExtensionContext;
+}
+
+function compactEvent(branch: SessionEntry[] = [], signal = new AbortController().signal): any {
   return {
     type: "session_before_compact",
     preparation: {
       firstKeptEntryId: "kept-1",
       messagesToSummarize: [{ role: "user", content: [{ type: "text", text: "old question" }], timestamp: 1 }],
       turnPrefixMessages: [],
-      isSplitTurn: false,
       tokensBefore: 50_000,
-      fileOps: { read: new Set(), written: new Set(), edited: new Set() },
-      settings: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 },
+      settings: { keepRecentTokens: 20_000 },
     },
-    branchEntries: [],
+    branchEntries: branch,
     reason: "manual",
     willRetry: false,
-    signal: new AbortController().signal,
-  } as unknown as SessionBeforeCompactEvent;
+    signal,
+  };
 }
 
-function registerHandler(nativeCompaction: NativeCompaction): CompactHandler {
-  let handler: CompactHandler | undefined;
-  const pi = {
-    on: (event: string, callback: CompactHandler) => {
-      if (event === "session_before_compact") handler = callback;
-    },
-  } as unknown as ExtensionAPI;
-  const extension = nativeCompaction.asExtension();
-  if (typeof extension === "function") void extension(pi);
-  else void extension.factory(pi);
-  if (!handler) throw new Error("Compaction handler was not registered.");
-  return handler;
-}
-
-function fakeSession(entries: unknown[] = []): AgentSession {
-  return {
-    modelRuntime: {
-      getAuth: vi.fn().mockResolvedValue({
-        auth: { apiKey: "secret", baseUrl: "https://gateway.example/v1", headers: { "x-auth": "yes" } },
-      }),
-    },
-    sessionManager: { getBranch: () => entries },
-    agent: { streamFunction: vi.fn(), onPayload: undefined },
-  } as unknown as AgentSession;
-}
-
-function context(activeModel: Model<Api> = model): ExtensionContext {
-  return { model: activeModel, getSystemPrompt: () => "project instructions" } as unknown as ExtensionContext;
+function sse(opaque = "opaque"): Response {
+  return new Response(
+    `event: response.completed\ndata: ${JSON.stringify({
+      type: "response.completed",
+      response: {
+        id: "resp-1",
+        status: "completed",
+        output: [{ type: "compaction", id: "cmp-1", encrypted_content: opaque }],
+        usage: { input_tokens: 1000, output_tokens: 10, total_tokens: 1010 },
+      },
+    })}\n\n`,
+    { status: 200, headers: { "content-type": "text/event-stream" } },
+  );
 }
 
 describe("NativeCompaction", () => {
-  it("uses the active Responses base URL and persists the opaque compaction item", async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
-      output: [{ type: "compaction", id: "cmp_1", encrypted_content: "opaque" }],
-      usage: { input_tokens: 1200, output_tokens: 80, total_tokens: 1280 },
-    }), { status: 200 }));
+  it("uses remote_compaction_v2 on the normal Responses endpoint", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(sse());
     const session = fakeSession();
-    const nativeCompaction = new NativeCompaction(() => session, request);
+    const handlers = register(new NativeCompaction(() => session, fetcher));
 
-    const result = await registerHandler(nativeCompaction)(compactEvent(), context());
+    const result = await handlers.compact?.(compactEvent(), context());
 
-    expect(request).toHaveBeenCalledWith(
-      "https://gateway.example/v1/responses/compact",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({ authorization: "Bearer secret", "x-auth": "yes" }),
-      }),
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://gateway.example/v1/responses",
+      expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer secret", accept: "text/event-stream" }) }),
     );
-    const requestBody = JSON.parse(String((request.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, unknown>;
-    expect(requestBody.instructions).toBe("project instructions");
+    const body = JSON.parse(String((fetcher.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, any>;
+    expect(body).toMatchObject({ model: "model-1", instructions: "project instructions", stream: true, store: false });
+    expect(body.input.at(-1)).toEqual({ type: "compaction_trigger" });
     expect(result?.compaction).toMatchObject({
-      summary: "[pi-ecode:openai-native-compaction]",
-      firstKeptEntryId: "kept-1",
-      details: {
-        kind: "pi-ecode.openai-native-compaction.v1",
-        output: [{ type: "compaction", encrypted_content: "opaque" }],
-      },
+      summary: "[pi-ecode:remote-compaction-v2]",
+      details: { kind: "pi-ecode.remote-compaction-v2", output: [{ type: "compaction", encrypted_content: "opaque" }] },
     });
   });
 
-  it("builds the Codex backend endpoint and account header for OAuth models", async () => {
-    const accountPayload = Buffer.from(JSON.stringify({
-      "https://api.openai.com/auth": { chatgpt_account_id: "account-1" },
-    })).toString("base64url");
-    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+  it("replaces only the pi summary sentinel during provider replay", async () => {
+    const details = {
+      kind: "pi-ecode.remote-compaction-v2",
+      provider: "third-party",
+      model: "model-1",
+      baseUrl: "https://gateway.example/v1",
       output: [{ type: "compaction", encrypted_content: "opaque" }],
-      usage: {},
-    }), { status: 200 }));
-    const session = fakeSession();
-    vi.mocked(session.modelRuntime.getAuth).mockResolvedValue({
-      auth: { apiKey: `header.${accountPayload}.signature`, baseUrl: "https://chatgpt.com/backend-api" },
-    });
-    const codexModel = { ...model, api: "openai-codex-responses", provider: "openai-codex" } as Model<Api>;
-
-    await registerHandler(new NativeCompaction(() => session, request))(compactEvent(), context(codexModel));
-
-    expect(request).toHaveBeenCalledWith(
-      "https://chatgpt.com/backend-api/codex/responses/compact",
-      expect.objectContaining({ headers: expect.objectContaining({ "chatgpt-account-id": "account-1" }) }),
-    );
-  });
-
-  it("falls back to pi summarization when compact is explicitly unsupported", async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response("not found", { status: 404 }));
-    const nativeCompaction = new NativeCompaction(() => fakeSession(), request);
-    await expect(registerHandler(nativeCompaction)(compactEvent(), context())).resolves.toBeUndefined();
-  });
-
-  it("injects a persisted native output in place of the pi summary marker", async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
-      output: [{ type: "compaction", encrypted_content: "opaque" }],
-      usage: {},
-    }), { status: 200 }));
-    const initialSession = fakeSession();
-    const nativeCompaction = new NativeCompaction(() => initialSession, request);
-    const result = await registerHandler(nativeCompaction)(compactEvent(), context());
-    const details = result?.compaction?.details;
-    const entry = { type: "compaction", summary: "marker", details };
-    const session = fakeSession([entry]);
-
-    nativeCompaction.installPayloadInjection(session);
-    const agent = (session as unknown as { agent: { onPayload: NonNullable<unknown> } }).agent;
-    const transform = agent.onPayload as (payload: unknown, activeModel: Model<Api>) => Promise<unknown>;
-    const transformed = await transform({
+      estimatedTokensAfter: 20_010,
+    };
+    const entry = { type: "compaction", id: "compact-1", parentId: "parent", timestamp: new Date().toISOString(), summary: "marker", firstKeptEntryId: "kept-1", tokensBefore: 10, details } as SessionEntry;
+    const branch = [entry];
+    const session = fakeSession(branch);
+    const handlers = register(new NativeCompaction(() => session));
+    const payload = {
+      model: "model-1",
       input: [
         { role: "developer", content: "system" },
-        { role: "user", content: [{ type: "input_text", text: "Summary [pi-ecode:openai-native-compaction]" }] },
-        { role: "user", content: "recent" },
+        { role: "user", content: [{ type: "input_text", text: "<summary>[pi-ecode:remote-compaction-v2]</summary>" }] },
+        { role: "user", content: [{ type: "input_text", text: "recent" }] },
       ],
-    }, model) as { input: unknown[] };
+      reasoning: { effort: "high" },
+    };
 
-    expect(transformed.input).toEqual([
+    const rewritten = await handlers.provider?.({ type: "before_provider_request", payload }, context(branch)) as typeof payload;
+
+    expect(rewritten.input).toEqual([
       { role: "developer", content: "system" },
       { type: "compaction", encrypted_content: "opaque" },
-      { role: "user", content: "recent" },
+      { role: "user", content: [{ type: "input_text", text: "recent" }] },
     ]);
+  });
+
+  it("returns cancel when the remote request is aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(new DOMException("aborted", "AbortError"));
+    const session = fakeSession();
+    const handlers = register(new NativeCompaction(() => session, fetcher));
+
+    await expect(handlers.compact?.(compactEvent([], controller.signal), context())).resolves.toEqual({ cancel: true });
   });
 });
