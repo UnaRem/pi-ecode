@@ -1,38 +1,48 @@
-import { Check, ChevronDown, Circle, LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { Check, Circle, LoaderCircle } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { TaskPlan } from "@shared/contracts";
 
 export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
-  const [expanded, setExpanded] = useState(false);
-  const completed = plan.items.filter((item) => item.status === "completed").length;
-  const current = plan.items.find((item) => item.status === "in_progress");
+  const currentItemRef = useRef<HTMLLIElement>(null);
+  const completedCount = plan.items.filter((item) => item.status === "completed").length;
+  const activeIndex = plan.items.findIndex((item) => item.status === "in_progress");
+  const nextIndex = plan.items.findIndex((item) => item.status === "pending");
+  const currentIndex = activeIndex >= 0 ? activeIndex : nextIndex;
+  const isComplete = completedCount === plan.items.length;
+
+  useEffect(() => {
+    currentItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [plan.updatedAt, currentIndex]);
 
   return (
-    <section className={`task-plan-panel ${expanded ? "expanded" : ""}`} aria-label="Task plan">
-      <button className="task-plan-summary" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
-        <span className="task-plan-progress">{completed}/{plan.items.length}</span>
-        <span className="task-plan-copy">
-          <strong>{plan.title}</strong>
-          <small>{current?.text ?? (completed === plan.items.length ? "All steps complete" : "Waiting for the next step")}</small>
-        </span>
-        <ChevronDown size={15} aria-hidden="true" />
-      </button>
-      {expanded && (
-        <ol className="task-plan-items">
-          {plan.items.map((item) => (
-            <li key={item.id} className={item.status}>
-              <span aria-hidden="true">
+    <section className="sidebar-task-plan" aria-label={`Task plan: ${plan.title}`}>
+      <ol className="sidebar-task-items">
+        {plan.items.map((item, index) => {
+          const isCurrent = index === currentIndex;
+          return (
+            <li
+              key={item.id}
+              ref={isCurrent ? currentItemRef : undefined}
+              className={`${item.status} ${isCurrent ? "current" : ""}`}
+            >
+              <span className="sidebar-task-icon" aria-hidden="true">
                 {item.status === "completed"
-                  ? <Check size={14} />
+                  ? <Check size={13} />
                   : item.status === "in_progress"
                     ? <LoaderCircle className="spin" size={14} />
-                    : <Circle size={12} />}
+                    : <Circle size={13} />}
               </span>
               <span>{item.text}</span>
             </li>
-          ))}
-        </ol>
-      )}
+          );
+        })}
+      </ol>
+      <div className={`sidebar-task-step ${isComplete ? "complete" : ""}`}>
+        {isComplete ? <Check size={13} /> : <LoaderCircle className="spin" size={14} />}
+        <span>{isComplete
+          ? `已完成 ${completedCount}/${plan.items.length} 步`
+          : `第 ${Math.max(1, currentIndex + 1)}/${plan.items.length} 步`}</span>
+      </div>
     </section>
   );
 }
