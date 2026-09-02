@@ -24,6 +24,7 @@ function createWindow(): void {
     title: "pi ecode",
     backgroundColor: "#f7f7f5",
     show: false,
+    autoHideMenuBar: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
@@ -33,6 +34,7 @@ function createWindow(): void {
     },
   });
 
+  window.setMenuBarVisibility(false);
   window.once("ready-to-show", () => window.show());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url);

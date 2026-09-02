@@ -67,7 +67,12 @@ export function Sidebar(props: SidebarProps) {
           ))
         )}
       </nav>
-      {props.taskPlan && <TaskPlanPanel plan={props.taskPlan} />}
+      {props.taskPlan && (
+        <section className="sidebar-task-section">
+          <div className="sidebar-label">{t("task.section")}</div>
+          <TaskPlanPanel plan={props.taskPlan} />
+        </section>
+      )}
       <label className="sidebar-language">
         <span>{t("sidebar.language")}</span>
         <select value={language} onChange={(event) => setLanguage(event.target.value as UiLanguage)}>

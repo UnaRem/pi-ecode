@@ -160,8 +160,10 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .jump-to-latest { position: fixed; z-index: 8; right: 30px; bottom: 112px; display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border: 1px solid #cfd4d0; border-radius: 16px; color: #4f6861; background: rgba(255, 255, 255, .94); box-shadow: 0 3px 14px rgba(40, 40, 35, .1); font-size: 10px; cursor: pointer; }
 .jump-to-latest:hover { border-color: #aebdb7; background: #fff; }
 .conversation-inner.empty { display: grid; place-items: center; padding-bottom: 12vh; }
-.sidebar-task-plan { flex: 0 0 auto; margin: 8px 3px 4px; }
-.sidebar-task-items { max-height: 116px; margin: 0; padding: 10px 10px; overflow-y: auto; border: 1px solid #c7cac5; border-radius: 12px; background: #fbfbf9; box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(45, 45, 40, .09); list-style: none; scrollbar-width: none; }
+.sidebar-task-section { flex: 0 0 auto; border-top: 1px solid #d3d3ce; }
+.sidebar-task-section .sidebar-label { margin-top: 12px; }
+.sidebar-task-plan { margin: 0 6px 4px; }
+.sidebar-task-items { max-height: 116px; margin: 0; padding: 1px 3px; overflow-y: auto; list-style: none; scrollbar-width: none; }
 .sidebar-task-items::-webkit-scrollbar { display: none; }
 .sidebar-task-items li { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 7px; min-height: 23px; color: #555550; font-size: 10.5px; line-height: 1.45; }
 .sidebar-task-items li > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -170,7 +172,7 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .sidebar-task-items li.in_progress .sidebar-task-icon { color: #58a5df; }
 .sidebar-task-items li.completed { color: #999994; text-decoration: line-through; }
 .sidebar-task-items li.completed .sidebar-task-icon { color: #999994; }
-.sidebar-task-step { width: max-content; max-width: calc(100% - 24px); display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 29px; margin: 5px auto 0; padding: 0 12px; border: 1px solid #deded9; border-radius: 15px; color: #676763; background: #f8f8f6; font-size: 10.5px; box-shadow: 0 2px 8px rgba(45, 45, 40, .04); }
+.sidebar-task-step { width: max-content; max-width: calc(100% - 24px); display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 25px; margin: 5px auto 0; padding: 0 8px; color: #676763; font-size: 10.5px; }
 .sidebar-task-step svg { color: #58a5df; }
 .sidebar-task-step.complete svg { color: #638779; }
 .welcome { max-width: 430px; text-align: center; }
