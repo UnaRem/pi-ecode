@@ -1,7 +1,19 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
-import type { ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
+import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AgentService } from "../agent/agent-service.js";
+
+function isExtensionUiResponse(value: unknown): value is ExtensionUiResponse {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<ExtensionUiResponse>;
+  const responseValue = candidate.value;
+  return typeof candidate.requestId === "string" && (
+    responseValue === null
+    || typeof responseValue === "string"
+    || typeof responseValue === "boolean"
+    || (Array.isArray(responseValue) && responseValue.every((item) => typeof item === "string"))
+  );
+}
 
 export function registerIpc(service: AgentService): () => void {
   ipcMain.handle(IPC_CHANNELS.chooseProject, async (event) => {
@@ -31,6 +43,9 @@ export function registerIpc(service: AgentService): () => void {
   ipcMain.handle(IPC_CHANNELS.rendererReady, () => service.rendererReady());
   ipcMain.handle(IPC_CHANNELS.compact, () => service.compact());
   ipcMain.handle(IPC_CHANNELS.cancelCompact, () => service.cancelCompaction());
+  ipcMain.handle(IPC_CHANNELS.respondExtensionUi, (_event, response: unknown) => (
+    isExtensionUiResponse(response) && service.respondExtensionUi(response)
+  ));
 
   const unsubscribe = service.subscribe((agentEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {

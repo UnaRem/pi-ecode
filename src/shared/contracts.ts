@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   rendererReady: "desktop:renderer-ready",
   compact: "agent:compact",
   cancelCompact: "agent:cancel-compact",
+  respondExtensionUi: "extension-ui:respond",
   event: "agent:event",
 } as const;
 
@@ -266,5 +267,6 @@ export interface DesktopApi {
   rendererReady(): Promise<void>;
   compact(): Promise<void>;
   cancelCompact(): Promise<void>;
+  respondExtensionUi(response: ExtensionUiResponse): Promise<boolean>;
   subscribe(listener: (event: AgentEvent) => void): () => void;
 }
