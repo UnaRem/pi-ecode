@@ -49,16 +49,19 @@ function mergeObjects(base: JsonObject, override: JsonObject): JsonObject {
   return merged;
 }
 
-function shouldMask(key: string, value: string): boolean {
-  if (!SENSITIVE_KEYS.test(key)) return false;
+function shouldMask(key: string, value: string, insideHeaders: boolean): boolean {
+  if (!insideHeaders && !SENSITIVE_KEYS.test(key)) return false;
   return !value.startsWith("$") && !value.startsWith("!");
 }
 
-function maskSensitive(value: JsonValue, key = ""): JsonValue {
-  if (typeof value === "string") return shouldMask(key, value) ? REDACTED_CONFIG_VALUE : value;
-  if (Array.isArray(value)) return value.map((item) => maskSensitive(item));
+function maskSensitive(value: JsonValue, key = "", insideHeaders = false): JsonValue {
+  if (typeof value === "string") return shouldMask(key, value, insideHeaders) ? REDACTED_CONFIG_VALUE : value;
+  if (Array.isArray(value)) return value.map((item) => maskSensitive(item, "", insideHeaders));
   if (!isObject(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([childKey, childValue]) => [childKey, maskSensitive(childValue, childKey)]));
+  const childInsideHeaders = insideHeaders || key.toLowerCase() === "headers";
+  return Object.fromEntries(Object.entries(value).map(([childKey, childValue]) => (
+    [childKey, maskSensitive(childValue, childKey, childInsideHeaders)]
+  )));
 }
 
 function restoreSensitive(next: JsonValue, current: JsonValue | undefined): JsonValue {

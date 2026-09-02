@@ -32,6 +32,14 @@ interface TopbarProps {
 
 export function Topbar(props: TopbarProps) {
   const { t } = useI18n();
+  const modelSeparator = props.selectedModel?.indexOf("/") ?? -1;
+  const selectedProvider = modelSeparator > 0 ? props.selectedModel?.slice(0, modelSeparator) ?? "" : props.models[0]?.provider ?? "";
+  const providers = [...new Set(props.models.map((model) => model.provider))];
+  const providerModels = props.models.filter((model) => model.provider === selectedProvider);
+  const selectProvider = (provider: string): void => {
+    const model = props.models.find((option) => option.provider === provider);
+    if (model) props.onSetModel(`${model.provider}/${model.id}`);
+  };
   return (
     <header className="topbar">
       <div className="topbar-title">
@@ -64,18 +72,19 @@ export function Topbar(props: TopbarProps) {
             : <ShieldCheck size={15} />}
           <span>{props.validation.status === "passed" ? t("topbar.verified") : props.validation.status === "stale" ? t("topbar.stale") : t("topbar.verify")}</span>
         </button>
-        <label className="select-shell">
+        <label className="select-shell provider-select">
+          <span className="sr-only">{t("topbar.provider")}</span>
+          <select value={selectedProvider} disabled={props.disabled || providers.length === 0} onChange={(event) => selectProvider(event.target.value)}>
+            {providers.length === 0 && <option value="">{t("topbar.noModel")}</option>}
+            {providers.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+          </select>
+          <ChevronDown size={14} aria-hidden="true" />
+        </label>
+        <label className="select-shell model-select">
           <span className="sr-only">{t("topbar.model")}</span>
-          <select
-            value={props.selectedModel ?? ""}
-            disabled={props.disabled || props.models.length === 0}
-            onChange={(event) => props.onSetModel(event.target.value)}
-          >
-            {props.models.length === 0 && <option value="">{t("topbar.noModel")}</option>}
-            {props.models.map((model) => (
-              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                {model.name}
-              </option>
+          <select value={props.selectedModel ?? ""} disabled={props.disabled || providerModels.length === 0} onChange={(event) => props.onSetModel(event.target.value)}>
+            {providerModels.map((model) => (
+              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name}</option>
             ))}
           </select>
           <ChevronDown size={14} aria-hidden="true" />

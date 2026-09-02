@@ -4,6 +4,7 @@ import type { ConfigTarget, JsonObject } from "@shared/settings-contracts";
 import { useSettings } from "../../hooks/use-settings";
 import { useI18n } from "../../i18n/i18n";
 import { GeneralSettingsForm } from "./GeneralSettingsForm";
+import { ModelsSettingsForm } from "./ModelsSettingsForm";
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -39,7 +40,9 @@ export function SettingsPage(props: SettingsPageProps) {
   const path = document?.path ?? "";
   const readOnly = target === "project-settings" && !settings.snapshot?.projectTrusted;
   const canSave = dirty && !readOnly && !settings.loading && !externalChange;
-  const heading = target === "global-settings" ? t("settings.global") : t("settings.project");
+  const heading = target === "global-settings"
+    ? t("settings.global")
+    : target === "project-settings" ? t("settings.project") : t("settings.models");
   const effectiveCount = useMemo(() => Object.keys(settings.snapshot?.effectiveSettings ?? {}).length, [settings.snapshot]);
 
   const reset = (): void => {
@@ -62,7 +65,9 @@ export function SettingsPage(props: SettingsPageProps) {
   const save = async (): Promise<void> => {
     const next = await settings.save({ target, value: draft, expectedRevision: baseRevision });
     if (!next) return;
-    const saved = target === "global-settings" ? next.globalSettings : next.projectSettings;
+    const saved = target === "global-settings"
+      ? next.globalSettings
+      : target === "project-settings" ? next.projectSettings : target === "models" ? next.models : next.fff;
     setDraft(structuredClone(saved.value));
     setBaseRevision(saved.revision);
     setDirty(false);
@@ -86,6 +91,9 @@ export function SettingsPage(props: SettingsPageProps) {
           <button className={target === "project-settings" ? "active" : ""} onClick={() => changeTarget("project-settings")}>
             <Settings2 size={14} /><span>{t("settings.project")}</span>
           </button>
+          <button className={target === "models" ? "active" : ""} onClick={() => changeTarget("models")}>
+            <Settings2 size={14} /><span>{t("settings.models")}</span>
+          </button>
           <div className="settings-nav-note">{t("settings.effectiveCount", { count: effectiveCount })}</div>
         </nav>
         <section className="settings-content">
@@ -101,13 +109,19 @@ export function SettingsPage(props: SettingsPageProps) {
               <button onClick={reset}>{t("settings.loadDisk")}</button>
             </div>
           )}
-          {!settingsTarget || !document ? (
+          {!document ? (
             <div className="settings-loading"><LoaderCircle className="spin" size={18} />{t("settings.loading")}</div>
-          ) : (
+          ) : settingsTarget ? (
             <GeneralSettingsForm
               value={draft}
               disabled={readOnly || settings.loading}
               readOnly={readOnly}
+              onChange={(value) => { setDraft(value); setDirty(true); }}
+            />
+          ) : (
+            <ModelsSettingsForm
+              value={draft}
+              disabled={settings.loading}
               onChange={(value) => { setDraft(value); setDirty(true); }}
             />
           )}

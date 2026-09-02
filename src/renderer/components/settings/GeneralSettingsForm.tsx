@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
 import type { JsonObject, JsonValue } from "@shared/settings-contracts";
 import { useI18n } from "../../i18n/i18n";
 import type { MessageKey } from "../../i18n/messages";
+import { JsonValueEditor } from "./JsonValueEditor";
 
 interface FieldDefinition {
   path: string;
@@ -112,27 +112,6 @@ function selectValue(value: string): JsonValue | undefined {
   return value;
 }
 
-function JsonField(props: { value: JsonValue | undefined; onChange: (value: JsonValue | undefined) => void }) {
-  const serialized = props.value === undefined ? "" : JSON.stringify(props.value, null, 2);
-  const [text, setText] = useState(serialized);
-  const [error, setError] = useState(false);
-  useEffect(() => setText(serialized), [serialized]);
-  const commit = (): void => {
-    if (!text.trim()) {
-      setError(false);
-      props.onChange(undefined);
-      return;
-    }
-    try {
-      props.onChange(JSON.parse(text) as JsonValue);
-      setError(false);
-    } catch {
-      setError(true);
-    }
-  };
-  return <textarea className={error ? "invalid" : ""} value={text} onChange={(event) => setText(event.target.value)} onBlur={commit} rows={4} />;
-}
-
 function FieldEditor(props: { field: FieldDefinition; value: JsonValue | undefined; onChange: (value: JsonValue | undefined) => void }) {
   const { t } = useI18n();
   const { field, value, onChange } = props;
@@ -151,7 +130,7 @@ function FieldEditor(props: { field: FieldDefinition; value: JsonValue | undefin
       </select>
     );
   }
-  if (field.kind === "json") return <JsonField value={value} onChange={onChange} />;
+  if (field.kind === "json") return <JsonValueEditor value={value} onChange={onChange} />;
   if (field.kind === "lines") {
     const text = Array.isArray(value) ? value.filter((item) => typeof item === "string").join("\n") : "";
     return <textarea rows={3} value={text} onChange={(event) => onChange(event.target.value.trim() ? event.target.value.split("\n").map((line) => line.trim()).filter(Boolean) : undefined)} />;
