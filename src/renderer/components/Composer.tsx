@@ -1,6 +1,7 @@
 import { ArrowUp, ImagePlus, Square } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
-import type { ContextState, ImageAttachment } from "@shared/contracts";
+import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment } from "@shared/contracts";
+import { ExtensionQuestionPanel } from "./ExtensionQuestionPanel";
 import { ImageGallery } from "./ImageGallery";
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
@@ -14,6 +15,8 @@ interface ComposerProps {
   restoredImages: ImageAttachment[];
   restoreVersion: number;
   context: ContextState;
+  extensionUi: ExtensionUiRequest | null;
+  onRespondExtensionUi: (response: ExtensionUiResponse) => void;
   onSend: (message: string, images: ImageAttachment[]) => void;
   onStop: () => void;
   onCompact: () => void;
@@ -64,7 +67,7 @@ export function Composer(props: ComposerProps) {
 
   const submit = (): void => {
     const message = text.trim();
-    if ((!message && images.length === 0) || !props.modelReady) return;
+    if ((!message && images.length === 0) || !props.modelReady || props.extensionUi) return;
     setText("");
     setImages([]);
     props.onSend(message, images);
@@ -109,7 +112,10 @@ export function Composer(props: ComposerProps) {
 
   return (
     <footer className="composer-area">
-      <div className={`composer ${props.isStreaming ? "working" : ""}`}>
+      {props.extensionUi && (
+        <ExtensionQuestionPanel request={props.extensionUi} onRespond={props.onRespondExtensionUi} />
+      )}
+      <div className={`composer ${props.isStreaming ? "working" : ""} ${props.extensionUi ? "blocked" : ""}`}>
         {images.length > 0 && (
           <ImageGallery
             images={images}
@@ -122,8 +128,10 @@ export function Composer(props: ComposerProps) {
           ref={textareaRef}
           value={text}
           rows={1}
-          placeholder={props.modelReady ? "Ask pi to work on this project…" : "Configure a pi model to begin"}
-          disabled={!props.modelReady}
+          placeholder={props.extensionUi
+            ? "Answer the question above to continue…"
+            : props.modelReady ? "Ask pi to work on this project…" : "Configure a pi model to begin"}
+          disabled={!props.modelReady || Boolean(props.extensionUi)}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -132,24 +140,26 @@ export function Composer(props: ComposerProps) {
         <div className="composer-footer">
           <div className="composer-tools">
             <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(event) => void addImages(event)} />
-            <button className="composer-tool-button" onClick={() => inputRef.current?.click()} disabled={!props.modelReady} aria-label="Attach images" title="Attach images"><ImagePlus size={15} /></button>
+            <button className="composer-tool-button" onClick={() => inputRef.current?.click()} disabled={!props.modelReady || Boolean(props.extensionUi)} aria-label="Attach images" title="Attach images"><ImagePlus size={15} /></button>
             <button
               className={`context-button ${props.context.isCompacting ? "cancel" : ""}`}
               onClick={props.context.isCompacting ? props.onCancelCompact : props.onCompact}
-              disabled={!props.context.isCompacting && (props.isStreaming || !props.context.contextWindow)}
+              disabled={Boolean(props.extensionUi) || (!props.context.isCompacting && (props.isStreaming || !props.context.contextWindow))}
               title={props.context.isCompacting ? "Cancel context compaction" : "Compact conversation context"}
             >
               {props.context.isCompacting ? "Cancel compact" : contextLabel}
             </button>
           </div>
-          <span>{props.isStreaming
-            ? (props.pendingCount ? `${props.pendingCount} steering · Enter to add another` : "Enter to steer · Shift Enter for newline")
-            : "Enter to send · Shift Enter for newline"}</span>
+          <span>{props.extensionUi
+            ? "Waiting for your answer"
+            : props.isStreaming
+              ? (props.pendingCount ? `${props.pendingCount} steering · Enter to add another` : "Enter to steer · Shift Enter for newline")
+              : "Enter to send · Shift Enter for newline"}</span>
           <div className="composer-actions">
             <button
               className={`send-button ${props.isStreaming ? "steer" : ""}`}
               onClick={submit}
-              disabled={(!text.trim() && images.length === 0) || !props.modelReady}
+              disabled={Boolean(props.extensionUi) || (!text.trim() && images.length === 0) || !props.modelReady}
               aria-label={props.isStreaming ? "Steer active task" : "Send message"}
               title={props.isStreaming ? "Steer active task" : "Send message"}
             >

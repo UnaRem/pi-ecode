@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
-import type { ImageAttachment, ThinkingLevel } from "@shared/contracts";
+import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "@shared/contracts";
 import { INITIAL_AGENT_STATE, reduceAgentEvent } from "@renderer/lib/agent-state";
 
 const LAST_PROJECT_KEY = "pi-ecode:last-project";
@@ -83,6 +83,10 @@ export function useAgent() {
     await run(() => window.piDesktop.stop());
   }, [run]);
 
+  const respondExtensionUi = useCallback(async (response: ExtensionUiResponse) => {
+    await run(() => window.piDesktop.respondExtensionUi(response));
+  }, [run]);
+
   const setModel = useCallback(async (value: string) => {
     const separator = value.indexOf("/");
     if (separator < 1) return;
@@ -140,6 +144,7 @@ export function useAgent() {
       compact,
       cancelCompact,
       stop,
+      respondExtensionUi,
       setModel,
       setThinkingLevel,
       createCheckpoint,

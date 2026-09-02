@@ -115,6 +115,8 @@ export default function App() {
           restoredImages={state.restoredEditorImages}
           restoreVersion={state.editorRestoreVersion}
           context={state.context}
+          extensionUi={state.extensionUi}
+          onRespondExtensionUi={(response) => void actions.respondExtensionUi(response)}
           onSend={(message, images) => void actions.send(message, images)}
           onCompact={() => void actions.compact()}
           onCancelCompact={() => void actions.cancelCompact()}
