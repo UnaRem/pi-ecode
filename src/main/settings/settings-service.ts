@@ -19,6 +19,7 @@ interface SettingsServiceOptions {
   agentDir: string;
   getProjectPath: () => string | undefined;
   getProviderStatuses: () => Promise<ProviderStatus[]>;
+  isFffLoaded: () => boolean;
   isProjectTrusted: () => boolean;
   isRuntimeBusy: () => boolean;
   applyRuntimeChanges: () => Promise<void>;
@@ -121,6 +122,7 @@ export class SettingsService {
       effectiveSettings: mergeObjects(globalSettings.rawValue, projectSettings.rawValue),
       models: this.publicDocument(models),
       fff: this.publicDocument(fff),
+      fffLoaded: this.options.isFffLoaded(),
       projectTrusted: this.options.isProjectTrusted(),
       providers,
       pendingReload: this.pendingReload,

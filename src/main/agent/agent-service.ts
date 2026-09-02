@@ -224,6 +224,12 @@ export class AgentService {
     return this.runtime?.services.settingsManager.isProjectTrusted() ?? false;
   }
 
+  get fffExtensionLoaded(): boolean {
+    return this.runtime?.session.resourceLoader.getExtensions().extensions.some((extension) => (
+      extension.path.replaceAll("\\", "/").includes("pi-fff")
+    )) ?? false;
+  }
+
   async getProviderStatuses(): Promise<ProviderStatus[]> {
     const modelRuntime = this.runtime?.session.modelRuntime;
     if (!modelRuntime) return [];

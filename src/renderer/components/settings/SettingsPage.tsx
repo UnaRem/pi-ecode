@@ -6,6 +6,7 @@ import { useI18n } from "../../i18n/i18n";
 import { GeneralSettingsForm } from "./GeneralSettingsForm";
 import { ModelsSettingsForm } from "./ModelsSettingsForm";
 import { AuthSettingsPanel } from "./AuthSettingsPanel";
+import { FffSettingsForm } from "./FffSettingsForm";
 
 type SettingsSection = ConfigTarget | "auth";
 
@@ -45,7 +46,9 @@ export function SettingsPage(props: SettingsPageProps) {
   const canSave = target !== "auth" && dirty && !readOnly && !settings.loading && !externalChange;
   const heading = target === "global-settings"
     ? t("settings.global")
-    : target === "project-settings" ? t("settings.project") : target === "models" ? t("settings.models") : t("settings.auth");
+    : target === "project-settings"
+      ? t("settings.project")
+      : target === "models" ? t("settings.models") : target === "auth" ? t("settings.auth") : t("settings.fff");
   const effectiveCount = useMemo(() => Object.keys(settings.snapshot?.effectiveSettings ?? {}).length, [settings.snapshot]);
 
   const reset = (): void => {
@@ -101,6 +104,9 @@ export function SettingsPage(props: SettingsPageProps) {
           <button className={target === "auth" ? "active" : ""} onClick={() => changeTarget("auth")}>
             <Settings2 size={14} /><span>{t("settings.auth")}</span>
           </button>
+          <button className={target === "pi-fff" ? "active" : ""} onClick={() => changeTarget("pi-fff")}>
+            <Settings2 size={14} /><span>{t("settings.fff")}</span>
+          </button>
           <div className="settings-nav-note">{t("settings.effectiveCount", { count: effectiveCount })}</div>
         </nav>
         <section className="settings-content">
@@ -135,9 +141,16 @@ export function SettingsPage(props: SettingsPageProps) {
               readOnly={readOnly}
               onChange={(value) => { setDraft(value); setDirty(true); }}
             />
-          ) : (
+          ) : target === "models" ? (
             <ModelsSettingsForm
               value={draft}
+              disabled={settings.loading}
+              onChange={(value) => { setDraft(value); setDirty(true); }}
+            />
+          ) : (
+            <FffSettingsForm
+              value={draft}
+              loaded={settings.snapshot?.fffLoaded ?? false}
               disabled={settings.loading}
               onChange={(value) => { setDraft(value); setDirty(true); }}
             />

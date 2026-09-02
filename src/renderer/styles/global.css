@@ -140,6 +140,14 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .auth-provider-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .auth-provider-actions button { display: flex; align-items: center; gap: 5px; min-height: 27px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: #fff; font-size: 9px; cursor: pointer; }
 .auth-provider-actions button.logout { color: var(--danger); }
+.fff-settings { max-width: 880px; display: flex; flex-direction: column; gap: 13px; margin: 0 auto; padding: 0; border: 0; }
+.fff-status { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid #c8dbd3; border-radius: 9px; color: var(--accent); background: var(--accent-soft); }
+.fff-status.missing { border-color: #e1d3b8; color: #765f37; background: #f8f1e4; }
+.fff-status > div { display: flex; flex-direction: column; gap: 2px; }
+.fff-status strong { font-size: 10.5px; }
+.fff-status span { color: var(--muted); font-size: 9px; }
+.fff-schema { padding: 12px 15px; border: 1px solid var(--line-soft); border-radius: 9px; background: rgba(255,255,255,.66); }
+.fff-schema input { height: 31px; padding: 0 8px; border: 1px solid #d9d9d4; border-radius: 7px; background: #fff; font-size: 10px; }
 .settings-readonly, .settings-error, .settings-conflict { max-width: 880px; margin: 0 auto 12px; padding: 9px 11px; border: 1px solid #e1d3b8; border-radius: 8px; color: #765f37; background: #f8f1e4; font-size: 10px; line-height: 1.5; }
 .settings-error { border-color: #e6c5c0; color: var(--danger); background: #faece9; white-space: pre-wrap; }
 .settings-conflict button { margin-left: 9px; border: 0; color: var(--accent); background: transparent; font-size: 10px; text-decoration: underline; cursor: pointer; }

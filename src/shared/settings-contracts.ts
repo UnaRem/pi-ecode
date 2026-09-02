@@ -36,6 +36,7 @@ export interface SettingsSnapshot {
   effectiveSettings: JsonObject;
   models: ConfigDocument;
   fff: ConfigDocument;
+  fffLoaded: boolean;
   projectTrusted: boolean;
   providers: ProviderStatus[];
   pendingReload: boolean;

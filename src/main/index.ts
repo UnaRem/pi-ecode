@@ -12,6 +12,7 @@ const settings = new SettingsService({
   agentDir: service.agentDirectory,
   getProjectPath: () => service.activeProjectPath,
   getProviderStatuses: () => service.getProviderStatuses(),
+  isFffLoaded: () => service.fffExtensionLoaded,
   isProjectTrusted: () => service.projectSettingsTrusted,
   isRuntimeBusy: () => service.runtimeBusy,
   applyRuntimeChanges: () => service.reloadRuntimeConfiguration(),

@@ -20,6 +20,7 @@ async function createHarness() {
     agentDir,
     getProjectPath: () => projectPath,
     getProviderStatuses: async () => [],
+    isFffLoaded: () => false,
     isProjectTrusted: () => true,
     isRuntimeBusy: () => busy,
     applyRuntimeChanges: async () => { applyCount += 1; },
