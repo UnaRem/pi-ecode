@@ -1,5 +1,5 @@
-import { BookmarkPlus, ChevronDown, LoaderCircle, PanelLeftOpen, ShieldCheck } from "lucide-react";
-import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState, WorkspaceHistoryState } from "@shared/contracts";
+import { ChevronDown, LoaderCircle, PanelLeftOpen, ShieldCheck } from "lucide-react";
+import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import type { MessageKey } from "../i18n/messages";
 
@@ -22,13 +22,11 @@ interface TopbarProps {
   thinkingLevel: ThinkingLevel;
   thinkingLevels: ThinkingLevel[];
   disabled: boolean;
-  history: WorkspaceHistoryState;
   validation: ValidationState;
   policy: RuntimePolicy;
   onOpenSidebar: () => void;
   onSetModel: (value: string) => void;
   onSetThinking: (value: ThinkingLevel) => void;
-  onCheckpoint: () => void;
   onToggleValidation: () => void;
 }
 
@@ -66,17 +64,6 @@ export function Topbar(props: TopbarProps) {
             : <ShieldCheck size={15} />}
           <span>{props.validation.status === "passed" ? t("topbar.verified") : props.validation.status === "stale" ? t("topbar.stale") : t("topbar.verify")}</span>
         </button>
-        <div className="history-controls" aria-label={t("topbar.workspaceHistory")}>
-          <button
-            className="icon-button"
-            onClick={props.onCheckpoint}
-            disabled={props.disabled || props.history.isBusy || !props.history.available}
-            aria-label={t("topbar.checkpoint")}
-            title={t("topbar.checkpoint")}
-          >
-            <BookmarkPlus size={16} />
-          </button>
-        </div>
         <label className="select-shell">
           <span className="sr-only">{t("topbar.model")}</span>
           <select

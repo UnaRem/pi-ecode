@@ -70,13 +70,11 @@ export default function App() {
           thinkingLevel={state.thinkingLevel}
           thinkingLevels={state.thinkingLevels}
           disabled={state.isStreaming}
-          history={state.history}
           validation={state.validation}
           policy={state.policy}
           onOpenSidebar={() => setSidebarOpen(true)}
           onSetModel={(value) => void actions.setModel(value)}
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
-          onCheckpoint={() => void actions.createCheckpoint()}
           onToggleValidation={() => setValidationOpen((open) => !open)}
         />
         {validationOpen && (

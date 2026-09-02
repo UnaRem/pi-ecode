@@ -364,20 +364,6 @@ export class AgentService {
     this.emitModelState(session);
   }
 
-  async createCheckpoint(label?: string): Promise<{ editorText?: string; message: string }> {
-    const session = this.requireRuntime().session;
-    const operation = this.history.checkpoint(session, label ?? "manual checkpoint");
-    await this.emitHistory(session);
-    try {
-      const result = await operation;
-      await this.emitHistory(session, result);
-      return result;
-    } catch (error) {
-      await this.emitHistory(session);
-      throw error;
-    }
-  }
-
   async undo(): Promise<import("../../shared/contracts.js").HistoryOperationResult> {
     const session = this.requireRuntime().session;
     this.validation.invalidate("Workspace was restored after the last verification.");

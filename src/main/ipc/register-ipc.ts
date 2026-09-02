@@ -31,7 +31,6 @@ export function registerIpc(service: AgentService): () => void {
   ipcMain.handle(IPC_CHANNELS.stop, () => service.stop());
   ipcMain.handle(IPC_CHANNELS.setModel, (_event, provider: string, modelId: string) => service.setModel(provider, modelId));
   ipcMain.handle(IPC_CHANNELS.setThinkingLevel, (_event, level: ThinkingLevel) => service.setThinkingLevel(level));
-  ipcMain.handle(IPC_CHANNELS.createCheckpoint, (_event, label?: string) => service.createCheckpoint(label));
   ipcMain.handle(IPC_CHANNELS.undo, () => service.undo());
   ipcMain.handle(IPC_CHANNELS.redo, () => service.redo());
   ipcMain.handle(IPC_CHANNELS.runValidation, () => service.runValidation());

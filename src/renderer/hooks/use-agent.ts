@@ -97,10 +97,6 @@ export function useAgent() {
     await run(() => window.piDesktop.setThinkingLevel(level));
   }, [run]);
 
-  const createCheckpoint = useCallback(async () => {
-    await run(() => window.piDesktop.createCheckpoint("manual checkpoint"));
-  }, [run]);
-
   const undo = useCallback(async () => {
     await run(() => window.piDesktop.undo());
   }, [run]);
@@ -147,7 +143,6 @@ export function useAgent() {
       respondExtensionUi,
       setModel,
       setThinkingLevel,
-      createCheckpoint,
       undo,
       redo,
       runValidation,

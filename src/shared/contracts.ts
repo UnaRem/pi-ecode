@@ -8,7 +8,6 @@ export const IPC_CHANNELS = {
   stop: "agent:stop",
   setModel: "agent:set-model",
   setThinkingLevel: "agent:set-thinking-level",
-  createCheckpoint: "history:create-checkpoint",
   undo: "history:undo",
   redo: "history:redo",
   runValidation: "validation:run",
@@ -274,7 +273,6 @@ export interface DesktopApi {
   stop(): Promise<void>;
   setModel(provider: string, modelId: string): Promise<void>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
-  createCheckpoint(label?: string): Promise<HistoryOperationResult>;
   undo(): Promise<HistoryOperationResult>;
   redo(): Promise<HistoryOperationResult>;
   runValidation(): Promise<ValidationState>;

@@ -12,7 +12,6 @@ const api: DesktopApi = {
   stop: () => ipcRenderer.invoke(IPC_CHANNELS.stop),
   setModel: (provider, modelId) => ipcRenderer.invoke(IPC_CHANNELS.setModel, provider, modelId),
   setThinkingLevel: (level: ThinkingLevel) => ipcRenderer.invoke(IPC_CHANNELS.setThinkingLevel, level),
-  createCheckpoint: (label) => ipcRenderer.invoke(IPC_CHANNELS.createCheckpoint, label),
   undo: () => ipcRenderer.invoke(IPC_CHANNELS.undo),
   redo: () => ipcRenderer.invoke(IPC_CHANNELS.redo),
   runValidation: () => ipcRenderer.invoke(IPC_CHANNELS.runValidation),

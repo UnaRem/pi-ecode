@@ -76,9 +76,6 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .validation-toggle.passed { color: var(--accent); background: var(--accent-soft); }
 .validation-toggle.failed { color: var(--danger); }
 .validation-toggle.stale { color: #8b7042; }
-.history-controls { display: flex; align-items: center; gap: 1px; margin-right: 5px; padding-right: 8px; border-right: 1px solid var(--line); color: var(--muted); }
-.history-controls .icon-button { width: 29px; height: 29px; }
-.history-controls .icon-button:disabled { opacity: .28; }
 .select-shell { position: relative; display: flex; align-items: center; }
 .select-shell select { max-width: 200px; height: 30px; padding: 0 28px 0 9px; border: 1px solid transparent; border-radius: 7px; color: #555550; background: transparent; font-size: 11px; appearance: none; cursor: pointer; }
 .select-shell select:hover { border-color: var(--line); background: #fff; }
