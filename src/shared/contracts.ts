@@ -191,7 +191,7 @@ export interface AgentSnapshot {
   isStreaming: boolean;
   pendingCount: number;
   error: string | null;
-  taskPlan?: TaskPlan | null;
+  taskPlan: TaskPlan | null;
   history: WorkspaceHistoryState;
   validation: ValidationState;
   review: ChangeReview;
@@ -207,6 +207,7 @@ export type AgentEvent =
   | { type: "tool"; tool: ToolActivity }
   | { type: "timeline-upsert"; item: ConversationItem }
   | { type: "context"; context: ContextState }
+  | { type: "task-plan"; taskPlan: TaskPlan | null }
   | { type: "state"; patch: Partial<Pick<AgentSnapshot, "isStreaming" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error">> }
   | { type: "sessions"; sessions: SessionSummary[] }
   | { type: "history"; history: WorkspaceHistoryState; editorText?: string; editorImages?: ImageAttachment[]; notice?: string }

@@ -24,6 +24,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   isStreaming: false,
   pendingCount: 0,
   error: null,
+  taskPlan: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
     supported: false,
@@ -104,6 +105,8 @@ export function reduceAgentEvent(state: AgentViewState, event: AgentEvent): Agen
       return { ...state, timeline: upsertTimeline(state.timeline, event.item) };
     case "context":
       return { ...state, context: event.context };
+    case "task-plan":
+      return { ...state, taskPlan: event.taskPlan };
     case "state":
       return { ...state, ...event.patch };
     case "sessions":

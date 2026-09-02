@@ -31,6 +31,7 @@ import { formatToolInput, mapMessages, textFromContent, textFromToolResult, tool
 import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
+import { TaskPlanService } from "./task-plan.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
   projectPath: null,
@@ -49,6 +50,7 @@ const EMPTY_SNAPSHOT: AgentSnapshot = {
   isStreaming: false,
   pendingCount: 0,
   error: null,
+  taskPlan: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
     supported: false,
@@ -104,6 +106,7 @@ export class AgentService {
     (message) => this.emit({ type: "error", message }),
   );
   private readonly streamContinuity = new StreamContinuity();
+  private readonly taskPlan = new TaskPlanService((taskPlan) => this.emit({ type: "task-plan", taskPlan }));
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
@@ -147,7 +150,7 @@ export class AgentService {
       const services = await createAgentSessionServices({
         cwd: targetCwd,
         resourceLoaderOptions: {
-          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension()],
+          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.taskPlan.asExtension()],
           extensionsOverride: (base) => ({
             ...base,
             extensions: base.extensions.filter((extension) => (
@@ -226,6 +229,7 @@ export class AgentService {
       isStreaming: session.isStreaming,
       pendingCount: session.pendingMessageCount,
       error: this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
+      taskPlan: this.taskPlan.current,
       history,
       validation: this.validation.getState(),
       review,

@@ -76,6 +76,17 @@ describe("reduceAgentEvent", () => {
     expect(finished.tools[0]).toMatchObject({ output: "passed", status: "success" });
   });
 
+  it("applies task plan updates without changing the conversation timeline", () => {
+    const taskPlan = {
+      title: "Implement feature",
+      items: [{ id: "build", text: "Build it", status: "in_progress" as const }],
+      updatedAt: 1,
+    };
+    const state = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "task-plan", taskPlan });
+    expect(state.taskPlan).toEqual(taskPlan);
+    expect(state.timeline).toEqual([]);
+  });
+
   it("restores text and images to the composer after undo", () => {
     const restored = reduceAgentEvent(INITIAL_AGENT_STATE, {
       type: "history",
