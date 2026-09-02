@@ -1,4 +1,4 @@
-import { BookmarkPlus, ChevronDown, LoaderCircle, PanelLeftOpen, Redo2, ShieldCheck, Undo2 } from "lucide-react";
+import { BookmarkPlus, ChevronDown, LoaderCircle, PanelLeftOpen, ShieldCheck } from "lucide-react";
 import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState, WorkspaceHistoryState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import type { MessageKey } from "../i18n/messages";
@@ -29,8 +29,6 @@ interface TopbarProps {
   onSetModel: (value: string) => void;
   onSetThinking: (value: ThinkingLevel) => void;
   onCheckpoint: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
   onToggleValidation: () => void;
 }
 
@@ -77,24 +75,6 @@ export function Topbar(props: TopbarProps) {
             title={t("topbar.checkpoint")}
           >
             <BookmarkPlus size={16} />
-          </button>
-          <button
-            className="icon-button"
-            onClick={props.onUndo}
-            disabled={props.disabled || props.history.isBusy || !props.history.canUndo}
-            aria-label={t("composer.undo")}
-            title={t("composer.undo")}
-          >
-            <Undo2 size={16} />
-          </button>
-          <button
-            className="icon-button"
-            onClick={props.onRedo}
-            disabled={props.disabled || props.history.isBusy || !props.history.canRedo}
-            aria-label={t("composer.redo")}
-            title={t("composer.redo")}
-          >
-            <Redo2 size={16} />
           </button>
         </div>
         <label className="select-shell">

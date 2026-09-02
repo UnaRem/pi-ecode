@@ -77,8 +77,6 @@ export default function App() {
           onSetModel={(value) => void actions.setModel(value)}
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
           onCheckpoint={() => void actions.createCheckpoint()}
-          onUndo={() => void actions.undo()}
-          onRedo={() => void actions.redo()}
           onToggleValidation={() => setValidationOpen((open) => !open)}
         />
         {validationOpen && (
@@ -117,12 +115,15 @@ export default function App() {
           restoredImages={state.restoredEditorImages}
           restoreVersion={state.editorRestoreVersion}
           context={state.context}
+          history={state.history}
           extensionUi={state.extensionUi}
           onRespondExtensionUi={(response) => void actions.respondExtensionUi(response)}
           onSend={(message, images) => void actions.send(message, images)}
           onCompact={() => void actions.compact()}
           onCancelCompact={() => void actions.cancelCompact()}
           onStop={() => void actions.stop()}
+          onUndo={() => void actions.undo()}
+          onRedo={() => void actions.redo()}
         />
       </section>
     </div>

@@ -1,6 +1,6 @@
-import { ArrowUp, ImagePlus, Square } from "lucide-react";
+import { ArrowUp, ImagePlus, Redo2, Square, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
-import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment } from "@shared/contracts";
+import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment, WorkspaceHistoryState } from "@shared/contracts";
 import { ExtensionQuestionPanel } from "./ExtensionQuestionPanel";
 import { ImageGallery } from "./ImageGallery";
 import { useI18n, type Translate } from "../i18n/i18n";
@@ -16,10 +16,13 @@ interface ComposerProps {
   restoredImages: ImageAttachment[];
   restoreVersion: number;
   context: ContextState;
+  history: WorkspaceHistoryState;
   extensionUi: ExtensionUiRequest | null;
   onRespondExtensionUi: (response: ExtensionUiResponse) => void;
   onSend: (message: string, images: ImageAttachment[]) => void;
   onStop: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
   onCompact: () => void;
   onCancelCompact: () => void;
 }
@@ -143,6 +146,20 @@ export function Composer(props: ComposerProps) {
           <div className="composer-tools">
             <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(event) => void addImages(event)} />
             <button className="composer-tool-button" onClick={() => inputRef.current?.click()} disabled={!props.modelReady || Boolean(props.extensionUi)} aria-label={t("composer.attach")} title={t("composer.attach")}><ImagePlus size={15} /></button>
+            <button
+              className="composer-tool-button"
+              onClick={props.onUndo}
+              disabled={props.isStreaming || Boolean(props.extensionUi) || props.history.isBusy || !props.history.canUndo}
+              aria-label={t("composer.undo")}
+              title={t("composer.undo")}
+            ><Undo2 size={15} /></button>
+            <button
+              className="composer-tool-button"
+              onClick={props.onRedo}
+              disabled={props.isStreaming || Boolean(props.extensionUi) || props.history.isBusy || !props.history.canRedo}
+              aria-label={t("composer.redo")}
+              title={t("composer.redo")}
+            ><Redo2 size={15} /></button>
             <button
               className={`context-button ${props.context.isCompacting ? "cancel" : ""}`}
               onClick={props.context.isCompacting ? props.onCancelCompact : props.onCompact}

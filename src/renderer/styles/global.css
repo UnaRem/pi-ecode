@@ -161,7 +161,7 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .jump-to-latest:hover { border-color: #aebdb7; background: #fff; }
 .conversation-inner.empty { display: grid; place-items: center; padding-bottom: 12vh; }
 .sidebar-task-plan { flex: 0 0 auto; margin: 8px 3px 4px; }
-.sidebar-task-items { max-height: 116px; margin: 0; padding: 10px 10px; overflow-y: auto; border: 1px solid #d9d9d4; border-radius: 12px; background: rgba(255, 255, 255, .78); box-shadow: 0 5px 18px rgba(45, 45, 40, .06); list-style: none; scrollbar-width: none; }
+.sidebar-task-items { max-height: 116px; margin: 0; padding: 10px 10px; overflow-y: auto; border: 1px solid #c7cac5; border-radius: 12px; background: #fbfbf9; box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(45, 45, 40, .09); list-style: none; scrollbar-width: none; }
 .sidebar-task-items::-webkit-scrollbar { display: none; }
 .sidebar-task-items li { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 7px; min-height: 23px; color: #555550; font-size: 10.5px; line-height: 1.45; }
 .sidebar-task-items li > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
