@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ConversationMessage } from "@shared/contracts";
 
 interface ConversationOutlineProps {
@@ -12,8 +13,27 @@ function messagePreview(message: ConversationMessage): string {
   return text.length > 90 ? `${text.slice(0, 90)}…` : text;
 }
 
+interface OutlinePreview {
+  index: number;
+  text: string;
+  top: number;
+}
+
 export function ConversationOutline(props: ConversationOutlineProps) {
+  const [preview, setPreview] = useState<OutlinePreview | null>(null);
   if (props.messages.length < 2) return null;
+
+  const showPreview = (message: ConversationMessage, index: number, marker: HTMLElement): void => {
+    const outline = marker.closest<HTMLElement>(".conversation-outline");
+    if (!outline) return;
+    const markerBounds = marker.getBoundingClientRect();
+    const outlineBounds = outline.getBoundingClientRect();
+    setPreview({
+      index,
+      text: messagePreview(message),
+      top: markerBounds.top - outlineBounds.top + markerBounds.height / 2,
+    });
+  };
 
   return (
     <nav className="conversation-outline" aria-label="Current conversation overview">
@@ -23,16 +43,22 @@ export function ConversationOutline(props: ConversationOutlineProps) {
             key={message.id}
             className={`outline-marker ${message.id === props.activeId ? "active" : ""}`}
             onClick={() => props.onSelect(message.id)}
+            onMouseEnter={(event) => showPreview(message, index, event.currentTarget)}
+            onMouseLeave={() => setPreview(null)}
+            onFocus={(event) => showPreview(message, index, event.currentTarget)}
+            onBlur={() => setPreview(null)}
             aria-label={`Go to turn ${index + 1}: ${messagePreview(message)}`}
           >
             <span className="outline-line" aria-hidden="true" />
-            <span className="outline-tooltip" role="tooltip">
-              <strong>Turn {index + 1}</strong>
-              {messagePreview(message)}
-            </span>
           </button>
         ))}
       </div>
+      {preview && (
+        <span className="outline-preview" role="tooltip" style={{ top: preview.top }}>
+          <strong>Turn {preview.index + 1}</strong>
+          {preview.text}
+        </span>
+      )}
     </nav>
   );
 }

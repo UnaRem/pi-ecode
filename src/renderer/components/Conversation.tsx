@@ -4,8 +4,8 @@ import type { ConversationItem, TaskPlan } from "@shared/contracts";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
-import { ToolCard } from "./ToolCard";
 import { TaskPlanPanel } from "./TaskPlanPanel";
+import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
 
 interface ConversationProps {
   timeline: ConversationItem[];
@@ -28,6 +28,7 @@ export function Conversation(props: ConversationProps) {
   )), [props.timeline]);
   const [activeUserId, setActiveUserId] = useState<string | null>(userMessages.at(-1)?.id ?? null);
   const conversationKey = userMessages.at(0)?.id ?? "empty";
+  const renderGroups = useMemo(() => groupConsecutiveTools(props.timeline), [props.timeline]);
 
   const setFollowing = (following: boolean): void => {
     followingRef.current = following;
@@ -109,33 +110,29 @@ export function Conversation(props: ConversationProps) {
           </section>
         ) : (
           <>
-            {props.timeline.map((item, index) => item.kind === "message" ? (
+            {renderGroups.map((group) => group.kind === "message" ? (
               <article
-                key={item.id}
+                key={group.id}
                 ref={(element) => {
-                  if (item.message.role !== "user") return;
-                  if (element) userElements.current.set(item.message.id, element);
-                  else userElements.current.delete(item.message.id);
+                  if (group.item.message.role !== "user") return;
+                  if (element) userElements.current.set(group.item.message.id, element);
+                  else userElements.current.delete(group.item.message.id);
                 }}
-                data-message-id={item.message.id}
-                className={`message ${item.message.role} ${item.message.isError ? "error" : ""}`}
+                data-message-id={group.item.message.id}
+                className={`message ${group.item.message.role} ${group.item.message.isError ? "error" : ""}`}
               >
-                <div className="message-role">{item.message.role === "user" ? "You" : "pi"}</div>
+                <div className="message-role">{group.item.message.role === "user" ? "You" : "pi"}</div>
                 <div className="message-content">
-                  {item.message.role === "assistant" ? <Markdown>{item.message.text}</Markdown> : item.message.text}
-                  {item.message.images && item.message.images.length > 0 && (
-                    <ImageGallery images={item.message.images} variant="message" />
+                  {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
+                  {group.item.message.images && group.item.message.images.length > 0 && (
+                    <ImageGallery images={group.item.message.images} variant="message" />
                   )}
-                  {hasLiveAssistant && index === props.timeline.length - 1 && (
+                  {hasLiveAssistant && group.id === lastItem?.id && (
                     <span className="stream-caret" aria-label="Generating" />
                   )}
                 </div>
               </article>
-            ) : (
-              <div className="timeline-tool" key={item.id}>
-                <ToolCard tool={item.tool} />
-              </div>
-            ))}
+            ) : <ToolBatch key={group.id} tools={group.tools} />)}
             {props.isStreaming && !hasLiveAssistant && (
               <article className="message assistant waiting">
                 <div className="message-role">pi</div>
