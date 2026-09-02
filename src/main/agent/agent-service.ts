@@ -175,6 +175,10 @@ export class AgentService {
     return () => this.authListeners.delete(listener);
   }
 
+  reportError(message: string): void {
+    this.emit({ type: "state", patch: { error: message } });
+  }
+
   private emit(event: AgentEvent): void {
     for (const listener of this.listeners) listener(event);
   }
@@ -230,25 +234,8 @@ export class AgentService {
     )) ?? false;
   }
 
-  async getProviderStatuses(): Promise<ProviderStatus[]> {
-    const modelRuntime = this.runtime?.session.modelRuntime;
-    if (!modelRuntime) return [];
-    const credentials = await modelRuntime.listCredentials().catch(() => []);
-    const credentialTypes = new Map(credentials.map((credential) => [credential.providerId, credential.type]));
-    return Promise.all(modelRuntime.getProviders().map(async (provider) => {
-      const check = await modelRuntime.checkAuth(provider.id).catch(() => undefined);
-      return {
-        id: provider.id,
-        name: provider.name,
-        methods: [
-          ...(provider.auth.apiKey?.login ? [{ type: "api_key" as const, label: provider.auth.apiKey.name }] : []),
-          ...(provider.auth.oauth ? [{ type: "oauth" as const, label: provider.auth.oauth.loginLabel ?? provider.auth.oauth.name }] : []),
-        ],
-        configuredType: credentialTypes.get(provider.id) ?? check?.type ?? null,
-        source: check?.source ?? null,
-        authenticated: Boolean(check),
-      };
-    }));
+  getProviderStatuses(): Promise<ProviderStatus[]> {
+    return this.auth.getProviderStatuses();
   }
 
   loginProvider(providerId: string, type: AuthType): Promise<void> {

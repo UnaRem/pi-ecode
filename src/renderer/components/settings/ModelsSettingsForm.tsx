@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { JsonObject, JsonValue } from "@shared/settings-contracts";
+import { REDACTED_CONFIG_VALUE } from "@shared/settings-contracts";
 import { useI18n } from "../../i18n/i18n";
 import { JsonValueEditor } from "./JsonValueEditor";
 
@@ -75,6 +76,7 @@ function ProviderEditor(props: { id: string; provider: JsonObject; onRename: (id
         <label><span>baseUrl</span><input value={typeof provider.baseUrl === "string" ? provider.baseUrl : ""} onChange={(event) => props.onChange(updateField(provider, "baseUrl", event.target.value))} /></label>
         <label><span>api</span><select value={typeof provider.api === "string" ? provider.api : ""} onChange={(event) => props.onChange(updateField(provider, "api", event.target.value))}><option value="">{t("settings.modelDefault")}</option>{API_TYPES.map((api) => <option key={api}>{api}</option>)}</select></label>
         <label><span>oauth</span><input value={typeof provider.oauth === "string" ? provider.oauth : ""} onChange={(event) => props.onChange(updateField(provider, "oauth", event.target.value))} placeholder="radius" /></label>
+        <label><span>apiKey</span><input value={typeof provider.apiKey === "string" && provider.apiKey !== REDACTED_CONFIG_VALUE ? provider.apiKey : ""} onChange={(event) => props.onChange(updateField(provider, "apiKey", event.target.value))} placeholder={provider.apiKey === REDACTED_CONFIG_VALUE ? t("settings.credentialManaged") : "$ENV_VAR"} /></label>
         <label><span>authHeader</span><select value={provider.authHeader === undefined ? "" : String(provider.authHeader)} onChange={(event) => props.onChange(updateField(provider, "authHeader", event.target.value ? event.target.value === "true" : undefined))}><option value="">{t("settings.default")}</option><option value="true">true</option><option value="false">false</option></select></label>
       </div>
       <div className="model-json-grid provider-json-grid">

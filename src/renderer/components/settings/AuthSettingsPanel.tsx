@@ -1,5 +1,5 @@
 import { Check, KeyRound, LoaderCircle, LogOut, Shield, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AuthFlowState, AuthPromptResponse, AuthType, ProviderStatus } from "@shared/settings-contracts";
 import { useI18n } from "../../i18n/i18n";
 
@@ -16,8 +16,12 @@ interface AuthSettingsPanelProps {
 function AuthPromptPanel(props: { flow: AuthFlowState; onRespond: (response: AuthPromptResponse) => void; onCancel: () => void }) {
   const { t } = useI18n();
   const request = props.flow.request;
-  const [value, setValue] = useState("");
-  useEffect(() => setValue(""), [request?.id]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [hasValue, setHasValue] = useState(false);
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.value = "";
+    setHasValue(false);
+  }, [request?.id]);
   if (!request) return (
     <div className={`auth-flow-status ${props.flow.status}`}>
       {props.flow.status === "running" ? <LoaderCircle className="spin" size={14} /> : props.flow.status === "completed" ? <Check size={14} /> : <X size={14} />}
@@ -27,7 +31,8 @@ function AuthPromptPanel(props: { flow: AuthFlowState; onRespond: (response: Aut
   );
   const respond = (responseValue: string | null): void => {
     props.onRespond({ requestId: request.id, value: responseValue });
-    setValue("");
+    if (inputRef.current) inputRef.current.value = "";
+    setHasValue(false);
   };
   return (
     <section className="auth-prompt-panel">
@@ -37,9 +42,9 @@ function AuthPromptPanel(props: { flow: AuthFlowState; onRespond: (response: Aut
           <button key={option.id} onClick={() => respond(option.id)}><span>{option.label}</span>{option.description && <small>{option.description}</small>}</button>
         ))}</div>
       ) : (
-        <form onSubmit={(event) => { event.preventDefault(); if (value) respond(value); }}>
-          <input type={request.type === "secret" ? "password" : "text"} value={value} onChange={(event) => setValue(event.target.value)} placeholder={request.placeholder} autoFocus />
-          <button type="submit" disabled={!value}>{t("common.submit")}</button>
+        <form onSubmit={(event) => { event.preventDefault(); const value = inputRef.current?.value ?? ""; if (value) respond(value); }}>
+          <input ref={inputRef} type={request.type === "secret" ? "password" : "text"} onChange={(event) => setHasValue(Boolean(event.target.value))} placeholder={request.placeholder} autoFocus />
+          <button type="submit" disabled={!hasValue}>{t("common.submit")}</button>
         </form>
       )}
       <button className="auth-cancel" onClick={() => respond(null)}>{t("common.cancel")}</button>

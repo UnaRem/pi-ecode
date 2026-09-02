@@ -21,11 +21,7 @@ const settings = new SettingsService({
       if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, { type: "settings-changed", snapshot, source });
     }
   },
-  onError: (message) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, { type: "auth-flow", state: { providerId: "settings", status: "failed", message, request: null } });
-    }
-  },
+  onError: (message) => service.reportError(message),
 });
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let unregisterIpc: (() => void) | undefined;

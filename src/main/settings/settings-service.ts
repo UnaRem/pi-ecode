@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type {
   AuthType,
@@ -116,7 +116,7 @@ export class SettingsService {
       this.loadDocument(paths.fff, false),
       this.providerStatuses(),
     ]);
-    return {
+    const snapshot: SettingsSnapshot = {
       globalSettings: this.publicDocument(globalSettings),
       projectSettings: this.publicDocument(projectSettings),
       effectiveSettings: mergeObjects(globalSettings.rawValue, projectSettings.rawValue),
@@ -126,7 +126,10 @@ export class SettingsService {
       projectTrusted: this.options.isProjectTrusted(),
       providers,
       pendingReload: this.pendingReload,
+      error: null,
     };
+    snapshot.error = this.snapshotError(snapshot);
+    return snapshot;
   }
 
   async save(request: SaveConfigRequest): Promise<SettingsSnapshot> {
@@ -140,6 +143,8 @@ export class SettingsService {
     const restored = restoreSensitive(request.value, current.rawValue);
     if (!isObject(restored)) throw new Error("Configuration root must be an object.");
     await this.writeAtomic(path, restored);
+    const diskSnapshot = await this.getSnapshot();
+    this.assertSnapshotValid(diskSnapshot);
     await this.requestRuntimeApply();
     const snapshot = await this.getSnapshot();
     this.options.onChanged(snapshot, "save");
@@ -147,6 +152,8 @@ export class SettingsService {
   }
 
   async reload(): Promise<SettingsSnapshot> {
+    const snapshot = await this.getSnapshot();
+    this.assertSnapshotValid(snapshot);
     await this.requestRuntimeApply();
     return this.runtimeStateChanged();
   }
@@ -159,7 +166,16 @@ export class SettingsService {
 
   async applyPendingIfIdle(): Promise<void> {
     if (!this.pendingReload || this.options.isRuntimeBusy()) return;
-    await this.applyRuntimeChanges();
+    const snapshot = await this.getSnapshot();
+    try {
+      this.assertSnapshotValid(snapshot);
+      await this.applyRuntimeChanges();
+      this.options.onChanged(await this.getSnapshot(), "runtime");
+    } catch (error) {
+      this.pendingReload = false;
+      this.options.onChanged(snapshot, "runtime");
+      this.options.onError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   private paths(): { globalSettings: string; projectSettings: string; models: string; fff: string } {
@@ -214,9 +230,24 @@ export class SettingsService {
 
   private async restartWatcher(): Promise<void> {
     await this.watcher?.close();
-    const paths = Object.values(this.paths());
-    this.watcher = chokidar.watch(paths, { ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 80 } });
-    this.watcher.on("all", () => this.onExternalChange());
+    const targetPaths = Object.values(this.paths()).map((path) => resolve(path));
+    const projectPath = this.options.getProjectPath();
+    const roots = [resolve(this.options.agentDir), ...(projectPath ? [resolve(projectPath)] : [])];
+    const isTargetOrAncestor = (path: string): boolean => {
+      const candidate = resolve(path);
+      return targetPaths.some((target) => target === candidate || target.startsWith(`${candidate}${sep}`));
+    };
+    const watcher = chokidar.watch([...new Set(roots)], {
+      depth: 1,
+      ignoreInitial: true,
+      ignored: (path) => !isTargetOrAncestor(path),
+      awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 80 },
+    });
+    this.watcher = watcher;
+    watcher.on("all", (_event, path) => {
+      if (targetPaths.includes(resolve(path))) this.onExternalChange();
+    });
+    await new Promise<void>((ready) => watcher.once("ready", ready));
   }
 
   private onExternalChange(): void {
@@ -228,13 +259,38 @@ export class SettingsService {
   }
 
   private async handleExternalChange(): Promise<void> {
+    let snapshot: SettingsSnapshot | undefined;
     try {
+      snapshot = await this.getSnapshot();
+      this.assertSnapshotValid(snapshot);
       await this.requestRuntimeApply();
-      const snapshot = await this.getSnapshot();
-      this.options.onChanged(snapshot, "external");
+      this.options.onChanged(await this.getSnapshot(), "external");
     } catch (error) {
+      if (snapshot) this.options.onChanged(snapshot, "external");
       this.options.onError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  private snapshotError(snapshot: SettingsSnapshot): string | null {
+    const documents: Array<[ConfigTarget, ConfigDocument]> = [
+      ["global-settings", snapshot.globalSettings],
+      ["project-settings", snapshot.projectSettings],
+      ["models", snapshot.models],
+      ["pi-fff", snapshot.fff],
+    ];
+    try {
+      for (const [target, document] of documents) {
+        if (document.error) throw new Error(`${document.path}: ${document.error}`);
+        validateConfig(target, document.value);
+      }
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  private assertSnapshotValid(snapshot: SettingsSnapshot): void {
+    if (snapshot.error) throw new Error(snapshot.error);
   }
 
   private async requestRuntimeApply(): Promise<void> {

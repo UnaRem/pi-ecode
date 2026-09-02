@@ -40,6 +40,7 @@ export interface SettingsSnapshot {
   projectTrusted: boolean;
   providers: ProviderStatus[];
   pendingReload: boolean;
+  error: string | null;
 }
 
 export interface SaveConfigRequest {

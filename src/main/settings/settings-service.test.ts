@@ -1,14 +1,14 @@
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { REDACTED_CONFIG_VALUE } from "../../shared/settings-contracts.js";
 import { SettingsService } from "./settings-service.js";
 
 const temporaryDirectories: string[] = [];
+const activeServices: SettingsService[] = [];
 
 async function createHarness() {
-  const root = await mkdtemp(join(tmpdir(), "pi-ecode-settings-"));
+  const root = await mkdtemp(join(process.cwd(), ".pi-ecode-settings-"));
   temporaryDirectories.push(root);
   const agentDir = join(root, "agent");
   const projectPath = join(root, "project");
@@ -16,6 +16,7 @@ async function createHarness() {
   await mkdir(projectPath, { recursive: true });
   let applyCount = 0;
   let busy = false;
+  const errors: string[] = [];
   const service = new SettingsService({
     agentDir,
     getProjectPath: () => projectPath,
@@ -25,12 +26,14 @@ async function createHarness() {
     isRuntimeBusy: () => busy,
     applyRuntimeChanges: async () => { applyCount += 1; },
     onChanged: () => undefined,
-    onError: () => undefined,
+    onError: (message) => errors.push(message),
   });
-  return { service, agentDir, projectPath, applyCount: () => applyCount, setBusy: (value: boolean) => { busy = value; } };
+  activeServices.push(service);
+  return { service, agentDir, projectPath, errors, applyCount: () => applyCount, setBusy: (value: boolean) => { busy = value; } };
 }
 
 afterEach(async () => {
+  await Promise.all(activeServices.splice(0).map((service) => service.dispose()));
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
@@ -58,6 +61,21 @@ describe("SettingsService", () => {
     expect(await readFile(path, "utf8")).toContain('"apiKey": "secret"');
   });
 
+  it("keeps the active runtime when a managed file is malformed", async () => {
+    const harness = await createHarness();
+    await writeFile(join(harness.agentDir, "pi-fff.json"), "{ invalid json");
+    expect((await harness.service.getSnapshot()).error).toContain("pi-fff.json");
+    await expect(harness.service.reload()).rejects.toThrow("pi-fff.json");
+    expect(harness.applyCount()).toBe(0);
+  });
+
+  it("applies valid external file changes", async () => {
+    const harness = await createHarness();
+    await harness.service.start();
+    await writeFile(join(harness.agentDir, "settings.json"), JSON.stringify({ quietStartup: true }));
+    await vi.waitFor(() => expect(harness.applyCount()).toBe(1), { timeout: 2_000 });
+  });
+
   it("defers runtime application while the agent is busy", async () => {
     const harness = await createHarness();
     harness.setBusy(true);
@@ -67,5 +85,17 @@ describe("SettingsService", () => {
     harness.setBusy(false);
     await harness.service.applyPendingIfIdle();
     expect(harness.applyCount()).toBe(1);
+  });
+
+  it("does not apply a deferred reload if a file becomes invalid", async () => {
+    const harness = await createHarness();
+    harness.setBusy(true);
+    const snapshot = await harness.service.getSnapshot();
+    await harness.service.save({ target: "global-settings", value: { quietStartup: true }, expectedRevision: snapshot.globalSettings.revision });
+    await writeFile(join(harness.agentDir, "pi-fff.json"), "{ invalid json");
+    harness.setBusy(false);
+    await harness.service.applyPendingIfIdle();
+    expect(harness.applyCount()).toBe(0);
+    expect(harness.errors.at(-1)).toContain("pi-fff.json");
   });
 });

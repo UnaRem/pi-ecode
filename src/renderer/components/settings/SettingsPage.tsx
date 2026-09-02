@@ -1,6 +1,6 @@
 import { ArrowLeft, LoaderCircle, RefreshCw, Save, Settings2, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { ConfigTarget, JsonObject } from "@shared/settings-contracts";
+import type { ConfigDocument, ConfigTarget, JsonObject } from "@shared/settings-contracts";
 import { useSettings } from "../../hooks/use-settings";
 import { useI18n } from "../../i18n/i18n";
 import { GeneralSettingsForm } from "./GeneralSettingsForm";
@@ -15,6 +15,81 @@ interface SettingsPageProps {
   onDirtyChange: (dirty: boolean) => void;
 }
 
+type SettingsController = ReturnType<typeof useSettings>;
+
+function SettingsNavigation(props: { target: SettingsSection; effectiveCount: number; onChange: (target: SettingsSection) => void }) {
+  const { t } = useI18n();
+  const sections: Array<[SettingsSection, string]> = [
+    ["global-settings", t("settings.global")],
+    ["project-settings", t("settings.project")],
+    ["models", t("settings.models")],
+    ["auth", t("settings.auth")],
+    ["pi-fff", t("settings.fff")],
+  ];
+  return (
+    <nav className="settings-nav" aria-label={t("settings.category")}>
+      {sections.map(([section, label]) => (
+        <button key={section} className={props.target === section ? "active" : ""} onClick={() => props.onChange(section)}>
+          <Settings2 size={14} /><span>{label}</span>
+        </button>
+      ))}
+      <div className="settings-nav-note">{t("settings.effectiveCount", { count: props.effectiveCount })}</div>
+    </nav>
+  );
+}
+
+interface SettingsContentProps {
+  target: SettingsSection;
+  heading: string;
+  document: ConfigDocument | null;
+  draft: JsonObject;
+  readOnly: boolean;
+  externalChange: boolean;
+  settings: SettingsController;
+  onDraftChange: (value: JsonObject) => void;
+  onReset: () => void;
+}
+
+function SettingsContent(props: SettingsContentProps) {
+  const { t } = useI18n();
+  const settingsTarget = props.target === "global-settings" || props.target === "project-settings";
+  const settings = props.settings;
+  return (
+    <section className="settings-content">
+      <div className="settings-content-title">
+        <div><h2>{props.heading}</h2><code title={props.document?.path}>{props.document?.path}</code></div>
+        {settings.snapshot?.pendingReload && <span className="settings-pending"><LoaderCircle className="spin" size={12} />{t("settings.pending")}</span>}
+      </div>
+      {settings.error && <div className="settings-error">{settings.error}</div>}
+      {settings.snapshot?.error && <div className="settings-error">{settings.snapshot.error}</div>}
+      {props.document?.error && !settings.snapshot?.error && <div className="settings-error">{props.document.error}</div>}
+      {props.externalChange && <div className="settings-conflict">{t("settings.externalChanged")}<button onClick={props.onReset}>{t("settings.loadDisk")}</button></div>}
+      {props.target === "auth" ? (
+        <AuthSettingsPanel providers={settings.snapshot?.providers ?? []} flow={settings.authFlow} disabled={settings.loading} onLogin={(id, type) => void settings.login(id, type)} onLogout={(id) => void settings.logout(id)} onRespond={(response) => void settings.respondAuth(response)} onCancel={() => void settings.cancelAuth()} />
+      ) : !props.document ? (
+        <div className="settings-loading"><LoaderCircle className="spin" size={18} />{t("settings.loading")}</div>
+      ) : settingsTarget ? (
+        <GeneralSettingsForm value={props.draft} disabled={props.readOnly || settings.loading} readOnly={props.readOnly} onChange={props.onDraftChange} />
+      ) : props.target === "models" ? (
+        <ModelsSettingsForm value={props.draft} disabled={settings.loading} onChange={props.onDraftChange} />
+      ) : (
+        <FffSettingsForm value={props.draft} loaded={settings.snapshot?.fffLoaded ?? false} disabled={settings.loading} onChange={props.onDraftChange} />
+      )}
+    </section>
+  );
+}
+
+function SettingsActions(props: { dirty: boolean; loading: boolean; canSave: boolean; onReset: () => void; onSave: () => void }) {
+  const { t } = useI18n();
+  return (
+    <footer className="settings-actions">
+      <span>{props.dirty ? t("settings.unsaved") : t("settings.synced")}</span>
+      <button onClick={props.onReset} disabled={!props.dirty || props.loading}><Undo2 size={14} />{t("settings.discard")}</button>
+      <button className="primary" onClick={props.onSave} disabled={!props.canSave}><Save size={14} />{t("settings.save")}</button>
+    </footer>
+  );
+}
+
 export function SettingsPage(props: SettingsPageProps) {
   const { t } = useI18n();
   const settings = useSettings(true);
@@ -24,7 +99,6 @@ export function SettingsPage(props: SettingsPageProps) {
   const [dirty, setDirty] = useState(false);
   const [externalChange, setExternalChange] = useState(false);
   const document = target === "auth" ? null : settings.documentFor(target);
-  const settingsTarget = target === "global-settings" || target === "project-settings";
 
   useEffect(() => props.onDirtyChange(dirty), [dirty, props.onDirtyChange]);
 
@@ -41,7 +115,6 @@ export function SettingsPage(props: SettingsPageProps) {
     }
   }, [baseRevision, dirty, document]);
 
-  const path = document?.path ?? "";
   const readOnly = target === "project-settings" && !settings.snapshot?.projectTrusted;
   const canSave = target !== "auth" && dirty && !readOnly && !settings.loading && !externalChange;
   const heading = target === "global-settings"
@@ -91,79 +164,20 @@ export function SettingsPage(props: SettingsPageProps) {
         </button>
       </header>
       <div className="settings-layout">
-        <nav className="settings-nav" aria-label={t("settings.category")}> 
-          <button className={target === "global-settings" ? "active" : ""} onClick={() => changeTarget("global-settings")}>
-            <Settings2 size={14} /><span>{t("settings.global")}</span>
-          </button>
-          <button className={target === "project-settings" ? "active" : ""} onClick={() => changeTarget("project-settings")}>
-            <Settings2 size={14} /><span>{t("settings.project")}</span>
-          </button>
-          <button className={target === "models" ? "active" : ""} onClick={() => changeTarget("models")}>
-            <Settings2 size={14} /><span>{t("settings.models")}</span>
-          </button>
-          <button className={target === "auth" ? "active" : ""} onClick={() => changeTarget("auth")}>
-            <Settings2 size={14} /><span>{t("settings.auth")}</span>
-          </button>
-          <button className={target === "pi-fff" ? "active" : ""} onClick={() => changeTarget("pi-fff")}>
-            <Settings2 size={14} /><span>{t("settings.fff")}</span>
-          </button>
-          <div className="settings-nav-note">{t("settings.effectiveCount", { count: effectiveCount })}</div>
-        </nav>
-        <section className="settings-content">
-          <div className="settings-content-title">
-            <div><h2>{heading}</h2><code title={path}>{path}</code></div>
-            {settings.snapshot?.pendingReload && <span className="settings-pending"><LoaderCircle className="spin" size={12} />{t("settings.pending")}</span>}
-          </div>
-          {settings.error && <div className="settings-error">{settings.error}</div>}
-          {document?.error && <div className="settings-error">{document.error}</div>}
-          {externalChange && (
-            <div className="settings-conflict">
-              {t("settings.externalChanged")}
-              <button onClick={reset}>{t("settings.loadDisk")}</button>
-            </div>
-          )}
-          {target === "auth" ? (
-            <AuthSettingsPanel
-              providers={settings.snapshot?.providers ?? []}
-              flow={settings.authFlow}
-              disabled={settings.loading}
-              onLogin={(providerId, type) => void settings.login(providerId, type)}
-              onLogout={(providerId) => void settings.logout(providerId)}
-              onRespond={(response) => void settings.respondAuth(response)}
-              onCancel={() => void settings.cancelAuth()}
-            />
-          ) : !document ? (
-            <div className="settings-loading"><LoaderCircle className="spin" size={18} />{t("settings.loading")}</div>
-          ) : settingsTarget ? (
-            <GeneralSettingsForm
-              value={draft}
-              disabled={readOnly || settings.loading}
-              readOnly={readOnly}
-              onChange={(value) => { setDraft(value); setDirty(true); }}
-            />
-          ) : target === "models" ? (
-            <ModelsSettingsForm
-              value={draft}
-              disabled={settings.loading}
-              onChange={(value) => { setDraft(value); setDirty(true); }}
-            />
-          ) : (
-            <FffSettingsForm
-              value={draft}
-              loaded={settings.snapshot?.fffLoaded ?? false}
-              disabled={settings.loading}
-              onChange={(value) => { setDraft(value); setDirty(true); }}
-            />
-          )}
-        </section>
+        <SettingsNavigation target={target} effectiveCount={effectiveCount} onChange={changeTarget} />
+        <SettingsContent
+          target={target}
+          heading={heading}
+          document={document}
+          draft={draft}
+          readOnly={readOnly}
+          externalChange={externalChange}
+          settings={settings}
+          onDraftChange={(value) => { setDraft(value); setDirty(true); }}
+          onReset={reset}
+        />
       </div>
-      {target !== "auth" && (
-        <footer className="settings-actions">
-          <span>{dirty ? t("settings.unsaved") : t("settings.synced")}</span>
-          <button onClick={reset} disabled={!dirty || settings.loading}><Undo2 size={14} />{t("settings.discard")}</button>
-          <button className="primary" onClick={() => void save()} disabled={!canSave}><Save size={14} />{t("settings.save")}</button>
-        </footer>
-      )}
+      {target !== "auth" && <SettingsActions dirty={dirty} loading={settings.loading} canSave={canSave} onReset={reset} onSave={() => void save()} />}
     </main>
   );
 }

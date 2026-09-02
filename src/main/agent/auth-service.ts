@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AuthEvent, AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import type { AuthFlowEvent, AuthPromptRequest, AuthPromptResponse, AuthType } from "../../shared/settings-contracts.js";
+import type { AuthFlowEvent, AuthPromptRequest, AuthPromptResponse, AuthType, ProviderStatus } from "../../shared/settings-contracts.js";
 
 interface PendingPrompt {
   request: AuthPromptRequest;
@@ -25,6 +25,27 @@ export class AuthService {
     private readonly emit: (event: AuthFlowEvent) => void,
     private readonly openExternal: (url: string) => Promise<void>,
   ) {}
+
+  async getProviderStatuses(): Promise<ProviderStatus[]> {
+    const runtime = this.getRuntime();
+    if (!runtime) return [];
+    const credentials = await runtime.listCredentials().catch(() => []);
+    const credentialTypes = new Map(credentials.map((credential) => [credential.providerId, credential.type]));
+    return Promise.all(runtime.getProviders().map(async (provider) => {
+      const check = await runtime.checkAuth(provider.id).catch(() => undefined);
+      return {
+        id: provider.id,
+        name: provider.name,
+        methods: [
+          ...(provider.auth.apiKey?.login ? [{ type: "api_key" as const, label: provider.auth.apiKey.name }] : []),
+          ...(provider.auth.oauth ? [{ type: "oauth" as const, label: provider.auth.oauth.loginLabel ?? provider.auth.oauth.name }] : []),
+        ],
+        configuredType: credentialTypes.get(provider.id) ?? check?.type ?? null,
+        source: check?.source ?? null,
+        authenticated: Boolean(check),
+      };
+    }));
+  }
 
   async login(providerId: string, type: AuthType): Promise<void> {
     if (this.controller) throw new Error("Another authentication flow is already running.");
