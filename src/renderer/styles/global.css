@@ -226,10 +226,14 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .context-button:hover { color: var(--muted); background: #f0f0ed; }
 .context-button.cancel { color: var(--danger); background: #f9ebe8; }
 .context-button.cancel:hover { background: #f4deda; }
+.composer-actions { display: flex; align-items: center; gap: 5px; }
 .send-button { display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 0; border-radius: 8px; color: white; background: #333331; cursor: pointer; }
 .send-button:hover { background: #1f1f1e; }
 .send-button:disabled { background: #d1d1cc; opacity: 1; }
-.send-button.stop { background: #4e6c64; }
+.send-button.steer { background: var(--accent); }
+.send-button.steer:hover { background: #315f53; }
+.send-button.stop { color: #4e4e4a; background: #e8e8e3; }
+.send-button.stop:hover { color: var(--danger); background: #f4deda; }
 .composer-note { margin: 7px auto 0; color: var(--faint); font-size: 9px; text-align: center; }
 
 .spin { animation: spin 1s linear infinite; }

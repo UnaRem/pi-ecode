@@ -142,12 +142,25 @@ export function Composer(props: ComposerProps) {
               {props.context.isCompacting ? "Cancel compact" : contextLabel}
             </button>
           </div>
-          <span>{props.isStreaming ? (props.pendingCount ? `${props.pendingCount} queued` : "pi is working") : "Enter to send · Shift Enter for newline"}</span>
-          {props.isStreaming ? (
-            <button className="send-button stop" onClick={props.onStop} aria-label="Stop agent"><Square size={12} fill="currentColor" /></button>
-          ) : (
-            <button className="send-button" onClick={submit} disabled={(!text.trim() && images.length === 0) || !props.modelReady} aria-label="Send message"><ArrowUp size={17} /></button>
-          )}
+          <span>{props.isStreaming
+            ? (props.pendingCount ? `${props.pendingCount} steering · Enter to add another` : "Enter to steer · Shift Enter for newline")
+            : "Enter to send · Shift Enter for newline"}</span>
+          <div className="composer-actions">
+            <button
+              className={`send-button ${props.isStreaming ? "steer" : ""}`}
+              onClick={submit}
+              disabled={(!text.trim() && images.length === 0) || !props.modelReady}
+              aria-label={props.isStreaming ? "Steer active task" : "Send message"}
+              title={props.isStreaming ? "Steer active task" : "Send message"}
+            >
+              <ArrowUp size={17} />
+            </button>
+            {props.isStreaming && (
+              <button className="send-button stop" onClick={props.onStop} aria-label="Stop agent" title="Stop agent">
+                <Square size={12} fill="currentColor" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <div className="composer-note">pi can make mistakes. Review commands and file changes.</div>
