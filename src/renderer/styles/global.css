@@ -224,6 +224,8 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .composer-tool-button:hover { background: #f0f0ed; }
 .context-button { height: 25px; padding: 0 7px; border: 0; border-radius: 6px; color: var(--faint); background: transparent; font-size: 9px; cursor: pointer; }
 .context-button:hover { color: var(--muted); background: #f0f0ed; }
+.context-button.cancel { color: var(--danger); background: #f9ebe8; }
+.context-button.cancel:hover { background: #f4deda; }
 .send-button { display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 0; border-radius: 8px; color: white; background: #333331; cursor: pointer; }
 .send-button:hover { background: #1f1f1e; }
 .send-button:disabled { background: #d1d1cc; opacity: 1; }

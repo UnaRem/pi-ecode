@@ -125,6 +125,8 @@ export function reduceAgentEvent(state: AgentViewState, event: AgentEvent): Agen
       return { ...state, review: event.review };
     case "candidate":
       return { ...state, candidate: event.candidate };
+    case "notice":
+      return { ...state, notice: event.message, error: null };
     case "error":
       return { ...state, error: event.message, isStreaming: false };
   }

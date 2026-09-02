@@ -75,6 +75,10 @@ export function useAgent() {
     await run(() => window.piDesktop.compact());
   }, [run]);
 
+  const cancelCompact = useCallback(async () => {
+    await run(() => window.piDesktop.cancelCompact());
+  }, [run]);
+
   const stop = useCallback(async () => {
     await run(() => window.piDesktop.stop());
   }, [run]);
@@ -134,6 +138,7 @@ export function useAgent() {
       switchSession,
       send,
       compact,
+      cancelCompact,
       stop,
       setModel,
       setThinkingLevel,

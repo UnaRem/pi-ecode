@@ -17,6 +17,7 @@ interface ComposerProps {
   onSend: (message: string, images: ImageAttachment[]) => void;
   onStop: () => void;
   onCompact: () => void;
+  onCancelCompact: () => void;
 }
 
 function readImage(file: File): Promise<ImageAttachment> {
@@ -132,8 +133,13 @@ export function Composer(props: ComposerProps) {
           <div className="composer-tools">
             <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(event) => void addImages(event)} />
             <button className="composer-tool-button" onClick={() => inputRef.current?.click()} disabled={!props.modelReady} aria-label="Attach images" title="Attach images"><ImagePlus size={15} /></button>
-            <button className="context-button" onClick={props.onCompact} disabled={props.isStreaming || props.context.isCompacting || !props.context.contextWindow} title="Compact conversation context">
-              {props.context.isCompacting ? "Compacting…" : contextLabel}
+            <button
+              className={`context-button ${props.context.isCompacting ? "cancel" : ""}`}
+              onClick={props.context.isCompacting ? props.onCancelCompact : props.onCompact}
+              disabled={!props.context.isCompacting && (props.isStreaming || !props.context.contextWindow)}
+              title={props.context.isCompacting ? "Cancel context compaction" : "Compact conversation context"}
+            >
+              {props.context.isCompacting ? "Cancel compact" : contextLabel}
             </button>
           </div>
           <span>{props.isStreaming ? (props.pendingCount ? `${props.pendingCount} queued` : "pi is working") : "Enter to send · Shift Enter for newline"}</span>

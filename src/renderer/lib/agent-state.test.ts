@@ -88,6 +88,15 @@ describe("reduceAgentEvent", () => {
     expect(restored.editorRestoreVersion).toBe(1);
   });
 
+  it("shows compaction cancellation as a notice instead of an error", () => {
+    const state = reduceAgentEvent({ ...INITIAL_AGENT_STATE, error: "old error" }, {
+      type: "notice",
+      message: "Context compaction cancelled.",
+    });
+    expect(state.notice).toBe("Context compaction cancelled.");
+    expect(state.error).toBeNull();
+  });
+
   it("does not append duplicate finalized messages", () => {
     const event = {
       type: "message" as const,

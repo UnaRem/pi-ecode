@@ -19,6 +19,7 @@ export const IPC_CHANNELS = {
   activateCandidate: "self-update:activate",
   rendererReady: "desktop:renderer-ready",
   compact: "agent:compact",
+  cancelCompact: "agent:cancel-compact",
   event: "agent:event",
 } as const;
 
@@ -197,6 +198,7 @@ export type AgentEvent =
   | { type: "validation"; validation: ValidationState }
   | { type: "review"; review: ChangeReview }
   | { type: "candidate"; candidate: CandidateState }
+  | { type: "notice"; message: string }
   | { type: "error"; message: string };
 
 export interface DesktopApi {
@@ -220,5 +222,6 @@ export interface DesktopApi {
   activateCandidate(): Promise<void>;
   rendererReady(): Promise<void>;
   compact(): Promise<void>;
+  cancelCompact(): Promise<void>;
   subscribe(listener: (event: AgentEvent) => void): () => void;
 }

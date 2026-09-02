@@ -30,6 +30,7 @@ export function registerIpc(service: AgentService): () => void {
   ipcMain.handle(IPC_CHANNELS.activateCandidate, () => service.activateCandidate());
   ipcMain.handle(IPC_CHANNELS.rendererReady, () => service.rendererReady());
   ipcMain.handle(IPC_CHANNELS.compact, () => service.compact());
+  ipcMain.handle(IPC_CHANNELS.cancelCompact, () => service.cancelCompaction());
 
   const unsubscribe = service.subscribe((agentEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {

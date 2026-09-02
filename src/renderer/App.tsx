@@ -116,6 +116,7 @@ export default function App() {
           context={state.context}
           onSend={(message, images) => void actions.send(message, images)}
           onCompact={() => void actions.compact()}
+          onCancelCompact={() => void actions.cancelCompact()}
           onStop={() => void actions.stop()}
         />
       </section>

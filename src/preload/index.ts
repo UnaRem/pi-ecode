@@ -23,6 +23,7 @@ const api: DesktopApi = {
   activateCandidate: () => ipcRenderer.invoke(IPC_CHANNELS.activateCandidate),
   rendererReady: () => ipcRenderer.invoke(IPC_CHANNELS.rendererReady),
   compact: () => ipcRenderer.invoke(IPC_CHANNELS.compact),
+  cancelCompact: () => ipcRenderer.invoke(IPC_CHANNELS.cancelCompact),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => listener(agentEvent);
     ipcRenderer.on(IPC_CHANNELS.event, handler);

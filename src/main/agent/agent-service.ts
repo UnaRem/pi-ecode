@@ -96,6 +96,7 @@ export class AgentService {
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
   private compactOperation: Promise<void> | undefined;
+  private compactCancelRequested = false;
   private contextEstimate: number | null = null;
   private readonly nativeCompaction = new NativeCompaction(() => this.runtime?.session);
   private readonly streamContinuity = new StreamContinuity();
@@ -275,6 +276,7 @@ export class AgentService {
   compact(): Promise<void> {
     if (this.compactOperation) return this.compactOperation;
     const session = this.requireRuntime().session;
+    this.compactCancelRequested = false;
     if (session.isStreaming) return Promise.reject(new Error("Stop the active agent run before compacting context."));
     this.emit({
       type: "context",
@@ -291,9 +293,7 @@ export class AgentService {
       .then(() => undefined)
       .catch((error: unknown) => {
         const message = errorText(error);
-        if (message.includes("operation was aborted")) {
-          throw new Error("Context compaction was interrupted. Wait for the current operation to settle, then try again.");
-        }
+        if (message === "Compaction cancelled") return;
         throw error;
       })
       .finally(() => {
@@ -304,8 +304,19 @@ export class AgentService {
     return operation;
   }
 
+  cancelCompaction(): void {
+    const session = this.requireRuntime().session;
+    if (!this.compactOperation && !session.isCompacting) return;
+    this.compactCancelRequested = true;
+    session.abortCompaction();
+  }
+
   async stop(): Promise<void> {
     const session = this.requireRuntime().session;
+    if (session.isCompacting) {
+      this.compactCancelRequested = true;
+      session.abortCompaction();
+    }
     session.clearQueue();
     await session.abort();
     this.emit({ type: "state", patch: { isStreaming: false, pendingCount: 0 } });
@@ -549,6 +560,10 @@ export class AgentService {
         this.emitContext(session);
         break;
       case "compaction_end": {
+        if (event.aborted && this.compactCancelRequested) {
+          this.emit({ type: "notice", message: "Context compaction cancelled." });
+        }
+        this.compactCancelRequested = false;
         const nativeEstimate = this.nativeCompaction.consumeEstimatedTokensAfter();
         this.contextEstimate = event.result
           ? nativeEstimate ?? event.result.estimatedTokensAfter ?? null
