@@ -50,9 +50,19 @@ function fakeSession(cwd: string, entries: SessionEntry[], captured: CapturedChe
       getBranch: () => entries,
       getLeafId: () => leafId,
       getEntry: () => undefined,
-      appendCustomEntry: (_type: string, data: unknown) => {
+      appendCustomEntry: (type: string, data: unknown) => {
         if (typeof data === "object" && data !== null && "commit" in data && typeof data.commit === "string") {
           captured.push({ commit: data.commit });
+        }
+        if (type === "pi-ecode.workspace-turn") {
+          entries.push({
+            type: "custom",
+            id: `turn-${entries.length}`,
+            parentId: entries.at(-1)?.id ?? null,
+            timestamp: new Date().toISOString(),
+            customType: type,
+            data,
+          } as SessionEntry);
         }
         return "checkpoint-entry";
       },
@@ -117,6 +127,44 @@ describe("WorkspaceHistory", () => {
 
     expect(harness.turnRecords).toHaveLength(1);
     expect(harness.turnRecords[0]).toMatchObject({ userEntryId: "current-user", assistantEntryId: "assistant-result" });
+  });
+
+  it("settles the current stopped task without borrowing an earlier assistant message", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-stopped-turn-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-stopped-history-"));
+    temporaryPaths.push(workspace, storage);
+    await writeFile(join(workspace, "app.txt"), "before\n", "utf8");
+    const history = new WorkspaceHistory(storage);
+    const entries = [{
+      type: "message",
+      id: "previous-assistant",
+      parentId: null,
+      timestamp: new Date().toISOString(),
+      message: { role: "assistant", content: [{ type: "text", text: "Earlier answer" }], stopReason: "stop", timestamp: 1 },
+    }] as unknown as SessionEntry[];
+    const harness = historyExtensionHarness(history, entries, workspace);
+
+    await harness.handlers.get("before_agent_start")?.({ prompt: "question stopped immediately" }, harness.context);
+    entries.push({
+      type: "message",
+      id: "current-user",
+      parentId: "previous-assistant",
+      timestamp: new Date().toISOString(),
+      message: { role: "user", content: "question stopped immediately", timestamp: 2 },
+    } as SessionEntry);
+    await harness.handlers.get("message_end")?.({ message: { role: "user" } }, harness.context);
+    const session = fakeSession(workspace, entries, []);
+
+    await history.settlePending(session);
+    await harness.handlers.get("agent_settled")?.({}, harness.context);
+
+    const records = entries.filter((entry) => entry.type === "custom" && entry.customType === "pi-ecode.workspace-turn");
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      data: { userEntryId: "current-user", prompt: "question stopped immediately" },
+    });
+    expect((records[0] as { data: { assistantEntryId?: string } }).data.assistantEntryId).toBeUndefined();
+    expect((await history.getState(session)).canUndo).toBe(true);
   });
 
   it("restores modified and newly-created files with undo", async () => {

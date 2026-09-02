@@ -343,6 +343,8 @@ export class AgentService {
     }
     session.clearQueue();
     await session.abort();
+    await this.history.settlePending(session);
+    await this.emitHistory(session);
     this.emit({ type: "state", patch: { isStreaming: false, pendingCount: 0 } });
   }
 

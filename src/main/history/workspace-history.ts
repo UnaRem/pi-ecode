@@ -37,7 +37,7 @@ interface TurnRecord {
   beforeCommit: string;
   afterCommit: string;
   userEntryId: string;
-  assistantEntryId: string;
+  assistantEntryId?: string;
   prompt: string;
   createdAt: string;
 }
@@ -117,6 +117,7 @@ function errorMessage(error: unknown): string {
 export class WorkspaceHistory {
   private readonly pendingBySession = new Map<string, PendingTurn>();
   private readonly checkpointBySession = new Map<string, Promise<HistoryOperationResult>>();
+  private readonly finalizeBySession = new Map<string, Promise<void>>();
   private busy = false;
   private statusMessage: string | null = null;
 
@@ -149,31 +150,25 @@ export class WorkspaceHistory {
     });
 
     pi.on("agent_settled", async (_event, ctx) => {
-      const sessionId = ctx.sessionManager.getSessionId();
-      const pending = this.pendingBySession.get(sessionId);
-      const assistantEntry = [...ctx.sessionManager.getBranch()].reverse().find(
-        (entry) => entry.type === "message" && entry.message.role === "assistant",
-      );
-      if (!pending?.userEntryId || !assistantEntry) {
-        this.pendingBySession.delete(sessionId);
-        return;
-      }
-      const afterCommit = await this.snapshot(ctx.cwd, sessionId, "after agent turn");
-      pi.appendEntry<TurnRecord>(TURN_ENTRY, {
-        version: 1,
-        beforeCommit: pending.beforeCommit,
-        afterCommit,
-        userEntryId: pending.userEntryId,
-        assistantEntryId: assistantEntry.id,
-        prompt: pending.prompt,
-        createdAt: new Date().toISOString(),
+      await this.finalizePendingTurn({
+        cwd: ctx.cwd,
+        sessionId: ctx.sessionManager.getSessionId(),
+        branch: ctx.sessionManager.getBranch(),
+        append: (record) => pi.appendEntry<TurnRecord>(TURN_ENTRY, record),
       });
-      this.pendingBySession.delete(sessionId);
-      await this.writeRedo(ctx.cwd, sessionId, undefined);
     });
 
     pi.on("session_shutdown", (_event, ctx) => {
       this.pendingBySession.delete(ctx.sessionManager.getSessionId());
+    });
+  }
+
+  async settlePending(session: AgentSession): Promise<void> {
+    await this.finalizePendingTurn({
+      cwd: session.sessionManager.getCwd(),
+      sessionId: session.sessionId,
+      branch: session.sessionManager.getBranch(),
+      append: (record) => session.sessionManager.appendCustomEntry(TURN_ENTRY, record),
     });
   }
 
@@ -369,6 +364,50 @@ export class WorkspaceHistory {
       await this.writeRedo(session.sessionManager.getCwd(), session.sessionId, undefined);
       return { message: "Workspace and conversation restored." };
     });
+  }
+
+  private finalizePendingTurn(input: {
+    cwd: string;
+    sessionId: string;
+    branch: SessionEntry[];
+    append: (record: TurnRecord) => unknown;
+  }): Promise<void> {
+    const existing = this.finalizeBySession.get(input.sessionId);
+    if (existing) return existing;
+    const pending = this.pendingBySession.get(input.sessionId);
+    if (!pending) return Promise.resolve();
+
+    const operation = this.writePendingTurn(input, pending).finally(() => {
+      this.pendingBySession.delete(input.sessionId);
+      this.finalizeBySession.delete(input.sessionId);
+    });
+    this.finalizeBySession.set(input.sessionId, operation);
+    return operation;
+  }
+
+  private async writePendingTurn(
+    input: { cwd: string; sessionId: string; branch: SessionEntry[]; append: (record: TurnRecord) => unknown },
+    pending: PendingTurn,
+  ): Promise<void> {
+    const userEntryId = pending.userEntryId ?? [...input.branch].reverse().find(
+      (entry) => entry.type === "message" && entry.message.role === "user",
+    )?.id;
+    if (!userEntryId) return;
+    const userIndex = input.branch.findIndex((entry) => entry.id === userEntryId);
+    const assistantEntry = input.branch.slice(userIndex + 1).find(
+      (entry) => entry.type === "message" && entry.message.role === "assistant",
+    );
+    const afterCommit = await this.snapshot(input.cwd, input.sessionId, "after agent turn");
+    input.append({
+      version: 1,
+      beforeCommit: pending.beforeCommit,
+      afterCommit,
+      userEntryId,
+      ...(assistantEntry ? { assistantEntryId: assistantEntry.id } : {}),
+      prompt: pending.prompt,
+      createdAt: new Date().toISOString(),
+    });
+    await this.writeRedo(input.cwd, input.sessionId, undefined);
   }
 
   private findUndoRecord(session: AgentSession): TurnRecord | undefined {
