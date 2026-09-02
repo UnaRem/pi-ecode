@@ -12,6 +12,33 @@ function inlineMarkdown(text: string): ReactNode[] {
   });
 }
 
+function tableCells(line: string): string[] {
+  const trimmed = line.trim().replace(/^\|/u, "").replace(/\|$/u, "");
+  return trimmed.split(/(?<!\\)\|/u).map((cell) => cell.trim().replaceAll("\\|", "|"));
+}
+
+function tableAlignment(cell: string): "left" | "center" | "right" | undefined {
+  const trimmed = cell.trim();
+  if (!/^:?-{3,}:?$/u.test(trimmed)) return undefined;
+  if (trimmed.startsWith(":") && trimmed.endsWith(":")) return "center";
+  if (trimmed.endsWith(":")) return "right";
+  return "left";
+}
+
+function MarkdownTable({ header, divider, rows }: { header: string[]; divider: string[]; rows: string[][] }) {
+  const alignments = divider.map(tableAlignment);
+  return (
+    <div className="markdown-table-wrap">
+      <table>
+        <thead><tr>{header.map((cell, index) => <th key={index} style={{ textAlign: alignments[index] }}>{inlineMarkdown(cell)}</th>)}</tr></thead>
+        <tbody>{rows.map((row, rowIndex) => (
+          <tr key={rowIndex}>{header.map((_, cellIndex) => <td key={cellIndex} style={{ textAlign: alignments[cellIndex] }}>{inlineMarkdown(row[cellIndex] ?? "")}</td>)}</tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Markdown({ children }: { children: string }) {
   const lines = children.replaceAll("\r\n", "\n").split("\n");
   const nodes: ReactNode[] = [];
@@ -25,6 +52,18 @@ export function Markdown({ children }: { children: string }) {
       while (index < lines.length && !(lines[index] ?? "").startsWith("```")) code.push(lines[index++] ?? "");
       index += 1;
       nodes.push(<pre key={`code-${index}`}><code data-language={language || undefined}>{code.join("\n")}</code></pre>);
+      continue;
+    }
+    const nextLine = lines[index + 1] ?? "";
+    const headerCells = tableCells(line);
+    const dividerCells = tableCells(nextLine);
+    if (line.includes("|") && headerCells.length === dividerCells.length && dividerCells.every((cell) => tableAlignment(cell))) {
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && (lines[index] ?? "").includes("|") && (lines[index] ?? "").trim()) {
+        rows.push(tableCells(lines[index++] ?? ""));
+      }
+      nodes.push(<MarkdownTable key={`table-${index}`} header={headerCells} divider={dividerCells} rows={rows} />);
       continue;
     }
     const heading = line.match(/^(#{1,4})\s+(.+)$/u);

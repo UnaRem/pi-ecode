@@ -1,6 +1,7 @@
-import { ArrowUp, ImagePlus, Square, X } from "lucide-react";
+import { ArrowUp, ImagePlus, Square } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
 import type { ContextState, ImageAttachment } from "@shared/contracts";
+import { ImageGallery } from "./ImageGallery";
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -10,6 +11,7 @@ interface ComposerProps {
   pendingCount: number;
   modelReady: boolean;
   restoredText: string | null;
+  restoredImages: ImageAttachment[];
   restoreVersion: number;
   context: ContextState;
   onSend: (message: string, images: ImageAttachment[]) => void;
@@ -45,8 +47,9 @@ export function Composer(props: ComposerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (props.restoredText !== null) {
-      setText(props.restoredText);
+    if (props.restoredText !== null) setText(props.restoredText);
+    setImages(props.restoredImages);
+    if (props.restoredText !== null || props.restoredImages.length > 0) {
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [props.restoreVersion]);
@@ -107,15 +110,11 @@ export function Composer(props: ComposerProps) {
     <footer className="composer-area">
       <div className={`composer ${props.isStreaming ? "working" : ""}`}>
         {images.length > 0 && (
-          <div className="image-strip">
-            {images.map((image) => (
-              <div className="image-chip" key={image.id}>
-                <img src={`data:${image.mimeType};base64,${image.data}`} alt={image.fileName} />
-                <span>{image.fileName}</span>
-                <button onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))} aria-label={`Remove ${image.fileName}`}><X size={12} /></button>
-              </div>
-            ))}
-          </div>
+          <ImageGallery
+            images={images}
+            variant="composer"
+            onRemove={(id) => setImages((current) => current.filter((item) => item.id !== id))}
+          />
         )}
         {attachmentError && <div className="attachment-error">{attachmentError}</div>}
         <textarea

@@ -76,6 +76,18 @@ describe("reduceAgentEvent", () => {
     expect(finished.tools[0]).toMatchObject({ output: "passed", status: "success" });
   });
 
+  it("restores text and images to the composer after undo", () => {
+    const restored = reduceAgentEvent(INITIAL_AGENT_STATE, {
+      type: "history",
+      history: INITIAL_AGENT_STATE.history,
+      editorText: "Inspect this",
+      editorImages: [{ id: "image-1", fileName: "image.png", mimeType: "image/png", data: "aGVsbG8=" }],
+    });
+    expect(restored.restoredEditorText).toBe("Inspect this");
+    expect(restored.restoredEditorImages).toHaveLength(1);
+    expect(restored.editorRestoreVersion).toBe(1);
+  });
+
   it("does not append duplicate finalized messages", () => {
     const event = {
       type: "message" as const,

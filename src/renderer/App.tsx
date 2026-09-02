@@ -109,6 +109,7 @@ export default function App() {
           pendingCount={state.pendingCount}
           modelReady={Boolean(state.selectedModel)}
           restoredText={state.restoredEditorText}
+          restoredImages={state.restoredEditorImages}
           restoreVersion={state.editorRestoreVersion}
           context={state.context}
           onSend={(message, images) => void actions.send(message, images)}

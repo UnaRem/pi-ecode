@@ -9,7 +9,7 @@ import type {
   InlineExtension,
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import type { ChangeReview, ChangedFile } from "../../shared/contracts.js";
+import type { ChangeReview, ChangedFile, ImageAttachment } from "../../shared/contracts.js";
 
 const execFileAsync = promisify(execFile);
 const TURN_ENTRY = "pi-ecode.workspace-turn";
@@ -71,6 +71,7 @@ export interface WorkspaceHistoryState {
 
 export interface HistoryOperationResult {
   editorText?: string;
+  editorImages?: ImageAttachment[];
   message: string;
 }
 
@@ -89,6 +90,20 @@ function messageText(entry: SessionEntry | undefined): string {
     ))
     .map((block) => block.text)
     .join("\n");
+}
+
+function messageImages(entry: SessionEntry | undefined): ImageAttachment[] {
+  if (entry?.type !== "message" || entry.message.role !== "user" || !Array.isArray(entry.message.content)) return [];
+  return entry.message.content.flatMap((block, index) => {
+    if (block.type !== "image" || !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(block.mimeType)) return [];
+    const mimeType = block.mimeType as ImageAttachment["mimeType"];
+    return [{
+      id: `restored-image-${index}-${block.data.slice(0, 12)}`,
+      fileName: `restored-${index + 1}.${mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1]}`,
+      mimeType,
+      data: block.data,
+    }];
+  });
 }
 
 function latestEntryId(session: AgentSession): string | undefined {
@@ -332,7 +347,12 @@ export class WorkspaceHistory {
         commit: currentCommit,
         createdAt: new Date().toISOString(),
       });
-      return { editorText: record.prompt || messageText(session.sessionManager.getEntry(record.userEntryId)), message: "Workspace and conversation restored." };
+      const userEntry = session.sessionManager.getEntry(record.userEntryId);
+      return {
+        editorText: record.prompt || messageText(userEntry),
+        editorImages: messageImages(userEntry),
+        message: "Workspace and conversation restored.",
+      };
     });
   }
 

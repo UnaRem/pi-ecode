@@ -337,7 +337,7 @@ export class AgentService {
     }
   }
 
-  async undo(): Promise<{ editorText?: string; message: string }> {
+  async undo(): Promise<import("../../shared/contracts.js").HistoryOperationResult> {
     const session = this.requireRuntime().session;
     this.validation.invalidate("Workspace was restored after the last verification.");
     this.candidate.invalidate();
@@ -347,7 +347,7 @@ export class AgentService {
     return result;
   }
 
-  async redo(): Promise<{ editorText?: string; message: string }> {
+  async redo(): Promise<import("../../shared/contracts.js").HistoryOperationResult> {
     const session = this.requireRuntime().session;
     this.validation.invalidate("Workspace was restored after the last verification.");
     this.candidate.invalidate();
@@ -408,12 +408,13 @@ export class AgentService {
     this.emit({ type: "review", review: await this.history.getReview(session) });
   }
 
-  private async emitHistory(session: AgentSession, result?: { editorText?: string; message: string }): Promise<void> {
+  private async emitHistory(session: AgentSession, result?: import("../../shared/contracts.js").HistoryOperationResult): Promise<void> {
     const history = await this.history.getState(session);
     this.emit({
       type: "history",
       history,
-      ...(result?.editorText ? { editorText: result.editorText } : {}),
+      ...(result?.editorText !== undefined ? { editorText: result.editorText } : {}),
+      ...(result?.editorImages ? { editorImages: result.editorImages } : {}),
       ...(result?.message ? { notice: result.message } : {}),
     });
   }

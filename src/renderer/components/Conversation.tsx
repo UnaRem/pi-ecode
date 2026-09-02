@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Sparkles } from "lucide-react";
 import type { ConversationItem } from "@shared/contracts";
+import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
 
@@ -39,6 +40,9 @@ export function Conversation(props: ConversationProps) {
                 <div className="message-role">{item.message.role === "user" ? "You" : "pi"}</div>
                 <div className="message-content">
                   {item.message.role === "assistant" ? <Markdown>{item.message.text}</Markdown> : item.message.text}
+                  {item.message.images && item.message.images.length > 0 && (
+                    <ImageGallery images={item.message.images} variant="message" />
+                  )}
                   {hasLiveAssistant && index === props.timeline.length - 1 && (
                     <span className="stream-caret" aria-label="Generating" />
                   )}

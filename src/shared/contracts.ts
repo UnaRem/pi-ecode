@@ -51,6 +51,7 @@ export interface ConversationMessage {
   role: "user" | "assistant";
   text: string;
   timestamp: number;
+  images?: ImageAttachment[];
   isError?: boolean;
 }
 
@@ -90,6 +91,7 @@ export interface WorkspaceHistoryState {
 
 export interface HistoryOperationResult {
   editorText?: string;
+  editorImages?: ImageAttachment[];
   message: string;
 }
 
@@ -189,7 +191,7 @@ export type AgentEvent =
   | { type: "context"; context: ContextState }
   | { type: "state"; patch: Partial<Pick<AgentSnapshot, "isStreaming" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error">> }
   | { type: "sessions"; sessions: SessionSummary[] }
-  | { type: "history"; history: WorkspaceHistoryState; editorText?: string; notice?: string }
+  | { type: "history"; history: WorkspaceHistoryState; editorText?: string; editorImages?: ImageAttachment[]; notice?: string }
   | { type: "validation"; validation: ValidationState }
   | { type: "review"; review: ChangeReview }
   | { type: "candidate"; candidate: CandidateState }

@@ -1,8 +1,9 @@
-import type { AgentEvent, AgentSnapshot, ToolActivity } from "@shared/contracts";
+import type { AgentEvent, AgentSnapshot, ImageAttachment, ToolActivity } from "@shared/contracts";
 
 export interface AgentViewState extends AgentSnapshot {
   liveAssistant: string;
   restoredEditorText: string | null;
+  restoredEditorImages: ImageAttachment[];
   editorRestoreVersion: number;
   notice: string | null;
 }
@@ -56,6 +57,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   policy: { contextFiles: [], workflow: "manual-review", gitCommits: "required-after-verification" },
   liveAssistant: "",
   restoredEditorText: null,
+  restoredEditorImages: [],
   editorRestoreVersion: 0,
   notice: null,
 };
@@ -82,6 +84,7 @@ export function reduceAgentEvent(state: AgentViewState, event: AgentEvent): Agen
         ...event.snapshot,
         liveAssistant: "",
         restoredEditorText: null,
+        restoredEditorImages: [],
         editorRestoreVersion: state.editorRestoreVersion,
         notice: null,
       };
@@ -110,7 +113,10 @@ export function reduceAgentEvent(state: AgentViewState, event: AgentEvent): Agen
         ...state,
         history: event.history,
         restoredEditorText: event.editorText ?? state.restoredEditorText,
-        editorRestoreVersion: event.editorText ? state.editorRestoreVersion + 1 : state.editorRestoreVersion,
+        restoredEditorImages: event.editorImages ?? state.restoredEditorImages,
+        editorRestoreVersion: event.editorText !== undefined || event.editorImages !== undefined
+          ? state.editorRestoreVersion + 1
+          : state.editorRestoreVersion,
         notice: event.notice ?? null,
       };
     case "validation":

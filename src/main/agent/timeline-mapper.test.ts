@@ -38,4 +38,20 @@ describe("mapTimeline", () => {
       tool: { id: "call-1", input: expect.stringContaining("app.ts"), output: "const value = 1;" },
     });
   });
+
+  it("keeps images attached to their user message", () => {
+    const messages = [{
+      role: "user",
+      content: [
+        { type: "text", text: "Inspect this" },
+        { type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+      ],
+      timestamp: 1,
+    }] as unknown as AgentMessage[];
+
+    expect(mapTimeline(messages)[0]).toMatchObject({
+      kind: "message",
+      message: { text: "Inspect this", images: [{ mimeType: "image/png", data: "aGVsbG8=" }] },
+    });
+  });
 });
