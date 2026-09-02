@@ -65,6 +65,20 @@ export interface ToolActivity {
   status: "running" | "success" | "error";
 }
 
+export type TaskPlanItemStatus = "pending" | "in_progress" | "completed";
+
+export interface TaskPlanItem {
+  id: string;
+  text: string;
+  status: TaskPlanItemStatus;
+}
+
+export interface TaskPlan {
+  title: string;
+  items: TaskPlanItem[];
+  updatedAt: number;
+}
+
 export type ConversationItem =
   | { kind: "message"; id: string; message: ConversationMessage }
   | { kind: "tool"; id: string; tool: ToolActivity };
@@ -177,6 +191,7 @@ export interface AgentSnapshot {
   isStreaming: boolean;
   pendingCount: number;
   error: string | null;
+  taskPlan?: TaskPlan | null;
   history: WorkspaceHistoryState;
   validation: ValidationState;
   review: ChangeReview;
