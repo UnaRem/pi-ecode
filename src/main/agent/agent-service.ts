@@ -495,16 +495,10 @@ export class AgentService {
         break;
       case "message_end": {
         if (event.message.role === "user") {
-          const text = textFromContent(event.message.content);
-          if (text) {
-            const message: ConversationMessage = {
-              id: `user-${event.message.timestamp}-${session.sessionId}`,
-              role: "user",
-              text,
-              timestamp: event.message.timestamp,
-            };
-            this.emit({ type: "message", message });
-            this.emit({ type: "timeline-upsert", item: messageItem(message) });
+          const item = mapTimeline([event.message]).at(0);
+          if (item?.kind === "message") {
+            this.emit({ type: "message", message: item.message });
+            this.emit({ type: "timeline-upsert", item });
           }
         }
         this.emitContext(session);
