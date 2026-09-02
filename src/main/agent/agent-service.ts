@@ -29,6 +29,7 @@ import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { formatToolInput, mapMessages, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
 import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
+import { StreamContinuity } from "./stream-continuity.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
   projectPath: null,
@@ -94,6 +95,7 @@ export class AgentService {
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
   private compactOperation: Promise<void> | undefined;
+  private readonly streamContinuity = new StreamContinuity();
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
@@ -426,6 +428,7 @@ export class AgentService {
 
   private async bindSession(session: AgentSession): Promise<void> {
     this.unsubscribe?.();
+    this.streamContinuity.install(session);
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";
@@ -453,6 +456,18 @@ export class AgentService {
         break;
       case "queue_update":
         this.emit({ type: "state", patch: { pendingCount: event.steering.length + event.followUp.length } });
+        break;
+      case "auto_retry_start":
+        this.emit({
+          type: "state",
+          patch: { error: `Connection interrupted · retrying ${event.attempt}/${event.maxAttempts}…` },
+        });
+        break;
+      case "auto_retry_end":
+        this.emit({
+          type: "state",
+          patch: { error: event.success ? null : event.finalError ?? "Connection recovery failed." },
+        });
         break;
       case "message_start":
         if (event.message.role === "assistant") {
