@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEvent, DesktopApi, ThinkingLevel } from "../shared/contracts.js";
+import type { AuthFlowEvent, SettingsChangedEvent } from "../shared/settings-contracts.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
 const api: DesktopApi = {
@@ -25,10 +26,22 @@ const api: DesktopApi = {
   cancelCompact: () => ipcRenderer.invoke(IPC_CHANNELS.cancelCompact),
   notifyCompactionComplete: (title, body) => ipcRenderer.invoke(IPC_CHANNELS.notifyCompactionComplete, title, body),
   respondExtensionUi: (response) => ipcRenderer.invoke(IPC_CHANNELS.respondExtensionUi, response),
+  getSettings: () => ipcRenderer.invoke(IPC_CHANNELS.getSettings),
+  saveConfig: (request) => ipcRenderer.invoke(IPC_CHANNELS.saveConfig, request),
+  reloadSettings: () => ipcRenderer.invoke(IPC_CHANNELS.reloadSettings),
+  loginProvider: (providerId, type) => ipcRenderer.invoke(IPC_CHANNELS.loginProvider, providerId, type),
+  logoutProvider: (providerId) => ipcRenderer.invoke(IPC_CHANNELS.logoutProvider, providerId),
+  respondAuthPrompt: (response) => ipcRenderer.invoke(IPC_CHANNELS.respondAuthPrompt, response),
+  cancelAuth: () => ipcRenderer.invoke(IPC_CHANNELS.cancelAuth),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => listener(agentEvent);
     ipcRenderer.on(IPC_CHANNELS.event, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.event, handler);
+  },
+  subscribeSettings: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, settingsEvent: SettingsChangedEvent | AuthFlowEvent): void => listener(settingsEvent);
+    ipcRenderer.on(IPC_CHANNELS.settingsEvent, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.settingsEvent, handler);
   },
 };
 

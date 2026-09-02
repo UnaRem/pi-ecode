@@ -12,6 +12,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import type { ProviderStatus } from "../../shared/settings-contracts.js";
 import type {
   AgentEvent,
   AgentSnapshot,
@@ -169,33 +170,8 @@ export class AgentService {
     this.projectPath = cwd;
     this.startupError = undefined;
 
-    const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
-      const services = await createAgentSessionServices({
-        cwd: targetCwd,
-        resourceLoaderOptions: {
-          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.taskPlan.asExtension()],
-          eventBus: this.extensionEventBus,
-          extensionsOverride: (base) => ({
-            ...base,
-            extensions: base.extensions.filter((extension) => (
-              !extension.path.replaceAll("\\", "/").includes("/node_modules/pi-workspace-history/")
-            )),
-          }),
-        },
-      });
-      return {
-        ...(await createAgentSessionFromServices({
-          services,
-          sessionManager,
-          ...(sessionStartEvent ? { sessionStartEvent } : {}),
-        })),
-        services,
-        diagnostics: services.diagnostics,
-      };
-    };
-
     try {
-      this.runtime = await createAgentSessionRuntime(createRuntime, {
+      this.runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
         cwd,
         agentDir: getAgentDir(),
         sessionManager: SessionManager.continueRecent(cwd),
@@ -212,6 +188,72 @@ export class AgentService {
       this.projectPath = undefined;
       throw error;
     }
+  }
+
+  get agentDirectory(): string {
+    return getAgentDir();
+  }
+
+  get activeProjectPath(): string | undefined {
+    return this.projectPath;
+  }
+
+  get activeModelRuntime() {
+    return this.runtime?.session.modelRuntime;
+  }
+
+  get projectSettingsTrusted(): boolean {
+    return this.runtime?.services.settingsManager.isProjectTrusted() ?? false;
+  }
+
+  async getProviderStatuses(): Promise<ProviderStatus[]> {
+    const modelRuntime = this.runtime?.session.modelRuntime;
+    if (!modelRuntime) return [];
+    const credentials = await modelRuntime.listCredentials().catch(() => []);
+    const credentialTypes = new Map(credentials.map((credential) => [credential.providerId, credential.type]));
+    return Promise.all(modelRuntime.getProviders().map(async (provider) => {
+      const check = await modelRuntime.checkAuth(provider.id).catch(() => undefined);
+      return {
+        id: provider.id,
+        name: provider.name,
+        methods: [
+          ...(provider.auth.apiKey?.login ? [{ type: "api_key" as const, label: provider.auth.apiKey.name }] : []),
+          ...(provider.auth.oauth ? [{ type: "oauth" as const, label: provider.auth.oauth.loginLabel ?? provider.auth.oauth.name }] : []),
+        ],
+        configuredType: credentialTypes.get(provider.id) ?? check?.type ?? null,
+        source: check?.source ?? null,
+        authenticated: Boolean(check),
+      };
+    }));
+  }
+
+  get runtimeBusy(): boolean {
+    return Boolean(this.runtime?.session.isStreaming || this.runtime?.session.isCompacting);
+  }
+
+  async reloadRuntimeConfiguration(): Promise<void> {
+    const previousRuntime = this.requireRuntime();
+    const cwd = this.projectPath;
+    if (!cwd) return;
+    const sessionFile = previousRuntime.session.sessionFile;
+    const sessionManager = sessionFile ? SessionManager.open(sessionFile) : SessionManager.create(cwd);
+    const candidateRuntime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
+      cwd,
+      agentDir: getAgentDir(),
+      sessionManager,
+    });
+    try {
+      this.runtime = candidateRuntime;
+      candidateRuntime.setRebindSession(async (session) => this.bindSession(session));
+      await this.bindSession(candidateRuntime.session);
+    } catch (error) {
+      this.runtime = previousRuntime;
+      await candidateRuntime.dispose();
+      await this.bindSession(previousRuntime.session);
+      throw error;
+    }
+    await previousRuntime.dispose();
+    this.emit({ type: "snapshot", snapshot: await this.getSnapshot() });
   }
 
   async getSnapshot(): Promise<AgentSnapshot> {
@@ -444,6 +486,33 @@ export class AgentService {
       ...(result?.editorImages ? { editorImages: result.editorImages } : {}),
       ...(result?.message ? { notice: result.message } : {}),
     });
+  }
+
+  private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
+    return async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
+      const services = await createAgentSessionServices({
+        cwd: targetCwd,
+        resourceLoaderOptions: {
+          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.taskPlan.asExtension()],
+          eventBus: this.extensionEventBus,
+          extensionsOverride: (base) => ({
+            ...base,
+            extensions: base.extensions.filter((extension) => (
+              !extension.path.replaceAll("\\", "/").includes("/node_modules/pi-workspace-history/")
+            )),
+          }),
+        },
+      });
+      return {
+        ...(await createAgentSessionFromServices({
+          services,
+          sessionManager,
+          ...(sessionStartEvent ? { sessionStartEvent } : {}),
+        })),
+        services,
+        diagnostics: services.diagnostics,
+      };
+    };
   }
 
   private requireRuntime(): AgentSessionRuntime {

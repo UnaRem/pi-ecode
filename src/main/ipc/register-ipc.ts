@@ -1,7 +1,9 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
+import type { SaveConfigRequest } from "../../shared/settings-contracts.js";
 import type { AgentService } from "../agent/agent-service.js";
+import type { SettingsService } from "../settings/settings-service.js";
 
 function isExtensionUiResponse(value: unknown): value is ExtensionUiResponse {
   if (!value || typeof value !== "object") return false;
@@ -15,7 +17,19 @@ function isExtensionUiResponse(value: unknown): value is ExtensionUiResponse {
   );
 }
 
-export function registerIpc(service: AgentService): () => void {
+function isSaveConfigRequest(value: unknown): value is SaveConfigRequest {
+  if (!value || typeof value !== "object") return false;
+  const request = value as Partial<SaveConfigRequest>;
+  const targets = ["global-settings", "project-settings", "models", "pi-fff"];
+  return typeof request.target === "string"
+    && targets.includes(request.target)
+    && Boolean(request.value)
+    && typeof request.value === "object"
+    && !Array.isArray(request.value)
+    && (request.expectedRevision === null || typeof request.expectedRevision === "string");
+}
+
+export function registerIpc(service: AgentService, settings: SettingsService): () => void {
   ipcMain.handle(IPC_CHANNELS.chooseProject, async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
     const result = owner
@@ -23,7 +37,11 @@ export function registerIpc(service: AgentService): () => void {
       : await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
-  ipcMain.handle(IPC_CHANNELS.openProject, (_event, path: string) => service.openProject(path));
+  ipcMain.handle(IPC_CHANNELS.openProject, async (_event, path: string) => {
+    const snapshot = await service.openProject(path);
+    await settings.projectChanged();
+    return snapshot;
+  });
   ipcMain.handle(IPC_CHANNELS.getSnapshot, () => service.getSnapshot());
   ipcMain.handle(IPC_CHANNELS.newSession, () => service.newSession());
   ipcMain.handle(IPC_CHANNELS.switchSession, (_event, path: string) => service.switchSession(path));
@@ -53,6 +71,12 @@ export function registerIpc(service: AgentService): () => void {
   ipcMain.handle(IPC_CHANNELS.respondExtensionUi, (_event, response: unknown) => (
     isExtensionUiResponse(response) && service.respondExtensionUi(response)
   ));
+  ipcMain.handle(IPC_CHANNELS.getSettings, () => settings.getSnapshot());
+  ipcMain.handle(IPC_CHANNELS.saveConfig, (_event, request: unknown) => {
+    if (!isSaveConfigRequest(request)) throw new Error("Invalid settings save request.");
+    return settings.save(request);
+  });
+  ipcMain.handle(IPC_CHANNELS.reloadSettings, () => settings.reload());
 
   const unsubscribe = service.subscribe((agentEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {

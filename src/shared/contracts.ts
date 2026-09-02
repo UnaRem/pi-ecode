@@ -1,3 +1,5 @@
+import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
+
 export const IPC_CHANNELS = {
   chooseProject: "desktop:choose-project",
   openProject: "agent:open-project",
@@ -21,6 +23,14 @@ export const IPC_CHANNELS = {
   cancelCompact: "agent:cancel-compact",
   notifyCompactionComplete: "desktop:notify-compaction-complete",
   respondExtensionUi: "extension-ui:respond",
+  getSettings: "settings:get",
+  saveConfig: "settings:save",
+  reloadSettings: "settings:reload",
+  loginProvider: "settings:auth-login",
+  logoutProvider: "settings:auth-logout",
+  respondAuthPrompt: "settings:auth-respond",
+  cancelAuth: "settings:auth-cancel",
+  settingsEvent: "settings:event",
   event: "agent:event",
 } as const;
 
@@ -286,5 +296,13 @@ export interface DesktopApi {
   cancelCompact(): Promise<void>;
   notifyCompactionComplete(title: string, body: string): Promise<boolean>;
   respondExtensionUi(response: ExtensionUiResponse): Promise<boolean>;
+  getSettings(): Promise<SettingsSnapshot>;
+  saveConfig(request: SaveConfigRequest): Promise<SettingsSnapshot>;
+  reloadSettings(): Promise<SettingsSnapshot>;
+  loginProvider(providerId: string, type: AuthType): Promise<void>;
+  logoutProvider(providerId: string): Promise<SettingsSnapshot>;
+  respondAuthPrompt(response: AuthPromptResponse): Promise<boolean>;
+  cancelAuth(): Promise<void>;
   subscribe(listener: (event: AgentEvent) => void): () => void;
+  subscribeSettings(listener: (event: SettingsChangedEvent | AuthFlowEvent) => void): () => void;
 }

@@ -2,12 +2,33 @@ import { join } from "node:path";
 import { app, BrowserWindow, shell } from "electron";
 import { AgentService } from "./agent/agent-service.js";
 import { registerIpc } from "./ipc/register-ipc.js";
+import { SettingsService } from "./settings/settings-service.js";
+import { IPC_CHANNELS } from "../shared/contracts.js";
 
 if (process.platform === "win32") app.setAppUserModelId("com.pi-ecode.desktop");
 
 const service = new AgentService();
+const settings = new SettingsService({
+  agentDir: service.agentDirectory,
+  getProjectPath: () => service.activeProjectPath,
+  getProviderStatuses: () => service.getProviderStatuses(),
+  isProjectTrusted: () => service.projectSettingsTrusted,
+  isRuntimeBusy: () => service.runtimeBusy,
+  applyRuntimeChanges: () => service.reloadRuntimeConfiguration(),
+  onChanged: (snapshot, source) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, { type: "settings-changed", snapshot, source });
+    }
+  },
+  onError: (message) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, { type: "auth-flow", state: { providerId: "settings", status: "failed", message, request: null } });
+    }
+  },
+});
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let unregisterIpc: (() => void) | undefined;
+let unsubscribeAgent: (() => void) | undefined;
 
 function focusMainWindow(): void {
   const window = BrowserWindow.getAllWindows()[0];
@@ -57,7 +78,11 @@ if (!hasSingleInstanceLock) {
 
   void app.whenReady().then(async () => {
     await service.initialize();
-    unregisterIpc = registerIpc(service);
+    await settings.start();
+    unsubscribeAgent = service.subscribe((event) => {
+      if (event.type === "state" && event.patch.isStreaming === false) void settings.applyPendingIfIdle();
+    });
+    unregisterIpc = registerIpc(service, settings);
     createWindow();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -71,6 +96,8 @@ if (!hasSingleInstanceLock) {
 
   app.on("before-quit", () => {
     unregisterIpc?.();
+    unsubscribeAgent?.();
+    void settings.dispose();
     void service.dispose();
   });
 }
