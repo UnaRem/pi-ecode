@@ -1,10 +1,11 @@
 import { FolderOpen, LoaderCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Composer } from "./components/Composer";
 import { Conversation } from "./components/Conversation";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { ValidationPanel } from "./components/ValidationPanel";
+import { SettingsPage } from "./components/settings/SettingsPage";
 import { useAgent } from "./hooks/use-agent";
 import { useI18n } from "./i18n/i18n";
 
@@ -13,17 +14,26 @@ export default function App() {
   const { t } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [validationOpen, setValidationOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+
+  const leaveSettings = useCallback((): boolean => {
+    if (settingsDirty && !window.confirm(t("settings.confirmDiscard"))) return false;
+    setSettingsOpen(false);
+    setSettingsDirty(false);
+    return true;
+  }, [settingsDirty, t]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n" && state.projectPath) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n" && state.projectPath && !settingsOpen) {
         event.preventDefault();
         void actions.newSession();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [actions, state.projectPath]);
+  }, [actions, settingsOpen, state.projectPath]);
 
   if (isLoading) {
     return <div className="loading-screen"><LoaderCircle className="spin" size={22} /><span>{t("app.openingProject")}</span></div>;
@@ -54,13 +64,19 @@ export default function App() {
           activeSessionFile={state.sessionFile}
           disabled={state.isStreaming}
           taskPlan={state.taskPlan}
-          onChooseProject={() => void actions.chooseProject()}
-          onNewSession={() => void actions.newSession()}
-          onSwitchSession={(path) => void actions.switchSession(path)}
+          settingsActive={settingsOpen}
+          onChooseProject={() => { if (leaveSettings()) void actions.chooseProject(); }}
+          onNewSession={() => { if (leaveSettings()) void actions.newSession(); }}
+          onSwitchSession={(path) => { if (leaveSettings()) void actions.switchSession(path); }}
+          onOpenSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebarOpen(false)}
         />
       )}
       <section className="workspace">
+        {settingsOpen ? (
+          <SettingsPage onClose={() => void leaveSettings()} onDirtyChange={setSettingsDirty} />
+        ) : (
+          <>
         <Topbar
           sidebarOpen={sidebarOpen}
           projectName={state.projectName}
@@ -115,6 +131,8 @@ export default function App() {
           onUndo={() => void actions.undo()}
           onRedo={() => void actions.redo()}
         />
+          </>
+        )}
       </section>
     </div>
   );

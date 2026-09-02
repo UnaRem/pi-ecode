@@ -1,4 +1,4 @@
-import { FolderOpen, MessageSquarePlus, PanelLeftClose } from "lucide-react";
+import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
 import { TaskPlanPanel } from "./TaskPlanPanel";
 import { useI18n, type UiLanguage } from "../i18n/i18n";
@@ -10,9 +10,11 @@ interface SidebarProps {
   activeSessionFile: string | null;
   disabled: boolean;
   taskPlan: TaskPlan | null;
+  settingsActive: boolean;
   onChooseProject: () => void;
   onNewSession: () => void;
   onSwitchSession: (path: string) => void;
+  onOpenSettings: () => void;
   onCollapse: () => void;
 }
 
@@ -73,6 +75,10 @@ export function Sidebar(props: SidebarProps) {
           <TaskPlanPanel plan={props.taskPlan} />
         </section>
       )}
+      <button className={`sidebar-settings ${props.settingsActive ? "active" : ""}`} onClick={props.onOpenSettings}>
+        <Settings size={15} />
+        {t("sidebar.settings")}
+      </button>
       <label className="sidebar-language">
         <span>{t("sidebar.language")}</span>
         <select value={language} onChange={(event) => setLanguage(event.target.value as UiLanguage)}>
