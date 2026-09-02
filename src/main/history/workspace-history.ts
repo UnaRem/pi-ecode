@@ -57,7 +57,7 @@ interface RedoRecord {
 
 interface PendingTurn {
   beforeCommit: string;
-  userEntryId: string;
+  userEntryId?: string;
   prompt: string;
 }
 
@@ -110,18 +110,6 @@ function latestEntryId(session: AgentSession): string | undefined {
   return session.sessionManager.getLeafId() ?? undefined;
 }
 
-function latestUserEntry(session: AgentSession): SessionEntry | undefined {
-  return [...session.sessionManager.getBranch()].reverse().find(
-    (entry) => entry.type === "message" && entry.message.role === "user",
-  );
-}
-
-function latestAssistantEntry(session: AgentSession): SessionEntry | undefined {
-  return [...session.sessionManager.getBranch()].reverse().find(
-    (entry) => entry.type === "message" && entry.message.role === "assistant",
-  );
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -143,28 +131,35 @@ export class WorkspaceHistory {
 
   private registerExtension(pi: ExtensionAPI): void {
     pi.on("before_agent_start", async (event, ctx) => {
-      const userEntry = [...ctx.sessionManager.getBranch()].reverse().find(
-        (entry) => entry.type === "message" && entry.message.role === "user",
-      );
-      if (!userEntry) return;
       const beforeCommit = await this.snapshot(ctx.cwd, ctx.sessionManager.getSessionId(), "before agent turn");
       this.pendingBySession.set(ctx.sessionManager.getSessionId(), {
         beforeCommit,
-        userEntryId: userEntry.id,
         prompt: event.prompt,
       });
     });
 
-    pi.on("turn_end", async (_event, ctx) => {
+    pi.on("message_end", (event, ctx) => {
+      if (event.message.role !== "user") return;
+      const pending = this.pendingBySession.get(ctx.sessionManager.getSessionId());
+      if (!pending || pending.userEntryId) return;
+      const userEntry = [...ctx.sessionManager.getBranch()].reverse().find(
+        (entry) => entry.type === "message" && entry.message.role === "user",
+      );
+      if (userEntry) pending.userEntryId = userEntry.id;
+    });
+
+    pi.on("agent_settled", async (_event, ctx) => {
       const sessionId = ctx.sessionManager.getSessionId();
       const pending = this.pendingBySession.get(sessionId);
-      if (!pending) return;
       const assistantEntry = [...ctx.sessionManager.getBranch()].reverse().find(
         (entry) => entry.type === "message" && entry.message.role === "assistant",
       );
-      if (!assistantEntry) return;
+      if (!pending?.userEntryId || !assistantEntry) {
+        this.pendingBySession.delete(sessionId);
+        return;
+      }
       const afterCommit = await this.snapshot(ctx.cwd, sessionId, "after agent turn");
-      const record: TurnRecord = {
+      pi.appendEntry<TurnRecord>(TURN_ENTRY, {
         version: 1,
         beforeCommit: pending.beforeCommit,
         afterCommit,
@@ -172,13 +167,9 @@ export class WorkspaceHistory {
         assistantEntryId: assistantEntry.id,
         prompt: pending.prompt,
         createdAt: new Date().toISOString(),
-      };
-      pi.appendEntry<TurnRecord>(TURN_ENTRY, record);
+      });
+      this.pendingBySession.delete(sessionId);
       await this.writeRedo(ctx.cwd, sessionId, undefined);
-    });
-
-    pi.on("agent_end", (_event, ctx) => {
-      this.pendingBySession.delete(ctx.sessionManager.getSessionId());
     });
 
     pi.on("session_shutdown", (_event, ctx) => {

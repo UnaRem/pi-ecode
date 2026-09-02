@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentSession, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it } from "vitest";
 import { WorkspaceHistory } from "./workspace-history.js";
 
@@ -13,6 +13,30 @@ afterEach(async () => {
 
 interface CapturedCheckpoint {
   commit: string;
+}
+
+type ExtensionHandler = (event: { message?: { role: string }; prompt?: string }, context: ExtensionContext) => Promise<void> | void;
+
+function historyExtensionHarness(history: WorkspaceHistory, entries: SessionEntry[], cwd: string) {
+  const handlers = new Map<string, ExtensionHandler>();
+  const turnRecords: unknown[] = [];
+  const pi = {
+    on: (name: string, handler: ExtensionHandler) => handlers.set(name, handler),
+    appendEntry: (customType: string, record: unknown) => {
+      if (customType === "pi-ecode.workspace-turn") turnRecords.push(record);
+      return "turn-entry";
+    },
+  } as unknown as ExtensionAPI;
+  const extension = history.asExtension();
+  void (typeof extension === "function" ? extension(pi) : extension.factory(pi));
+  const context = {
+    cwd,
+    sessionManager: {
+      getSessionId: () => "test-session",
+      getBranch: () => entries,
+    },
+  } as unknown as ExtensionContext;
+  return { handlers, turnRecords, context };
 }
 
 function fakeSession(cwd: string, entries: SessionEntry[], captured: CapturedCheckpoint[], leafId = "current-leaf"): AgentSession {
@@ -54,6 +78,45 @@ describe("WorkspaceHistory", () => {
     expect(results.every((result) => result.message === "Checkpoint saved: rapid click")).toBe(true);
     expect(captured).toHaveLength(1);
     expect((await history.getState(session)).isBusy).toBe(false);
+  });
+
+  it("binds history to the current user message and records one settled task", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-turn-boundary-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-history-boundary-"));
+    temporaryPaths.push(workspace, storage);
+    await writeFile(join(workspace, "app.txt"), "before\n", "utf8");
+    const history = new WorkspaceHistory(storage);
+    const entries = [{
+      type: "message",
+      id: "previous-user",
+      parentId: null,
+      timestamp: new Date().toISOString(),
+      message: { role: "user", content: [{ type: "image", data: "old-image", mimeType: "image/png" }], timestamp: 1 },
+    }] as SessionEntry[];
+    const harness = historyExtensionHarness(history, entries, workspace);
+
+    await harness.handlers.get("before_agent_start")?.({ prompt: "current prompt" }, harness.context);
+    entries.push({
+      type: "message",
+      id: "current-user",
+      parentId: "previous-user",
+      timestamp: new Date().toISOString(),
+      message: { role: "user", content: "current prompt", timestamp: 2 },
+    } as SessionEntry);
+    await harness.handlers.get("message_end")?.({ message: { role: "user" } }, harness.context);
+    entries.push({
+      type: "message",
+      id: "assistant-result",
+      parentId: "current-user",
+      timestamp: new Date().toISOString(),
+      message: { role: "assistant", content: [], stopReason: "stop", timestamp: 3 },
+    } as unknown as SessionEntry);
+
+    await harness.handlers.get("agent_settled")?.({}, harness.context);
+    await harness.handlers.get("agent_settled")?.({}, harness.context);
+
+    expect(harness.turnRecords).toHaveLength(1);
+    expect(harness.turnRecords[0]).toMatchObject({ userEntryId: "current-user", assistantEntryId: "assistant-result" });
   });
 
   it("restores modified and newly-created files with undo", async () => {
