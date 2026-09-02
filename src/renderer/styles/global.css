@@ -194,12 +194,19 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .working-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
 .stream-caret { display: inline-block; width: 5px; height: 16px; margin-left: 3px; vertical-align: -3px; border-radius: 1px; background: #777; animation: blink 1s steps(2) infinite; }
 .timeline-tool { margin: -11px 0 20px 55px; }
-.tool-card { overflow: hidden; border: 1px solid #d9ddd9; border-radius: 8px; color: var(--muted); background: #f0f2ef; }
-.tool-card::before { content: "TOOL"; display: block; padding: 4px 9px 0; color: #8a958f; font-size: 7px; font-weight: 700; letter-spacing: .1em; }
+.tool-card { --tool-accent: #7d817e; --tool-border: #d9ddd9; --tool-bg: #f0f2ef; overflow: hidden; border: 1px solid var(--tool-border); border-left: 3px solid var(--tool-accent); border-radius: 8px; color: var(--muted); background: var(--tool-bg); }
+.tool-card::before { content: attr(data-tool-label); display: block; padding: 4px 9px 0; color: var(--tool-accent); font-size: 7px; font-weight: 700; letter-spacing: .1em; }
+.tool-card.category-inspect { --tool-accent: #557d9b; --tool-border: #d3e0e9; --tool-bg: #f0f5f8; }
+.tool-card.category-mutate { --tool-accent: #a66d35; --tool-border: #e8d9c8; --tool-bg: #f8f3ec; }
+.tool-card.category-execute { --tool-accent: #77659a; --tool-border: #ddd6e9; --tool-bg: #f4f1f8; }
+.tool-card.category-research { --tool-accent: #397e7b; --tool-border: #cce1df; --tool-bg: #eef7f5; }
+.tool-card.category-version { --tool-accent: #4f7c58; --tool-border: #d1e1d3; --tool-bg: #f0f6f0; }
+.tool-card.category-plan { --tool-accent: #586ba0; --tool-border: #d3d9ea; --tool-bg: #f0f2f8; }
+.tool-card.error { --tool-accent: var(--danger); --tool-border: #e5c6c2; --tool-bg: #f9ebe8; }
 .tool-summary { width: 100%; display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 3px 4px; border: 0; background: transparent; font-size: 11.5px; text-align: left; cursor: pointer; }
 .tool-title { min-width: 0; overflow: hidden; color: #555550; text-overflow: ellipsis; white-space: nowrap; }
 .tool-summary small { margin-left: auto; color: var(--faint); font-size: 10px; }
-.tool-status { display: grid; place-items: center; color: #739084; }
+.tool-status { display: grid; place-items: center; color: var(--tool-accent); }
 .tool-card.error .tool-status { color: var(--danger); }
 .tool-chevron { flex: 0 0 auto; transition: transform .15s ease; }
 .tool-card.expanded .tool-chevron { transform: rotate(90deg); }
