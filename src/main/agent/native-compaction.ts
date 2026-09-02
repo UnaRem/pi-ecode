@@ -148,6 +148,7 @@ function serializeMessages(model: Model<Api>, messages: AgentMessage[]): unknown
     if (message.role === "assistant") {
       for (const call of pendingCalls.values()) input.push({ type: "function_call_output", call_id: call.id.split("|")[0], output: "No result provided" });
       pendingCalls.clear();
+      if (message.stopReason === "error" || message.stopReason === "aborted") return;
       input.push(...assistantItems(message, index));
       for (const block of message.content) if (block.type === "toolCall") pendingCalls.set(block.id, block);
       return;

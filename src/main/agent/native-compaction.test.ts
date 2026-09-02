@@ -43,16 +43,18 @@ function fakeSession(branch: SessionEntry[] = []): AgentSession {
   } as unknown as AgentSession;
 }
 
-function context(branch: SessionEntry[] = [], activeModel: Model<Api> = model): ExtensionContext {
+function context(
+  branch: SessionEntry[] = [],
+  activeModel: Model<Api> = model,
+  messages: unknown[] = [{ role: "user", content: [{ type: "text", text: "old question" }], timestamp: 1 }],
+): ExtensionContext {
   return {
     model: activeModel,
     getSystemPrompt: () => "project instructions",
     abort: vi.fn(),
     sessionManager: {
       getBranch: () => branch,
-      buildSessionContext: () => ({
-        messages: [{ role: "user", content: [{ type: "text", text: "old question" }], timestamp: 1 }],
-      }),
+      buildSessionContext: () => ({ messages }),
     },
   } as unknown as ExtensionContext;
 }
@@ -143,6 +145,31 @@ describe("NativeCompaction", () => {
     const body = JSON.parse(String((fetcher.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, any>;
     expect(JSON.stringify(body.input)).toContain("old question");
     expect(result?.compaction?.details).toMatchObject({ kind: "pi-ecode.remote-compaction-v2" });
+  });
+
+  it("does not synthesize an orphan output for a tool call in a failed assistant response", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(sse());
+    const session = fakeSession();
+    const handlers = register(new NativeCompaction(() => session, fetcher));
+    const failedAssistant = {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "call_failed|fc_failed", name: "read", arguments: { path: "app.ts" } }],
+      api: "openai-responses",
+      provider: "third-party",
+      model: "model-1",
+      stopReason: "error",
+      errorMessage: "upstream error",
+      timestamp: 2,
+    };
+
+    await handlers.compact?.(compactEvent(), context([], model, [
+      { role: "user", content: [{ type: "text", text: "inspect" }], timestamp: 1 },
+      failedAssistant,
+    ]));
+
+    const body = JSON.parse(String((fetcher.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, any>;
+    expect(JSON.stringify(body.input)).not.toContain("call_failed");
+    expect(body.input.at(-1)).toEqual({ type: "compaction_trigger" });
   });
 
   it("replaces only the pi summary sentinel during provider replay", async () => {
