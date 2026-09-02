@@ -87,6 +87,13 @@ describe("reduceAgentEvent", () => {
     expect(state.timeline).toEqual([]);
   });
 
+  it("tracks the active extension UI request", () => {
+    const request = { id: "question-1", method: "select" as const, title: "Choose", options: [{ value: "one", label: "One" }] };
+    const opened = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "extension-ui", request });
+    expect(opened.extensionUi).toEqual(request);
+    expect(reduceAgentEvent(opened, { type: "extension-ui", request: null }).extensionUi).toBeNull();
+  });
+
   it("restores text and images to the composer after undo", () => {
     const restored = reduceAgentEvent(INITIAL_AGENT_STATE, {
       type: "history",

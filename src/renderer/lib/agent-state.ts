@@ -25,6 +25,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   pendingCount: 0,
   error: null,
   taskPlan: null,
+  extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
     supported: false,
@@ -107,6 +108,8 @@ export function reduceAgentEvent(state: AgentViewState, event: AgentEvent): Agen
       return { ...state, context: event.context };
     case "task-plan":
       return { ...state, taskPlan: event.taskPlan };
+    case "extension-ui":
+      return { ...state, extensionUi: event.request };
     case "state":
       return { ...state, ...event.patch };
     case "sessions":

@@ -23,6 +23,7 @@ import type {
   CandidateState,
   ChangeReview,
   ToolActivity,
+  ExtensionUiResponse,
 } from "../../shared/contracts.js";
 import { WorkspaceHistory } from "../history/workspace-history.js";
 import { ValidationService } from "../validation/validation-service.js";
@@ -32,6 +33,7 @@ import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
+import { ExtensionUiBridge } from "./extension-ui-bridge.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
   projectPath: null,
@@ -51,6 +53,7 @@ const EMPTY_SNAPSHOT: AgentSnapshot = {
   pendingCount: 0,
   error: null,
   taskPlan: null,
+  extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
     supported: false,
@@ -107,6 +110,10 @@ export class AgentService {
   );
   private readonly streamContinuity = new StreamContinuity();
   private readonly taskPlan = new TaskPlanService((taskPlan) => this.emit({ type: "task-plan", taskPlan }));
+  private readonly extensionUi = new ExtensionUiBridge(
+    (request) => this.emit({ type: "extension-ui", request }),
+    (message) => this.emit({ type: "notice", message }),
+  );
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
@@ -230,6 +237,7 @@ export class AgentService {
       pendingCount: session.pendingMessageCount,
       error: this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
       taskPlan: this.taskPlan.current,
+      extensionUi: this.extensionUi.current,
       history,
       validation: this.validation.getState(),
       review,
@@ -321,6 +329,7 @@ export class AgentService {
 
   async stop(): Promise<void> {
     const session = this.requireRuntime().session;
+    this.extensionUi.cancelPending();
     if (session.isCompacting) {
       this.compactCancelRequested = true;
       session.abortCompaction();
@@ -447,12 +456,14 @@ export class AgentService {
 
   private async bindSession(session: AgentSession): Promise<void> {
     this.unsubscribe?.();
+    this.extensionUi.cancelPending();
     this.contextEstimate = this.nativeCompaction.storedEstimatedTokensAfter(session);
     this.streamContinuity.install(session);
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";
-    await session.bindExtensions({});
+    const fallbackUi = session.extensionRunner.getUIContext();
+    await session.bindExtensions({ mode: "rpc", uiContext: this.extensionUi.createContext(fallbackUi) });
     this.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session, event));
   }
 
@@ -634,7 +645,12 @@ export class AgentService {
     this.emit({ type: "sessions", sessions: await this.listSessions() });
   }
 
+  respondExtensionUi(response: ExtensionUiResponse): boolean {
+    return this.extensionUi.respond(response);
+  }
+
   private async disposeRuntime(): Promise<void> {
+    this.extensionUi.cancelPending();
     await this.validation.stop();
     this.unsubscribe?.();
     this.unsubscribe = undefined;
