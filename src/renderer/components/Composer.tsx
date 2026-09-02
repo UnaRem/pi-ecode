@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, typ
 import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment } from "@shared/contracts";
 import { ExtensionQuestionPanel } from "./ExtensionQuestionPanel";
 import { ImageGallery } from "./ImageGallery";
+import { useI18n, type Translate } from "../i18n/i18n";
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -23,12 +24,12 @@ interface ComposerProps {
   onCancelCompact: () => void;
 }
 
-function readImage(file: File): Promise<ImageAttachment> {
+function readImage(file: File, t: Translate): Promise<ImageAttachment> {
   return new Promise((resolve, reject) => {
-    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) return reject(new Error(`Unsupported image: ${file.name}`));
-    if (file.size > MAX_IMAGE_BYTES) return reject(new Error(`${file.name} exceeds the 10MB limit.`));
+    if (!ACCEPTED_IMAGE_TYPES.has(file.type)) return reject(new Error(t("composer.unsupportedImage", { name: file.name })));
+    if (file.size > MAX_IMAGE_BYTES) return reject(new Error(t("composer.imageTooLarge", { name: file.name })));
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read image."));
+    reader.onerror = () => reject(reader.error ?? new Error(t("composer.readImageFailed")));
     reader.onload = () => {
       const value = String(reader.result ?? "");
       const comma = value.indexOf(",");
@@ -44,6 +45,7 @@ function readImage(file: File): Promise<ImageAttachment> {
 }
 
 export function Composer(props: ComposerProps) {
+  const { t } = useI18n();
   const [text, setText] = useState("");
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export function Composer(props: ComposerProps) {
 
   const processImages = async (files: File[]): Promise<void> => {
     try {
-      const added = await Promise.all(files.map(readImage));
+      const added = await Promise.all(files.map((file) => readImage(file, t)));
       setImages((current) => [...current, ...added].slice(0, 8));
       setAttachmentError(null);
     } catch (error) {
@@ -108,7 +110,7 @@ export function Composer(props: ComposerProps) {
 
   const contextLabel = props.context.contextWindow
     ? `${props.context.isEstimated ? "~" : ""}${props.context.percent === null ? "?" : Math.round(props.context.percent)}% · ${props.context.isEstimated ? "~" : ""}${props.context.tokens === null ? "?" : Math.round(props.context.tokens / 1000)}k/${Math.round(props.context.contextWindow / 1000)}k`
-    : "Context unavailable";
+    : t("composer.contextUnavailable");
 
   return (
     <footer className="composer-area">
@@ -129,51 +131,51 @@ export function Composer(props: ComposerProps) {
           value={text}
           rows={1}
           placeholder={props.extensionUi
-            ? "Answer the question above to continue…"
-            : props.modelReady ? "Ask pi to work on this project…" : "Configure a pi model to begin"}
+            ? t("composer.answerAbove")
+            : props.modelReady ? t("composer.ask") : t("composer.configureModel")}
           disabled={!props.modelReady || Boolean(props.extensionUi)}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          aria-label="Message pi"
+          aria-label={t("composer.message")}
         />
         <div className="composer-footer">
           <div className="composer-tools">
             <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(event) => void addImages(event)} />
-            <button className="composer-tool-button" onClick={() => inputRef.current?.click()} disabled={!props.modelReady || Boolean(props.extensionUi)} aria-label="Attach images" title="Attach images"><ImagePlus size={15} /></button>
+            <button className="composer-tool-button" onClick={() => inputRef.current?.click()} disabled={!props.modelReady || Boolean(props.extensionUi)} aria-label={t("composer.attach")} title={t("composer.attach")}><ImagePlus size={15} /></button>
             <button
               className={`context-button ${props.context.isCompacting ? "cancel" : ""}`}
               onClick={props.context.isCompacting ? props.onCancelCompact : props.onCompact}
               disabled={Boolean(props.extensionUi) || (!props.context.isCompacting && (props.isStreaming || !props.context.contextWindow))}
-              title={props.context.isCompacting ? "Cancel context compaction" : "Compact conversation context"}
+              title={props.context.isCompacting ? t("composer.cancelCompact") : t("composer.compact")}
             >
-              {props.context.isCompacting ? "Cancel compact" : contextLabel}
+              {props.context.isCompacting ? t("composer.cancelCompact") : contextLabel}
             </button>
           </div>
           <span>{props.extensionUi
-            ? "Waiting for your answer"
+            ? t("composer.waitingAnswer")
             : props.isStreaming
-              ? (props.pendingCount ? `${props.pendingCount} steering · Enter to add another` : "Enter to steer · Shift Enter for newline")
-              : "Enter to send · Shift Enter for newline"}</span>
+              ? (props.pendingCount ? t("composer.steeringCount", { count: props.pendingCount }) : t("composer.steerHint"))
+              : t("composer.sendHint")}</span>
           <div className="composer-actions">
             <button
               className={`send-button ${props.isStreaming ? "steer" : ""}`}
               onClick={submit}
               disabled={Boolean(props.extensionUi) || (!text.trim() && images.length === 0) || !props.modelReady}
-              aria-label={props.isStreaming ? "Steer active task" : "Send message"}
-              title={props.isStreaming ? "Steer active task" : "Send message"}
+              aria-label={props.isStreaming ? t("composer.steer") : t("composer.send")}
+              title={props.isStreaming ? t("composer.steer") : t("composer.send")}
             >
               <ArrowUp size={17} />
             </button>
             {props.isStreaming && (
-              <button className="send-button stop" onClick={props.onStop} aria-label="Stop agent" title="Stop agent">
+              <button className="send-button stop" onClick={props.onStop} aria-label={t("composer.stop")} title={t("composer.stop")}>
                 <Square size={12} fill="currentColor" />
               </button>
             )}
           </div>
         </div>
       </div>
-      <div className="composer-note">pi can make mistakes. Review commands and file changes.</div>
+      <div className="composer-note">{t("composer.note")}</div>
     </footer>
   );
 }

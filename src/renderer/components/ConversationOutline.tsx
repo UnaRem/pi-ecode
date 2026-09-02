@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ConversationMessage } from "@shared/contracts";
+import { useI18n, type Translate } from "../i18n/i18n";
 
 interface ConversationOutlineProps {
   messages: ConversationMessage[];
@@ -7,9 +8,9 @@ interface ConversationOutlineProps {
   onSelect: (id: string) => void;
 }
 
-function messagePreview(message: ConversationMessage): string {
+function messagePreview(message: ConversationMessage, t: Translate): string {
   const text = message.text.replace(/\s+/g, " ").trim();
-  if (!text) return message.images?.length ? "Image request" : "Empty message";
+  if (!text) return message.images?.length ? t("conversation.imageRequest") : t("conversation.emptyMessage");
   return text.length > 90 ? `${text.slice(0, 90)}…` : text;
 }
 
@@ -20,6 +21,7 @@ interface OutlinePreview {
 }
 
 export function ConversationOutline(props: ConversationOutlineProps) {
+  const { t } = useI18n();
   const [preview, setPreview] = useState<OutlinePreview | null>(null);
   if (props.messages.length < 2) return null;
 
@@ -30,13 +32,13 @@ export function ConversationOutline(props: ConversationOutlineProps) {
     const outlineBounds = outline.getBoundingClientRect();
     setPreview({
       index,
-      text: messagePreview(message),
+      text: messagePreview(message, t),
       top: markerBounds.top - outlineBounds.top + markerBounds.height / 2,
     });
   };
 
   return (
-    <nav className="conversation-outline" aria-label="Current conversation overview">
+    <nav className="conversation-outline" aria-label={t("conversation.overview")}>
       <div className="outline-track">
         {props.messages.map((message, index) => (
           <button
@@ -47,7 +49,7 @@ export function ConversationOutline(props: ConversationOutlineProps) {
             onMouseLeave={() => setPreview(null)}
             onFocus={(event) => showPreview(message, index, event.currentTarget)}
             onBlur={() => setPreview(null)}
-            aria-label={`Go to turn ${index + 1}: ${messagePreview(message)}`}
+            aria-label={t("conversation.goTurn", { turn: index + 1, preview: messagePreview(message, t) })}
           >
             <span className="outline-line" aria-hidden="true" />
           </button>
@@ -55,7 +57,7 @@ export function ConversationOutline(props: ConversationOutlineProps) {
       </div>
       {preview && (
         <span className="outline-preview" role="tooltip" style={{ top: preview.top }}>
-          <strong>Turn {preview.index + 1}</strong>
+          <strong>{t("conversation.turn", { turn: preview.index + 1 })}</strong>
           {preview.text}
         </span>
       )}

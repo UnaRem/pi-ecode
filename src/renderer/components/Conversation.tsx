@@ -5,6 +5,7 @@ import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
+import { useI18n } from "../i18n/i18n";
 
 interface ConversationProps {
   timeline: ConversationItem[];
@@ -17,6 +18,7 @@ interface ConversationProps {
 const BOTTOM_THRESHOLD = 48;
 
 export function Conversation(props: ConversationProps) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLElement>(null);
   const userElements = useRef(new Map<string, HTMLElement>());
   const followingRef = useRef(true);
@@ -102,8 +104,8 @@ export function Conversation(props: ConversationProps) {
         {isEmpty ? (
           <section className="welcome">
             <div className="welcome-icon"><Sparkles size={21} /></div>
-            <h1>What should we build?</h1>
-            <p>pi is ready to work in <strong>{props.projectName}</strong>. Ask for a change, an explanation, or a review.</p>
+            <h1>{t("conversation.welcomeTitle")}</h1>
+            <p>{t("conversation.welcomeBody", { project: props.projectName })}</p>
           </section>
         ) : (
           <>
@@ -118,14 +120,14 @@ export function Conversation(props: ConversationProps) {
                 data-message-id={group.item.message.id}
                 className={`message ${group.item.message.role} ${group.item.message.isError ? "error" : ""}`}
               >
-                <div className="message-role">{group.item.message.role === "user" ? "You" : "pi"}</div>
+                <div className="message-role">{group.item.message.role === "user" ? t("conversation.you") : "pi"}</div>
                 <div className="message-content">
                   {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
                   {group.item.message.images && group.item.message.images.length > 0 && (
                     <ImageGallery images={group.item.message.images} variant="message" />
                   )}
                   {hasLiveAssistant && group.id === lastItem?.id && (
-                    <span className="stream-caret" aria-label="Generating" />
+                    <span className="stream-caret" aria-label={t("conversation.generating")} />
                   )}
                 </div>
               </article>
@@ -133,7 +135,7 @@ export function Conversation(props: ConversationProps) {
             {props.isStreaming && !hasLiveAssistant && (
               <article className="message assistant waiting">
                 <div className="message-role">pi</div>
-                <div className="message-content"><span className="working-dot" /> Working…</div>
+                <div className="message-content"><span className="working-dot" /> {t("conversation.working")}</div>
               </article>
             )}
           </>
@@ -142,9 +144,9 @@ export function Conversation(props: ConversationProps) {
         {props.notice && <div className="notice-banner" role="status">{props.notice}</div>}
       </div>
       {!isFollowing && (
-        <button className="jump-to-latest" onClick={() => scrollToBottom("smooth")} aria-label="Jump to latest message">
+        <button className="jump-to-latest" onClick={() => scrollToBottom("smooth")} aria-label={t("conversation.jumpLatest")}>
           <ArrowDown size={15} />
-          Latest
+          {t("conversation.latest")}
         </button>
       )}
     </main>
