@@ -111,7 +111,7 @@ export class TaskPlanService {
       description: "Replace the current task plan with a complete ordered list of pending, in_progress, and completed steps.",
       promptSnippet: "Create or update the visible task plan for multi-step work",
       promptGuidelines: [
-        "Use task_plan before implementation tools for multi-step coding, diagnosis, or research; simple answers do not need a plan.",
+        "Use task_plan before the first implementation tool whenever coding, diagnosis, or research requires two or more concrete steps; simple answers do not need a plan.",
         "Keep at most one task_plan item in_progress, update it as work advances, and complete the plan before the final response.",
         "When a steering message changes scope or order, update task_plan before continuing implementation tools.",
       ],
