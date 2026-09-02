@@ -8,6 +8,30 @@ import {
   X,
 } from "lucide-react";
 import type { CandidateState, ChangeReview, ValidationState, ValidationStep } from "@shared/contracts";
+import { useI18n, type Translate } from "../i18n/i18n";
+import type { MessageKey } from "../i18n/messages";
+
+const STATUS_KEYS: Record<string, MessageKey> = {
+  idle: "status.idle",
+  pending: "status.pending",
+  running: "status.running",
+  passed: "status.passed",
+  failed: "status.failed",
+  cancelled: "status.cancelled",
+  stale: "status.stale",
+  skipped: "status.skipped",
+  preparing: "status.preparing",
+  prepared: "status.prepared",
+  ready: "status.ready",
+  activating: "status.activating",
+  active: "status.active",
+  discarded: "status.discarded",
+};
+
+function statusLabel(status: string, t: Translate): string {
+  const key = STATUS_KEYS[status];
+  return key ? t(key) : status;
+}
 
 interface ValidationPanelProps {
   validation: ValidationState;
@@ -35,34 +59,35 @@ function StepIcon({ step }: { step: ValidationStep }) {
 }
 
 export function ValidationPanel(props: ValidationPanelProps) {
+  const { locale, t } = useI18n();
   const running = props.validation.status === "running";
   const activeOutput = props.validation.steps.find((step) => step.status === "running")?.output
     ?? [...props.validation.steps].reverse().find((step) => step.output)?.output
     ?? "";
 
   return (
-    <section className="validation-panel" aria-label="Project validation">
+    <section className="validation-panel" aria-label={t("validation.panel")}>
       <header className="validation-header">
         <div className="validation-heading">
           <ShieldCheck size={17} />
           <div>
-            <strong>Verification</strong>
+            <strong>{t("validation.title")}</strong>
             <span>
-              {props.validation.isSelfProject ? "pi-ecode self-hosting pipeline" : "Project validation pipeline"}
+              {props.validation.isSelfProject ? t("validation.selfPipeline") : t("validation.projectPipeline")}
             </span>
           </div>
         </div>
         <div className="validation-actions">
           {running ? (
             <button className="validation-stop" onClick={props.onStop}>
-              <Square size={11} fill="currentColor" /> Stop
+              <Square size={11} fill="currentColor" /> {t("validation.stop")}
             </button>
           ) : (
             <button className="validation-run" onClick={props.onRun} disabled={!props.validation.supported}>
-              <ShieldCheck size={14} /> Run checks
+              <ShieldCheck size={14} /> {t("validation.run")}
             </button>
           )}
-          <button className="icon-button" onClick={props.onClose} aria-label="Close verification panel">
+          <button className="icon-button" onClick={props.onClose} aria-label={t("validation.close")}>
             <X size={16} />
           </button>
         </div>
@@ -76,7 +101,7 @@ export function ValidationPanel(props: ValidationPanelProps) {
               <strong>{step.label}</strong>
               <code>{step.command}</code>
             </div>
-            <small>{step.status === "skipped" ? "not configured" : duration(step.durationMs) || step.status}</small>
+            <small>{step.status === "skipped" ? t("validation.notConfigured") : duration(step.durationMs) || statusLabel(step.status, t)}</small>
           </div>
         ))}
       </div>
@@ -88,18 +113,18 @@ export function ValidationPanel(props: ValidationPanelProps) {
 
       <div className="review-section">
         <div className="review-summary">
-          <strong>Change review</strong>
-          <span>{props.review.files.length} changed {props.review.files.length === 1 ? "file" : "files"}</span>
+          <strong>{t("validation.review")}</strong>
+          <span>{t(props.review.files.length === 1 ? "validation.changedFile" : "validation.changedFiles", { count: props.review.files.length })}</span>
           {props.validation.isSelfProject && (
             <div className="candidate-actions">
               {props.candidate.status === "ready" ? (
-                <button className="candidate-activate" onClick={props.onActivateCandidate}>Restart into candidate</button>
+                <button className="candidate-activate" onClick={props.onActivateCandidate}>{t("validation.restart")}</button>
               ) : (
                 <button
                   onClick={props.onPrepareCandidate}
                   disabled={props.validation.status !== "passed" || props.candidate.status === "preparing"}
                 >
-                  {props.candidate.status === "preparing" ? "Preparing…" : "Prepare candidate"}
+                  {props.candidate.status === "preparing" ? t("validation.preparing") : t("validation.prepare")}
                 </button>
               )}
             </div>
@@ -113,38 +138,38 @@ export function ValidationPanel(props: ValidationPanelProps) {
                   <span className={`file-status ${file.status}`}>{file.status.slice(0, 1).toUpperCase()}</span>
                   <code>{file.path}</code>
                   <small>
-                    {file.additions === null ? "binary" : <><b>+{file.additions}</b> <i>-{file.deletions}</i></>}
+                    {file.additions === null ? t("validation.binary") : <><b>+{file.additions}</b> <i>-{file.deletions}</i></>}
                   </small>
                   <button
                     className="reject-file-button"
                     onClick={() => {
-                      if (window.confirm(`Restore ${file.path} to its pre-task state?`)) props.onRejectFile(file.path);
+                      if (window.confirm(t("validation.restoreFile", { path: file.path }))) props.onRejectFile(file.path);
                     }}
-                    title="Reject changes in this file"
-                  >Reject</button>
+                    title={t("validation.rejectTitle")}
+                  >{t("validation.reject")}</button>
                 </div>
               ))}
             </div>
             <details className="patch-view">
-              <summary>View unified patch{props.review.truncated ? " · truncated" : ""}</summary>
+              <summary>{t("validation.viewPatch")}{props.review.truncated ? ` · ${t("validation.truncated")}` : ""}</summary>
               <pre>{props.review.patch}</pre>
             </details>
           </>
         ) : (
-          <div className="review-empty">{props.review.message ?? "No source changes to review."}</div>
+          <div className="review-empty">{props.review.message ?? t("validation.noChanges")}</div>
         )}
         {props.candidate.message && <div className={`candidate-message ${props.candidate.status}`}>{props.candidate.message}</div>}
       </div>
 
       {props.candidate.history.length > 0 && (
         <div className="version-ledger">
-          <div className="version-ledger-title">Version history</div>
+          <div className="version-ledger-title">{t("validation.versionHistory")}</div>
           {props.candidate.history.slice(0, 8).map((record) => (
             <div className="version-record" key={record.id}>
               <span className={`version-status ${record.status}`} />
               <code>{record.id}</code>
-              <span>{record.status}</span>
-              <time>{new Date(record.updatedAt).toLocaleString()}</time>
+              <span>{statusLabel(record.status, t)}</span>
+              <time>{new Date(record.updatedAt).toLocaleString(locale)}</time>
             </div>
           ))}
         </div>
