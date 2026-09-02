@@ -146,6 +146,10 @@ export class SettingsService {
 
   async reload(): Promise<SettingsSnapshot> {
     await this.requestRuntimeApply();
+    return this.runtimeStateChanged();
+  }
+
+  async runtimeStateChanged(): Promise<SettingsSnapshot> {
     const snapshot = await this.getSnapshot();
     this.options.onChanged(snapshot, "runtime");
     return snapshot;

@@ -117,6 +117,29 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .model-config-card { padding: 11px; border: 1px solid var(--line-soft); border-radius: 8px; background: #f7f7f4; }
 .model-config-title { margin-bottom: 9px; }
 .model-config-title button { min-width: 27px; justify-content: center; padding: 0; border-color: transparent; background: transparent; }
+.auth-settings { max-width: 880px; display: flex; flex-direction: column; gap: 12px; margin: 0 auto; }
+.auth-flow-status, .auth-prompt-panel { padding: 11px 12px; border: 1px solid #cbded6; border-radius: 9px; color: var(--accent); background: var(--accent-soft); }
+.auth-flow-status { display: flex; align-items: center; gap: 8px; font-size: 10.5px; }
+.auth-flow-status span { flex: 1; }
+.auth-flow-status.failed { border-color: #e5c6c2; color: var(--danger); background: #f9ebe8; }
+.auth-flow-status button, .auth-prompt-panel button { min-height: 27px; padding: 0 8px; border: 1px solid rgba(63,111,98,.22); border-radius: 6px; color: inherit; background: rgba(255,255,255,.75); font-size: 9.5px; cursor: pointer; }
+.auth-prompt-panel > strong { display: block; margin-bottom: 9px; font-size: 11px; }
+.auth-prompt-panel form { display: flex; gap: 7px; }
+.auth-prompt-panel input { min-width: 0; flex: 1; height: 30px; padding: 0 8px; border: 1px solid #bfd0ca; border-radius: 6px; background: #fff; font-size: 10.5px; }
+.auth-prompt-panel .auth-cancel { margin-top: 7px; }
+.auth-options { display: flex; flex-direction: column; gap: 5px; }
+.auth-options button { display: flex; flex-direction: column; align-items: flex-start; padding: 7px 9px; text-align: left; }
+.auth-options small { color: var(--muted); }
+.auth-provider-list { display: flex; flex-direction: column; gap: 7px; }
+.auth-provider { display: grid; grid-template-columns: 31px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 61px; padding: 9px 11px; border: 1px solid var(--line-soft); border-radius: 9px; background: rgba(255,255,255,.7); }
+.auth-provider-icon { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; color: var(--accent); background: var(--accent-soft); }
+.auth-provider-copy { min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 7px; align-items: baseline; }
+.auth-provider-copy strong { font-size: 11px; }
+.auth-provider-copy code { overflow: hidden; color: var(--faint); font: 8.5px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.auth-provider-copy span { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
+.auth-provider-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.auth-provider-actions button { display: flex; align-items: center; gap: 5px; min-height: 27px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: #fff; font-size: 9px; cursor: pointer; }
+.auth-provider-actions button.logout { color: var(--danger); }
 .settings-readonly, .settings-error, .settings-conflict { max-width: 880px; margin: 0 auto 12px; padding: 9px 11px; border: 1px solid #e1d3b8; border-radius: 8px; color: #765f37; background: #f8f1e4; font-size: 10px; line-height: 1.5; }
 .settings-error { border-color: #e6c5c0; color: var(--danger); background: #faece9; white-space: pre-wrap; }
 .settings-conflict button { margin-left: 9px; border: 0; color: var(--accent); background: transparent; font-size: 10px; text-decoration: underline; cursor: pointer; }

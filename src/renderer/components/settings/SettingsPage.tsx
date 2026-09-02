@@ -5,6 +5,9 @@ import { useSettings } from "../../hooks/use-settings";
 import { useI18n } from "../../i18n/i18n";
 import { GeneralSettingsForm } from "./GeneralSettingsForm";
 import { ModelsSettingsForm } from "./ModelsSettingsForm";
+import { AuthSettingsPanel } from "./AuthSettingsPanel";
+
+type SettingsSection = ConfigTarget | "auth";
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -14,12 +17,12 @@ interface SettingsPageProps {
 export function SettingsPage(props: SettingsPageProps) {
   const { t } = useI18n();
   const settings = useSettings(true);
-  const [target, setTarget] = useState<ConfigTarget>("global-settings");
+  const [target, setTarget] = useState<SettingsSection>("global-settings");
   const [draft, setDraft] = useState<JsonObject>({});
   const [baseRevision, setBaseRevision] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [externalChange, setExternalChange] = useState(false);
-  const document = settings.documentFor(target);
+  const document = target === "auth" ? null : settings.documentFor(target);
   const settingsTarget = target === "global-settings" || target === "project-settings";
 
   useEffect(() => props.onDirtyChange(dirty), [dirty, props.onDirtyChange]);
@@ -39,10 +42,10 @@ export function SettingsPage(props: SettingsPageProps) {
 
   const path = document?.path ?? "";
   const readOnly = target === "project-settings" && !settings.snapshot?.projectTrusted;
-  const canSave = dirty && !readOnly && !settings.loading && !externalChange;
+  const canSave = target !== "auth" && dirty && !readOnly && !settings.loading && !externalChange;
   const heading = target === "global-settings"
     ? t("settings.global")
-    : target === "project-settings" ? t("settings.project") : t("settings.models");
+    : target === "project-settings" ? t("settings.project") : target === "models" ? t("settings.models") : t("settings.auth");
   const effectiveCount = useMemo(() => Object.keys(settings.snapshot?.effectiveSettings ?? {}).length, [settings.snapshot]);
 
   const reset = (): void => {
@@ -53,7 +56,7 @@ export function SettingsPage(props: SettingsPageProps) {
     setExternalChange(false);
   };
 
-  const changeTarget = (next: ConfigTarget): void => {
+  const changeTarget = (next: SettingsSection): void => {
     if (dirty && !window.confirm(t("settings.confirmDiscard"))) return;
     setDirty(false);
     setExternalChange(false);
@@ -63,6 +66,7 @@ export function SettingsPage(props: SettingsPageProps) {
   const close = (): void => props.onClose();
 
   const save = async (): Promise<void> => {
+    if (target === "auth") return;
     const next = await settings.save({ target, value: draft, expectedRevision: baseRevision });
     if (!next) return;
     const saved = target === "global-settings"
@@ -94,6 +98,9 @@ export function SettingsPage(props: SettingsPageProps) {
           <button className={target === "models" ? "active" : ""} onClick={() => changeTarget("models")}>
             <Settings2 size={14} /><span>{t("settings.models")}</span>
           </button>
+          <button className={target === "auth" ? "active" : ""} onClick={() => changeTarget("auth")}>
+            <Settings2 size={14} /><span>{t("settings.auth")}</span>
+          </button>
           <div className="settings-nav-note">{t("settings.effectiveCount", { count: effectiveCount })}</div>
         </nav>
         <section className="settings-content">
@@ -109,7 +116,17 @@ export function SettingsPage(props: SettingsPageProps) {
               <button onClick={reset}>{t("settings.loadDisk")}</button>
             </div>
           )}
-          {!document ? (
+          {target === "auth" ? (
+            <AuthSettingsPanel
+              providers={settings.snapshot?.providers ?? []}
+              flow={settings.authFlow}
+              disabled={settings.loading}
+              onLogin={(providerId, type) => void settings.login(providerId, type)}
+              onLogout={(providerId) => void settings.logout(providerId)}
+              onRespond={(response) => void settings.respondAuth(response)}
+              onCancel={() => void settings.cancelAuth()}
+            />
+          ) : !document ? (
             <div className="settings-loading"><LoaderCircle className="spin" size={18} />{t("settings.loading")}</div>
           ) : settingsTarget ? (
             <GeneralSettingsForm
@@ -127,11 +144,13 @@ export function SettingsPage(props: SettingsPageProps) {
           )}
         </section>
       </div>
-      <footer className="settings-actions">
-        <span>{dirty ? t("settings.unsaved") : t("settings.synced")}</span>
-        <button onClick={reset} disabled={!dirty || settings.loading}><Undo2 size={14} />{t("settings.discard")}</button>
-        <button className="primary" onClick={() => void save()} disabled={!canSave}><Save size={14} />{t("settings.save")}</button>
-      </footer>
+      {target !== "auth" && (
+        <footer className="settings-actions">
+          <span>{dirty ? t("settings.unsaved") : t("settings.synced")}</span>
+          <button onClick={reset} disabled={!dirty || settings.loading}><Undo2 size={14} />{t("settings.discard")}</button>
+          <button className="primary" onClick={() => void save()} disabled={!canSave}><Save size={14} />{t("settings.save")}</button>
+        </footer>
+      )}
     </main>
   );
 }

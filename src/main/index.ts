@@ -7,7 +7,7 @@ import { IPC_CHANNELS } from "../shared/contracts.js";
 
 if (process.platform === "win32") app.setAppUserModelId("com.pi-ecode.desktop");
 
-const service = new AgentService();
+const service = new AgentService((url) => shell.openExternal(url));
 const settings = new SettingsService({
   agentDir: service.agentDirectory,
   getProjectPath: () => service.activeProjectPath,
@@ -29,6 +29,7 @@ const settings = new SettingsService({
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let unregisterIpc: (() => void) | undefined;
 let unsubscribeAgent: (() => void) | undefined;
+let unsubscribeAuth: (() => void) | undefined;
 
 function focusMainWindow(): void {
   const window = BrowserWindow.getAllWindows()[0];
@@ -82,6 +83,11 @@ if (!hasSingleInstanceLock) {
     unsubscribeAgent = service.subscribe((event) => {
       if (event.type === "state" && event.patch.isStreaming === false) void settings.applyPendingIfIdle();
     });
+    unsubscribeAuth = service.subscribeAuth((event) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, event);
+      }
+    });
     unregisterIpc = registerIpc(service, settings);
     createWindow();
     app.on("activate", () => {
@@ -97,6 +103,7 @@ if (!hasSingleInstanceLock) {
   app.on("before-quit", () => {
     unregisterIpc?.();
     unsubscribeAgent?.();
+    unsubscribeAuth?.();
     void settings.dispose();
     void service.dispose();
   });

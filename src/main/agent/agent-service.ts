@@ -12,7 +12,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ProviderStatus } from "../../shared/settings-contracts.js";
+import type { AuthFlowEvent, AuthPromptResponse, AuthType, ProviderStatus } from "../../shared/settings-contracts.js";
 import type {
   AgentEvent,
   AgentSnapshot,
@@ -38,6 +38,7 @@ import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
 import { ExtensionUiBridge } from "./extension-ui-bridge.js";
+import { AuthService } from "./auth-service.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
   projectPath: null,
@@ -108,6 +109,8 @@ export class AgentService {
   private startupError: string | undefined;
   private unsubscribe: (() => void) | undefined;
   private readonly listeners = new Set<(event: AgentEvent) => void>();
+  private readonly authListeners = new Set<(event: AuthFlowEvent) => void>();
+  private readonly auth: AuthService;
   private readonly liveTools = new Map<string, ToolActivity>();
   private liveAssistantId: string | undefined;
   private liveAssistantText = "";
@@ -141,6 +144,16 @@ export class AgentService {
     (candidate) => this.emit({ type: "candidate", candidate }),
   );
 
+  constructor(openExternal: (url: string) => Promise<void> = async () => undefined) {
+    this.auth = new AuthService(
+      () => this.runtime?.session.modelRuntime,
+      (event) => {
+        for (const listener of this.authListeners) listener(event);
+      },
+      openExternal,
+    );
+  }
+
   async initialize(): Promise<void> {
     await this.candidate.initialize();
     const sourceRoot = await this.candidate.discoverSourceRoot();
@@ -155,6 +168,11 @@ export class AgentService {
   subscribe(listener: (event: AgentEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  subscribeAuth(listener: (event: AuthFlowEvent) => void): () => void {
+    this.authListeners.add(listener);
+    return () => this.authListeners.delete(listener);
   }
 
   private emit(event: AgentEvent): void {
@@ -225,6 +243,22 @@ export class AgentService {
         authenticated: Boolean(check),
       };
     }));
+  }
+
+  loginProvider(providerId: string, type: AuthType): Promise<void> {
+    return this.auth.login(providerId, type);
+  }
+
+  logoutProvider(providerId: string): Promise<void> {
+    return this.auth.logout(providerId);
+  }
+
+  respondAuthPrompt(response: AuthPromptResponse): boolean {
+    return this.auth.respond(response);
+  }
+
+  cancelAuth(): void {
+    this.auth.cancel();
   }
 
   get runtimeBusy(): boolean {
@@ -759,6 +793,7 @@ export class AgentService {
   }
 
   async dispose(): Promise<void> {
+    this.auth.cancel();
     await this.disposeRuntime();
     this.removeQuestionnaireListener();
     this.extensionEventBus.clear();

@@ -1,7 +1,7 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
-import type { SaveConfigRequest } from "../../shared/settings-contracts.js";
+import type { AuthPromptResponse, AuthType, SaveConfigRequest } from "../../shared/settings-contracts.js";
 import type { AgentService } from "../agent/agent-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
 
@@ -15,6 +15,16 @@ function isExtensionUiResponse(value: unknown): value is ExtensionUiResponse {
     || typeof responseValue === "boolean"
     || (Array.isArray(responseValue) && responseValue.every((item) => typeof item === "string"))
   );
+}
+
+function isAuthType(value: unknown): value is AuthType {
+  return value === "api_key" || value === "oauth";
+}
+
+function isAuthPromptResponse(value: unknown): value is AuthPromptResponse {
+  if (!value || typeof value !== "object") return false;
+  const response = value as Partial<AuthPromptResponse>;
+  return typeof response.requestId === "string" && (response.value === null || typeof response.value === "string");
 }
 
 function isSaveConfigRequest(value: unknown): value is SaveConfigRequest {
@@ -77,6 +87,20 @@ export function registerIpc(service: AgentService, settings: SettingsService): (
     return settings.save(request);
   });
   ipcMain.handle(IPC_CHANNELS.reloadSettings, () => settings.reload());
+  ipcMain.handle(IPC_CHANNELS.loginProvider, async (_event, providerId: unknown, type: unknown) => {
+    if (typeof providerId !== "string" || !isAuthType(type)) throw new Error("Invalid authentication request.");
+    await service.loginProvider(providerId, type);
+    await settings.runtimeStateChanged();
+  });
+  ipcMain.handle(IPC_CHANNELS.logoutProvider, async (_event, providerId: unknown) => {
+    if (typeof providerId !== "string") throw new Error("Invalid provider id.");
+    await service.logoutProvider(providerId);
+    return settings.reload();
+  });
+  ipcMain.handle(IPC_CHANNELS.respondAuthPrompt, (_event, response: unknown) => (
+    isAuthPromptResponse(response) && service.respondAuthPrompt(response)
+  ));
+  ipcMain.handle(IPC_CHANNELS.cancelAuth, () => service.cancelAuth());
 
   const unsubscribe = service.subscribe((agentEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {
