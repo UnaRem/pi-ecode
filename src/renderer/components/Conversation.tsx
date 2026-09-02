@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Sparkles } from "lucide-react";
 import type { ConversationItem } from "@shared/contracts";
+import { Markdown } from "./Markdown";
 import { ToolCard } from "./ToolCard";
 
 interface ConversationProps {
@@ -37,7 +38,7 @@ export function Conversation(props: ConversationProps) {
               <article key={item.id} className={`message ${item.message.role} ${item.message.isError ? "error" : ""}`}>
                 <div className="message-role">{item.message.role === "user" ? "You" : "pi"}</div>
                 <div className="message-content">
-                  {item.message.text}
+                  {item.message.role === "assistant" ? <Markdown>{item.message.text}</Markdown> : item.message.text}
                   {hasLiveAssistant && index === props.timeline.length - 1 && (
                     <span className="stream-caret" aria-label="Generating" />
                   )}

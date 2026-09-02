@@ -37,7 +37,7 @@ export function Topbar(props: TopbarProps) {
         <span
           className={`policy-indicator ${props.policy.contextFiles.length > 0 ? "loaded" : "missing"}`}
           title={props.policy.contextFiles.length > 0
-            ? `Loaded context:\n${props.policy.contextFiles.join("\n")}\nWorkflow: manual review\nGit commits: on request`
+            ? `Loaded context:\n${props.policy.contextFiles.join("\n")}\nWorkflow: manual review\nGit commits: required after verification`
             : "No AGENTS.md context loaded"}
         >
           {props.policy.contextFiles.length > 0 ? "AGENTS loaded" : "No project prompt"}

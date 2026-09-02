@@ -76,7 +76,7 @@ const EMPTY_SNAPSHOT: AgentSnapshot = {
     history: [],
   },
   context: { tokens: null, contextWindow: null, percent: null, isCompacting: false },
-  policy: { contextFiles: [], workflow: "manual-review", gitCommits: "on-request" },
+  policy: { contextFiles: [], workflow: "manual-review", gitCommits: "required-after-verification" },
 };
 
 function errorText(error: unknown): string {
@@ -93,6 +93,7 @@ export class AgentService {
   private liveAssistantId: string | undefined;
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
+  private compactOperation: Promise<void> | undefined;
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
@@ -225,7 +226,7 @@ export class AgentService {
         percent: usage?.percent ?? null,
         isCompacting: session.isCompacting,
       },
-      policy: { contextFiles, workflow: "manual-review", gitCommits: "on-request" },
+      policy: { contextFiles, workflow: "manual-review", gitCommits: "required-after-verification" },
     };
   }
 
@@ -271,11 +272,34 @@ export class AgentService {
     }
   }
 
-  async compact(): Promise<void> {
+  compact(): Promise<void> {
+    if (this.compactOperation) return this.compactOperation;
     const session = this.requireRuntime().session;
-    if (session.isStreaming) throw new Error("Stop the active agent run before compacting context.");
-    await session.compact();
-    this.emitContext(session);
+    if (session.isStreaming) return Promise.reject(new Error("Stop the active agent run before compacting context."));
+    this.emit({
+      type: "context",
+      context: {
+        tokens: session.getContextUsage()?.tokens ?? null,
+        contextWindow: session.getContextUsage()?.contextWindow ?? session.model?.contextWindow ?? null,
+        percent: session.getContextUsage()?.percent ?? null,
+        isCompacting: true,
+      },
+    });
+    const operation = session.compact()
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        const message = errorText(error);
+        if (message.includes("operation was aborted")) {
+          throw new Error("Context compaction was interrupted. Wait for the current operation to settle, then try again.");
+        }
+        throw error;
+      })
+      .finally(() => {
+        if (this.compactOperation === operation) this.compactOperation = undefined;
+        this.emitContext(session);
+      });
+    this.compactOperation = operation;
+    return operation;
   }
 
   async stop(): Promise<void> {

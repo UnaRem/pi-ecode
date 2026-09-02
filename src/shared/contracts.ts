@@ -77,7 +77,7 @@ export interface ContextState {
 export interface RuntimePolicy {
   contextFiles: string[];
   workflow: "manual-review";
-  gitCommits: "on-request";
+  gitCommits: "required-after-verification";
 }
 
 export interface WorkspaceHistoryState {

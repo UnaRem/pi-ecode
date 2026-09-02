@@ -111,6 +111,12 @@ npm run build
 
 For UI changes, also launch `npm run dev` and manually verify project selection, session switching, send/stream/stop, keyboard input, long tool output, and an error state. Tests should cover pure event reducers and SDK-to-view-model mapping before pixel-level component snapshots.
 
+## Delivery workflow
+
+- For implementation tasks, inspect the final workspace diff, run `npm run typecheck`, `npm test`, and `npm run build`, then review `git status` before delivery.
+- Commit completed, verified implementation work using `<type>(<scope>): <Chinese description>`. Workspace-history snapshots do not count as repository commits.
+- If Git cannot commit because identity, permissions, or hooks block it, report the exact blocker and leave the verified changes intact; never claim the task was committed.
+
 ## Repository hygiene
 
 - `docs/` and `examples/` are vendored pi reference material. Read them when changing integration behavior; do not casually edit them.

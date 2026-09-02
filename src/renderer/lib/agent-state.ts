@@ -53,7 +53,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
     history: [],
   },
   context: { tokens: null, contextWindow: null, percent: null, isCompacting: false },
-  policy: { contextFiles: [], workflow: "manual-review", gitCommits: "on-request" },
+  policy: { contextFiles: [], workflow: "manual-review", gitCommits: "required-after-verification" },
   liveAssistant: "",
   restoredEditorText: null,
   editorRestoreVersion: 0,

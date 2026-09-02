@@ -143,6 +143,7 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .version-status.activating { background: #b18848; }
 .version-status.discarded { background: #c6c6c0; }
 
+.compaction-progress { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; padding: 7px 12px; border-bottom: 1px solid #cfddd7; color: var(--accent); background: var(--accent-soft); font-size: 10px; }
 .conversation { min-height: 0; flex: 1; overflow-y: auto; scroll-behavior: smooth; }
 .conversation-inner { width: min(760px, calc(100% - 56px)); min-height: 100%; margin: 0 auto; padding: 34px 0 42px; }
 .conversation-inner.empty { display: grid; place-items: center; padding-bottom: 12vh; }
@@ -153,14 +154,28 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .message { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 13px; margin: 0 0 26px; }
 .message-role { padding-top: 2px; color: var(--muted); font-size: 11px; font-weight: 650; text-transform: lowercase; }
 .message-content { color: var(--text); font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.markdown { white-space: normal; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p { margin: 0 0 12px; white-space: pre-wrap; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 18px 0 8px; line-height: 1.3; letter-spacing: -.02em; }
+.markdown h1 { font-size: 20px; } .markdown h2 { font-size: 17px; } .markdown h3 { font-size: 15px; } .markdown h4 { font-size: 13.5px; }
+.markdown ul, .markdown ol { margin: 7px 0 12px; padding-left: 22px; }
+.markdown li { margin: 3px 0; }
+.markdown blockquote { margin: 10px 0; padding: 3px 12px; border-left: 3px solid #c7d6d0; color: var(--muted); }
+.markdown code { padding: 1px 4px; border-radius: 4px; color: #5c4d45; background: #ece9e5; font: .9em "Cascadia Code", Consolas, monospace; }
+.markdown pre { margin: 10px 0 14px; padding: 12px; overflow: auto; border: 1px solid var(--line-soft); border-radius: 8px; background: #eeeeeb; }
+.markdown pre code { padding: 0; color: #484844; background: transparent; font-size: 10.5px; }
+.markdown a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .message.user .message-content { padding: 11px 13px; border: 1px solid var(--line-soft); border-radius: 10px; background: #efefec; }
 .message.error .message-content { color: var(--danger); }
 .message.streaming { margin-top: 22px; }
 .message.waiting .message-content { color: var(--muted); font-size: 12px; }
 .working-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
 .stream-caret { display: inline-block; width: 5px; height: 16px; margin-left: 3px; vertical-align: -3px; border-radius: 1px; background: #777; animation: blink 1s steps(2) infinite; }
-.timeline-tool { margin: -11px 0 20px 55px; border-top: 1px solid var(--line-soft); }
-.tool-card { border-bottom: 1px solid var(--line-soft); color: var(--muted); }
+.timeline-tool { margin: -11px 0 20px 55px; }
+.tool-card { overflow: hidden; border: 1px solid #d9ddd9; border-radius: 8px; color: var(--muted); background: #f0f2ef; }
+.tool-card::before { content: "TOOL"; display: block; padding: 4px 9px 0; color: #8a958f; font-size: 7px; font-weight: 700; letter-spacing: .1em; }
 .tool-summary { width: 100%; display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 3px 4px; border: 0; background: transparent; font-size: 11.5px; text-align: left; cursor: pointer; }
 .tool-title { min-width: 0; overflow: hidden; color: #555550; text-overflow: ellipsis; white-space: nowrap; }
 .tool-summary small { margin-left: auto; color: var(--faint); font-size: 10px; }
@@ -168,7 +183,7 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .tool-card.error .tool-status { color: var(--danger); }
 .tool-chevron { flex: 0 0 auto; transition: transform .15s ease; }
 .tool-card.expanded .tool-chevron { transform: rotate(90deg); }
-.tool-preview { max-height: 58px; margin: -1px 4px 7px 25px; overflow: hidden; color: var(--faint); background: transparent; font: 9.5px/1.45 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; }
+.tool-preview { max-height: 58px; margin: -1px 9px 8px 29px; overflow: hidden; color: var(--faint); background: transparent; font: 9.5px/1.45 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; }
 .tool-detail { padding: 0 4px 10px 25px; }
 .tool-detail pre { max-height: 260px; margin: 0 0 7px; padding: 10px; overflow: auto; border: 1px solid var(--line-soft); border-radius: 7px; color: #555550; background: #f0f0ed; font: 10.5px/1.55 "Cascadia Code", "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; }
 .tool-detail .tool-output { color: #6a6a66; background: #fafaf8; }

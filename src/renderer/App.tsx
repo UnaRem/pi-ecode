@@ -91,6 +91,12 @@ export default function App() {
             onClose={() => setValidationOpen(false)}
           />
         )}
+        {state.context.isCompacting && (
+          <div className="compaction-progress" role="status">
+            <span className="working-dot" />
+            Compacting context · generating a conversation summary…
+          </div>
+        )}
         <Conversation
           timeline={state.timeline}
           isStreaming={state.isStreaming}

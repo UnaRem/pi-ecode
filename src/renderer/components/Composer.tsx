@@ -1,5 +1,5 @@
 import { ArrowUp, ImagePlus, Square, X } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
 import type { ContextState, ImageAttachment } from "@shared/contracts";
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
@@ -66,9 +66,7 @@ export function Composer(props: ComposerProps) {
     props.onSend(message, images);
   };
 
-  const addImages = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const files = [...(event.target.files ?? [])];
-    event.target.value = "";
+  const processImages = async (files: File[]): Promise<void> => {
     try {
       const added = await Promise.all(files.map(readImage));
       setImages((current) => [...current, ...added].slice(0, 8));
@@ -76,6 +74,22 @@ export function Composer(props: ComposerProps) {
     } catch (error) {
       setAttachmentError(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const addImages = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = "";
+    await processImages(files);
+  };
+
+  const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+    const files = [...event.clipboardData.items]
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length === 0) return;
+    event.preventDefault();
+    void processImages(files);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -112,6 +126,7 @@ export function Composer(props: ComposerProps) {
           disabled={!props.modelReady}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           aria-label="Message pi"
         />
         <div className="composer-footer">
