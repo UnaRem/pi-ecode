@@ -29,6 +29,7 @@ import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { formatToolInput, mapMessages, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
 import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
+import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
@@ -76,7 +77,7 @@ const EMPTY_SNAPSHOT: AgentSnapshot = {
     message: null,
     history: [],
   },
-  context: { tokens: null, contextWindow: null, percent: null, isCompacting: false },
+  context: { tokens: null, contextWindow: null, percent: null, isCompacting: false, isEstimated: false, compactionMethod: null },
   policy: { contextFiles: [], workflow: "manual-review", gitCommits: "required-after-verification" },
 };
 
@@ -95,6 +96,8 @@ export class AgentService {
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
   private compactOperation: Promise<void> | undefined;
+  private contextEstimate: number | null = null;
+  private readonly nativeCompaction = new NativeCompaction(() => this.runtime?.session);
   private readonly streamContinuity = new StreamContinuity();
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
   private readonly validation = new ValidationService((validation) => {
@@ -139,7 +142,7 @@ export class AgentService {
       const services = await createAgentSessionServices({
         cwd: targetCwd,
         resourceLoaderOptions: {
-          extensionFactories: [this.history.asExtension()],
+          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension()],
           extensionsOverride: (base) => ({
             ...base,
             extensions: base.extensions.filter((extension) => (
@@ -222,12 +225,7 @@ export class AgentService {
       validation: this.validation.getState(),
       review,
       candidate: this.candidate.getState(),
-      context: {
-        tokens: usage?.tokens ?? null,
-        contextWindow: usage?.contextWindow ?? model?.contextWindow ?? null,
-        percent: usage?.percent ?? null,
-        isCompacting: session.isCompacting,
-      },
+      context: this.contextState(session, usage),
       policy: { contextFiles, workflow: "manual-review", gitCommits: "required-after-verification" },
     };
   }
@@ -285,6 +283,8 @@ export class AgentService {
         contextWindow: session.getContextUsage()?.contextWindow ?? session.model?.contextWindow ?? null,
         percent: session.getContextUsage()?.percent ?? null,
         isCompacting: true,
+        isEstimated: false,
+        compactionMethod: this.nativeCompaction.supports(session.model) ? "native" : "summary",
       },
     });
     const operation = session.compact()
@@ -428,7 +428,9 @@ export class AgentService {
 
   private async bindSession(session: AgentSession): Promise<void> {
     this.unsubscribe?.();
+    this.contextEstimate = this.nativeCompaction.storedEstimatedTokensAfter(session);
     this.streamContinuity.install(session);
+    this.nativeCompaction.installPayloadInjection(session);
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";
@@ -547,26 +549,39 @@ export class AgentService {
       case "compaction_start":
         this.emitContext(session);
         break;
-      case "compaction_end":
+      case "compaction_end": {
+        const nativeEstimate = this.nativeCompaction.consumeEstimatedTokensAfter();
+        this.contextEstimate = event.result
+          ? nativeEstimate ?? event.result.estimatedTokensAfter ?? null
+          : null;
+        if (event.errorMessage) this.emit({ type: "error", message: event.errorMessage });
         this.emitContext(session);
         break;
+      }
       case "thinking_level_changed":
         this.emitModelState(session);
         break;
     }
   }
 
+  private contextState(session: AgentSession, usage = session.getContextUsage()): import("../../shared/contracts.js").ContextState {
+    const contextWindow = usage?.contextWindow ?? session.model?.contextWindow ?? null;
+    if (usage?.tokens !== null && usage?.tokens !== undefined) this.contextEstimate = null;
+    const tokens = usage?.tokens ?? this.contextEstimate;
+    return {
+      tokens,
+      contextWindow,
+      percent: usage?.percent ?? (tokens !== null && contextWindow ? tokens / contextWindow * 100 : null),
+      isCompacting: session.isCompacting,
+      isEstimated: usage?.tokens == null && tokens !== null,
+      compactionMethod: session.isCompacting
+        ? (this.nativeCompaction.supports(session.model) ? "native" : "summary")
+        : null,
+    };
+  }
+
   private emitContext(session: AgentSession): void {
-    const usage = session.getContextUsage();
-    this.emit({
-      type: "context",
-      context: {
-        tokens: usage?.tokens ?? null,
-        contextWindow: usage?.contextWindow ?? session.model?.contextWindow ?? null,
-        percent: usage?.percent ?? null,
-        isCompacting: session.isCompacting,
-      },
-    });
+    this.emit({ type: "context", context: this.contextState(session) });
   }
 
   private emitModelState(session: AgentSession): void {

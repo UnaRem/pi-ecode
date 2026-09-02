@@ -94,7 +94,9 @@ export default function App() {
         {state.context.isCompacting && (
           <div className="compaction-progress" role="status">
             <span className="working-dot" />
-            Compacting context · generating a conversation summary…
+            {state.context.compactionMethod === "native"
+              ? "Compacting context · requesting provider checkpoint…"
+              : "Compacting context · generating a conversation summary…"}
           </div>
         )}
         <Conversation

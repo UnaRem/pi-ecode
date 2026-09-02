@@ -73,6 +73,8 @@ export interface ContextState {
   contextWindow: number | null;
   percent: number | null;
   isCompacting: boolean;
+  isEstimated: boolean;
+  compactionMethod: "native" | "summary" | null;
 }
 
 export interface RuntimePolicy {

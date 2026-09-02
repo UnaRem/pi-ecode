@@ -103,7 +103,7 @@ export function Composer(props: ComposerProps) {
   };
 
   const contextLabel = props.context.contextWindow
-    ? `${props.context.percent === null ? "?" : Math.round(props.context.percent)}% · ${props.context.tokens === null ? "?" : Math.round(props.context.tokens / 1000)}k/${Math.round(props.context.contextWindow / 1000)}k`
+    ? `${props.context.isEstimated ? "~" : ""}${props.context.percent === null ? "?" : Math.round(props.context.percent)}% · ${props.context.isEstimated ? "~" : ""}${props.context.tokens === null ? "?" : Math.round(props.context.tokens / 1000)}k/${Math.round(props.context.contextWindow / 1000)}k`
     : "Context unavailable";
 
   return (
