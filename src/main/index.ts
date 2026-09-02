@@ -3,6 +3,8 @@ import { app, BrowserWindow, shell } from "electron";
 import { AgentService } from "./agent/agent-service.js";
 import { registerIpc } from "./ipc/register-ipc.js";
 
+if (process.platform === "win32") app.setAppUserModelId("com.pi-ecode.desktop");
+
 const service = new AgentService();
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let unregisterIpc: (() => void) | undefined;

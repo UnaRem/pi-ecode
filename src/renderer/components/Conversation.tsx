@@ -26,7 +26,8 @@ export function Conversation(props: ConversationProps) {
   const userMessages = useMemo(() => props.timeline.flatMap((item) => (
     item.kind === "message" && item.message.role === "user" ? [item.message] : []
   )), [props.timeline]);
-  const [activeUserId, setActiveUserId] = useState<string | null>(userMessages.at(-1)?.id ?? null);
+  const latestUserId = userMessages.at(-1)?.id ?? null;
+  const [activeUserId, setActiveUserId] = useState<string | null>(latestUserId);
   const conversationKey = userMessages.at(0)?.id ?? "empty";
   const renderGroups = useMemo(() => groupConsecutiveTools(props.timeline), [props.timeline]);
 
@@ -46,6 +47,13 @@ export function Conversation(props: ConversationProps) {
     setFollowing(true);
     requestAnimationFrame(() => scrollToBottom("auto"));
   }, [conversationKey]);
+
+  useEffect(() => {
+    if (!latestUserId) return;
+    setActiveUserId(latestUserId);
+    setFollowing(true);
+    requestAnimationFrame(() => scrollToBottom("auto"));
+  }, [latestUserId]);
 
   useEffect(() => {
     if (!followingRef.current) return;

@@ -145,7 +145,6 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .version-status.activating { background: #b18848; }
 .version-status.discarded { background: #c6c6c0; }
 
-.compaction-progress { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; padding: 7px 12px; border-bottom: 1px solid #cfddd7; color: var(--accent); background: var(--accent-soft); font-size: 10px; }
 .conversation { position: relative; min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: none; }
 .conversation::-webkit-scrollbar { display: none; }
 .conversation-inner { width: min(760px, calc(100% - 56px)); min-height: 100%; margin: 0 auto; padding: 34px 0 42px; }
@@ -236,6 +235,22 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .notice-banner { border: 1px solid #cbded6; color: #41685d; background: #eaf3ef; }
 
 .composer-area { flex: 0 0 auto; padding: 0 28px 12px; background: var(--bg); }
+.compaction-status-panel { width: min(760px, 100%); display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 8px; margin: 0 auto 8px; padding: 10px 11px; border: 1px solid #cbded6; border-radius: 11px; color: #41685d; background: #edf5f2; box-shadow: 0 4px 15px rgba(40, 70, 60, .07); }
+.compaction-status-panel.completed { border-color: #c8dbd3; background: #eff6f3; }
+.compaction-status-panel.failed { border-color: #e5c6c2; color: #8f3f36; background: #f9ebe8; }
+.compaction-status-panel.cancelled { border-color: #d8d8d2; color: var(--muted); background: #f3f3f0; }
+.compaction-status-icon { display: grid; height: 20px; place-items: center; }
+.compaction-status-copy { min-width: 0; }
+.compaction-status-heading { display: flex; align-items: center; gap: 7px; min-height: 20px; }
+.compaction-status-heading strong { color: inherit; font-size: 11px; font-weight: 680; }
+.compaction-status-heading small { padding: 2px 5px; border-radius: 5px; color: var(--muted); background: rgba(255, 255, 255, .62); font-size: 8px; }
+.compaction-status-copy > span { display: block; min-height: 17px; overflow: hidden; color: inherit; font-size: 10px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.compaction-status-panel > button { min-height: 24px; padding: 0 8px; border: 0; border-radius: 6px; color: inherit; background: rgba(255, 255, 255, .55); font-size: 9px; cursor: pointer; }
+.compaction-status-panel > button:hover { background: rgba(255, 255, 255, .9); }
+.compaction-status-panel > button.icon-button { width: 24px; padding: 0; }
+.compaction-indeterminate { position: relative; height: 2px; margin-top: 5px; overflow: hidden; border-radius: 1px; background: rgba(65, 104, 93, .16); }
+.compaction-indeterminate i { position: absolute; inset-block: 0; width: 34%; border-radius: inherit; background: var(--accent); animation: compaction-slide 1.5s ease-in-out infinite; }
+@keyframes compaction-slide { from { transform: translateX(-110%); } to { transform: translateX(310%); } }
 .extension-question { width: min(760px, 100%); max-height: 42vh; margin: 0 auto 8px; padding: 11px 12px 12px; overflow-y: auto; border: 1px solid #d8d8d2; border-radius: 13px; background: rgba(255, 255, 255, .98); box-shadow: 0 8px 28px rgba(40, 40, 35, .1); }
 .extension-question-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .extension-question-header > div { display: flex; align-items: center; gap: 7px; color: #5e7f76; font-size: 8px; font-weight: 750; letter-spacing: .08em; }

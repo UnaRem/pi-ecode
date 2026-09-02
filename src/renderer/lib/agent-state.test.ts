@@ -106,6 +106,21 @@ describe("reduceAgentEvent", () => {
     expect(restored.editorRestoreVersion).toBe(1);
   });
 
+  it("applies structured compaction progress updates", () => {
+    const compaction = {
+      status: "running" as const,
+      reason: "threshold" as const,
+      method: "native" as const,
+      tokensBefore: 102_400,
+    };
+    const state = reduceAgentEvent(INITIAL_AGENT_STATE, {
+      type: "context",
+      context: { ...INITIAL_AGENT_STATE.context, isCompacting: true, compactionMethod: "native", compaction },
+    });
+    expect(state.context.compaction).toEqual(compaction);
+    expect(state.context.isCompacting).toBe(true);
+  });
+
   it("shows compaction cancellation as a notice instead of an error", () => {
     const state = reduceAgentEvent({ ...INITIAL_AGENT_STATE, error: "old error" }, {
       type: "notice",

@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   rendererReady: "desktop:renderer-ready",
   compact: "agent:compact",
   cancelCompact: "agent:cancel-compact",
+  notifyCompactionComplete: "desktop:notify-compaction-complete",
   respondExtensionUi: "extension-ui:respond",
   event: "agent:event",
 } as const;
@@ -84,13 +85,31 @@ export type ConversationItem =
   | { kind: "message"; id: string; message: ConversationMessage }
   | { kind: "tool"; id: string; tool: ToolActivity };
 
+export type CompactionReason = "manual" | "threshold" | "overflow";
+export type CompactionMethod = "native" | "summary";
+
+export type CompactionStatus =
+  | { status: "idle" }
+  | { status: "running"; reason: CompactionReason; method: CompactionMethod; tokensBefore: number | null }
+  | {
+      status: "completed";
+      reason: CompactionReason;
+      method: CompactionMethod;
+      tokensBefore: number | null;
+      tokensAfter: number | null;
+      isEstimated: boolean;
+    }
+  | { status: "failed"; reason: CompactionReason; method: CompactionMethod; message: string }
+  | { status: "cancelled"; reason: CompactionReason; method: CompactionMethod };
+
 export interface ContextState {
   tokens: number | null;
   contextWindow: number | null;
   percent: number | null;
   isCompacting: boolean;
   isEstimated: boolean;
-  compactionMethod: "native" | "summary" | null;
+  compactionMethod: CompactionMethod | null;
+  compaction: CompactionStatus;
 }
 
 export interface RuntimePolicy {
@@ -267,6 +286,7 @@ export interface DesktopApi {
   rendererReady(): Promise<void>;
   compact(): Promise<void>;
   cancelCompact(): Promise<void>;
+  notifyCompactionComplete(title: string, body: string): Promise<boolean>;
   respondExtensionUi(response: ExtensionUiResponse): Promise<boolean>;
   subscribe(listener: (event: AgentEvent) => void): () => void;
 }

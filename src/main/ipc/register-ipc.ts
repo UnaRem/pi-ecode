@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain } from "electron";
+import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AgentService } from "../agent/agent-service.js";
@@ -43,6 +43,14 @@ export function registerIpc(service: AgentService): () => void {
   ipcMain.handle(IPC_CHANNELS.rendererReady, () => service.rendererReady());
   ipcMain.handle(IPC_CHANNELS.compact, () => service.compact());
   ipcMain.handle(IPC_CHANNELS.cancelCompact, () => service.cancelCompaction());
+  ipcMain.handle(IPC_CHANNELS.notifyCompactionComplete, (_event, title: unknown, body: unknown) => {
+    if (typeof title !== "string" || typeof body !== "string" || !Notification.isSupported()) return false;
+    const safeTitle = title.trim().slice(0, 80);
+    const safeBody = body.trim().slice(0, 240);
+    if (!safeTitle || !safeBody) return false;
+    new Notification({ title: safeTitle, body: safeBody }).show();
+    return true;
+  });
   ipcMain.handle(IPC_CHANNELS.respondExtensionUi, (_event, response: unknown) => (
     isExtensionUiResponse(response) && service.respondExtensionUi(response)
   ));

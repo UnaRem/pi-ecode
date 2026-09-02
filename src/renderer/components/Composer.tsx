@@ -1,6 +1,7 @@
 import { ArrowUp, ImagePlus, Redo2, Square, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
 import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment, WorkspaceHistoryState } from "@shared/contracts";
+import { CompactionStatusPanel } from "./CompactionStatusPanel";
 import { ExtensionQuestionPanel } from "./ExtensionQuestionPanel";
 import { ImageGallery } from "./ImageGallery";
 import { useI18n, type Translate } from "../i18n/i18n";
@@ -117,6 +118,7 @@ export function Composer(props: ComposerProps) {
 
   return (
     <footer className="composer-area">
+      <CompactionStatusPanel status={props.context.compaction} onCancel={props.onCancelCompact} />
       {props.extensionUi && (
         <ExtensionQuestionPanel request={props.extensionUi} onRespond={props.onRespondExtensionUi} />
       )}

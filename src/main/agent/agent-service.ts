@@ -23,6 +23,8 @@ import type {
   ValidationState,
   CandidateState,
   ChangeReview,
+  CompactionMethod,
+  CompactionStatus,
   ToolActivity,
   ExtensionUiResponse,
 } from "../../shared/contracts.js";
@@ -83,7 +85,15 @@ const EMPTY_SNAPSHOT: AgentSnapshot = {
     message: null,
     history: [],
   },
-  context: { tokens: null, contextWindow: null, percent: null, isCompacting: false, isEstimated: false, compactionMethod: null },
+  context: {
+    tokens: null,
+    contextWindow: null,
+    percent: null,
+    isCompacting: false,
+    isEstimated: false,
+    compactionMethod: null,
+    compaction: { status: "idle" },
+  },
   policy: { contextFiles: [], workflow: "manual-review", gitCommits: "required-after-verification" },
 };
 
@@ -102,8 +112,8 @@ export class AgentService {
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
   private compactOperation: Promise<void> | undefined;
-  private compactCancelRequested = false;
   private contextEstimate: number | null = null;
+  private compactionStatus: CompactionStatus = { status: "idle" };
   private readonly nativeCompaction = new NativeCompaction(
     () => this.runtime?.session,
     fetch,
@@ -299,19 +309,15 @@ export class AgentService {
   compact(): Promise<void> {
     if (this.compactOperation) return this.compactOperation;
     const session = this.requireRuntime().session;
-    this.compactCancelRequested = false;
     if (session.isStreaming) return Promise.reject(new Error("Stop the active agent run before compacting context."));
-    this.emit({
-      type: "context",
-      context: {
-        tokens: session.getContextUsage()?.tokens ?? null,
-        contextWindow: session.getContextUsage()?.contextWindow ?? session.model?.contextWindow ?? null,
-        percent: session.getContextUsage()?.percent ?? null,
-        isCompacting: true,
-        isEstimated: false,
-        compactionMethod: this.nativeCompaction.supports(session.model) ? "native" : "summary",
-      },
-    });
+    const usage = session.getContextUsage();
+    this.compactionStatus = {
+      status: "running",
+      reason: "manual",
+      method: this.compactionMethod(session),
+      tokensBefore: usage?.tokens ?? this.contextEstimate,
+    };
+    this.emitContext(session);
     const operation = session.compact()
       .then(() => undefined)
       .catch((error: unknown) => {
@@ -330,17 +336,13 @@ export class AgentService {
   cancelCompaction(): void {
     const session = this.requireRuntime().session;
     if (!this.compactOperation && !session.isCompacting) return;
-    this.compactCancelRequested = true;
     session.abortCompaction();
   }
 
   async stop(): Promise<void> {
     const session = this.requireRuntime().session;
     this.extensionUi.cancelPending();
-    if (session.isCompacting) {
-      this.compactCancelRequested = true;
-      session.abortCompaction();
-    }
+    if (session.isCompacting) session.abortCompaction();
     session.clearQueue();
     await session.abort();
     await this.history.settlePending(session);
@@ -467,6 +469,7 @@ export class AgentService {
     this.unsubscribe?.();
     this.extensionUi.cancelPending();
     this.contextEstimate = this.nativeCompaction.storedEstimatedTokensAfter(session);
+    this.compactionStatus = { status: "idle" };
     this.streamContinuity.install(session);
     this.liveTools.clear();
     this.liveAssistantId = undefined;
@@ -584,18 +587,45 @@ export class AgentService {
         this.emit({ type: "timeline-upsert", item: toolItem(tool) });
         break;
       }
-      case "compaction_start":
+      case "compaction_start": {
+        const current = this.compactionStatus.status === "running" ? this.compactionStatus : undefined;
+        this.compactionStatus = {
+          status: "running",
+          reason: event.reason,
+          method: this.compactionMethod(session),
+          tokensBefore: current?.tokensBefore ?? session.getContextUsage()?.tokens ?? this.contextEstimate,
+        };
         this.emitContext(session);
         break;
+      }
       case "compaction_end": {
-        if (event.aborted && this.compactCancelRequested) {
-          this.emit({ type: "notice", message: "Context compaction cancelled." });
-        }
-        this.compactCancelRequested = false;
+        const active = this.compactionStatus.status === "running" ? this.compactionStatus : undefined;
+        const method = active?.method ?? this.compactionMethod(session);
+        const tokensBefore = active?.tokensBefore ?? null;
         const nativeEstimate = this.nativeCompaction.consumeEstimatedTokensAfter();
-        this.contextEstimate = event.result
+        const estimatedTokensAfter = event.result
           ? nativeEstimate ?? event.result.estimatedTokensAfter ?? null
           : null;
+        this.contextEstimate = estimatedTokensAfter;
+        if (event.aborted) {
+          this.compactionStatus = { status: "cancelled", reason: event.reason, method };
+        } else if (event.errorMessage || !event.result) {
+          this.compactionStatus = {
+            status: "failed",
+            reason: event.reason,
+            method,
+            message: event.errorMessage ?? "Context compaction did not produce a result.",
+          };
+        } else {
+          this.compactionStatus = {
+            status: "completed",
+            reason: event.reason,
+            method,
+            tokensBefore,
+            tokensAfter: estimatedTokensAfter,
+            isEstimated: estimatedTokensAfter !== null,
+          };
+        }
         if (event.errorMessage) this.emit({ type: "error", message: event.errorMessage });
         this.emitContext(session);
         break;
@@ -606,6 +636,10 @@ export class AgentService {
     }
   }
 
+  private compactionMethod(session: AgentSession): CompactionMethod {
+    return this.nativeCompaction.supports(session.model) ? "native" : "summary";
+  }
+
   private contextState(session: AgentSession, usage = session.getContextUsage()): import("../../shared/contracts.js").ContextState {
     const contextWindow = usage?.contextWindow ?? session.model?.contextWindow ?? null;
     if (usage?.tokens !== null && usage?.tokens !== undefined) this.contextEstimate = null;
@@ -614,11 +648,12 @@ export class AgentService {
       tokens,
       contextWindow,
       percent: usage?.percent ?? (tokens !== null && contextWindow ? tokens / contextWindow * 100 : null),
-      isCompacting: session.isCompacting,
+      isCompacting: this.compactionStatus.status === "running" || session.isCompacting,
       isEstimated: usage?.tokens == null && tokens !== null,
-      compactionMethod: session.isCompacting
-        ? (this.nativeCompaction.supports(session.model) ? "native" : "summary")
-        : null,
+      compactionMethod: this.compactionStatus.status === "running"
+        ? this.compactionStatus.method
+        : session.isCompacting ? this.compactionMethod(session) : null,
+      compaction: this.compactionStatus,
     };
   }
 

@@ -92,14 +92,6 @@ export default function App() {
             onClose={() => setValidationOpen(false)}
           />
         )}
-        {state.context.isCompacting && (
-          <div className="compaction-progress" role="status">
-            <span className="working-dot" />
-            {state.context.compactionMethod === "native"
-              ? t("compaction.native")
-              : t("compaction.summary")}
-          </div>
-        )}
         <Conversation
           timeline={state.timeline}
           isStreaming={state.isStreaming}
