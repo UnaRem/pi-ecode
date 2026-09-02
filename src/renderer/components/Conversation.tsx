@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Sparkles } from "lucide-react";
-import type { ConversationItem, TaskPlan } from "@shared/contracts";
+import type { ConversationItem } from "@shared/contracts";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
-import { TaskPlanPanel } from "./TaskPlanPanel";
 import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
 
 interface ConversationProps {
@@ -13,7 +12,6 @@ interface ConversationProps {
   projectName: string;
   error: string | null;
   notice: string | null;
-  taskPlan: TaskPlan | null;
 }
 
 const BOTTOM_THRESHOLD = 48;
@@ -101,7 +99,6 @@ export function Conversation(props: ConversationProps) {
     >
       <ConversationOutline messages={userMessages} activeId={activeUserId} onSelect={selectTurn} />
       <div className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
-        {props.taskPlan && <TaskPlanPanel plan={props.taskPlan} />}
         {isEmpty ? (
           <section className="welcome">
             <div className="welcome-icon"><Sparkles size={21} /></div>

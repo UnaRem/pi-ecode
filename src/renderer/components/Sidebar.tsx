@@ -1,5 +1,6 @@
 import { FolderOpen, MessageSquarePlus, PanelLeftClose } from "lucide-react";
-import type { SessionSummary } from "@shared/contracts";
+import type { SessionSummary, TaskPlan } from "@shared/contracts";
+import { TaskPlanPanel } from "./TaskPlanPanel";
 
 interface SidebarProps {
   projectName: string;
@@ -7,6 +8,7 @@ interface SidebarProps {
   sessions: SessionSummary[];
   activeSessionFile: string | null;
   disabled: boolean;
+  taskPlan: TaskPlan | null;
   onChooseProject: () => void;
   onNewSession: () => void;
   onSwitchSession: (path: string) => void;
@@ -62,6 +64,7 @@ export function Sidebar(props: SidebarProps) {
           ))
         )}
       </nav>
+      {props.taskPlan && <TaskPlanPanel plan={props.taskPlan} />}
       <div className="sidebar-footer">Local sessions · pi</div>
     </aside>
   );

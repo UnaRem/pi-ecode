@@ -51,6 +51,7 @@ export default function App() {
           sessions={state.sessions}
           activeSessionFile={state.sessionFile}
           disabled={state.isStreaming}
+          taskPlan={state.taskPlan}
           onChooseProject={() => void actions.chooseProject()}
           onNewSession={() => void actions.newSession()}
           onSwitchSession={(path) => void actions.switchSession(path)}
@@ -105,7 +106,6 @@ export default function App() {
           projectName={state.projectName}
           error={state.error}
           notice={state.notice}
-          taskPlan={state.taskPlan}
         />
         <Composer
           isStreaming={state.isStreaming}
