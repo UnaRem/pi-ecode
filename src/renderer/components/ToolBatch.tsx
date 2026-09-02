@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { ToolCard } from "./ToolCard";
+import { useI18n } from "../i18n/i18n";
 
 export type ConversationRenderGroup =
   | { kind: "message"; id: string; item: Extract<ConversationItem, { kind: "message" }> }
@@ -29,17 +30,18 @@ export function visibleToolsInBatch(tools: ToolActivity[], expanded: boolean): T
 }
 
 export function ToolBatch({ tools }: { tools: ToolActivity[] }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const collapsible = tools.length > 3;
   const visibleTools = visibleToolsInBatch(tools, expanded);
   const hiddenCount = tools.length - visibleTools.length;
 
   return (
-    <section className="tool-batch" aria-label={`${tools.length} consecutive tool calls`}>
+    <section className="tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
       {collapsible && (
         <button className="tool-batch-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
           {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          {expanded ? "Collapse tool calls" : `${hiddenCount} earlier tool calls folded`}
+          {expanded ? t("tool.collapse") : t("tool.folded", { count: hiddenCount })}
         </button>
       )}
       {visibleTools.map((tool) => (

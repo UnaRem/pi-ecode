@@ -1,8 +1,10 @@
 import { Check, Circle, LoaderCircle } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { TaskPlan } from "@shared/contracts";
+import { useI18n } from "../i18n/i18n";
 
 export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
+  const { t } = useI18n();
   const currentItemRef = useRef<HTMLLIElement>(null);
   const completedCount = plan.items.filter((item) => item.status === "completed").length;
   const activeIndex = plan.items.findIndex((item) => item.status === "in_progress");
@@ -15,7 +17,7 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
   }, [plan.updatedAt, currentIndex]);
 
   return (
-    <section className="sidebar-task-plan" aria-label={`Task plan: ${plan.title}`}>
+    <section className="sidebar-task-plan" aria-label={t("task.plan", { title: plan.title })}>
       <ol className="sidebar-task-items">
         {plan.items.map((item, index) => {
           const isCurrent = index === currentIndex;
@@ -40,8 +42,8 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
       <div className={`sidebar-task-step ${isComplete ? "complete" : ""}`}>
         {isComplete ? <Check size={13} /> : <LoaderCircle className="spin" size={14} />}
         <span>{isComplete
-          ? `已完成 ${completedCount}/${plan.items.length} 步`
-          : `第 ${Math.max(1, currentIndex + 1)}/${plan.items.length} 步`}</span>
+          ? t("task.complete", { done: completedCount, total: plan.items.length })
+          : t("task.current", { current: Math.max(1, currentIndex + 1), total: plan.items.length })}</span>
       </div>
     </section>
   );
