@@ -58,7 +58,9 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .session-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-row time { color: var(--faint); font-size: 10px; }
 .sidebar-empty { margin: 9px; color: var(--faint); font-size: 11px; line-height: 1.5; }
-.sidebar-footer { padding: 8px 9px 1px; color: var(--faint); font-size: 10px; }
+.sidebar-language { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 8px; margin: 7px 4px 0; padding: 7px 8px; border-top: 1px solid #d9d9d4; color: var(--muted); font-size: 9.5px; }
+.sidebar-language select { min-width: 72px; height: 25px; padding: 0 5px; border: 1px solid #d2d2cd; border-radius: 6px; color: #555550; background: #f8f8f6; font-size: 9.5px; }
+.sidebar-footer { padding: 5px 9px 1px; color: var(--faint); font-size: 10px; }
 
 .workspace { min-width: 0; flex: 1; display: flex; flex-direction: column; background: var(--bg); }
 .topbar { height: 53px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 18px; border-bottom: 1px solid var(--line-soft); }

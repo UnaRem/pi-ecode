@@ -1,6 +1,7 @@
 import { FolderOpen, MessageSquarePlus, PanelLeftClose } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
 import { TaskPlanPanel } from "./TaskPlanPanel";
+import { useI18n, type UiLanguage } from "../i18n/i18n";
 
 interface SidebarProps {
   projectName: string;
@@ -15,19 +16,21 @@ interface SidebarProps {
   onCollapse: () => void;
 }
 
-function relativeTime(timestamp: number): string {
+function relativeTime(timestamp: number, locale: string): string {
   const elapsed = Date.now() - timestamp;
-  if (elapsed < 60_000) return "now";
-  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m`;
-  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h`;
-  return `${Math.floor(elapsed / 86_400_000)}d`;
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "narrow" });
+  if (elapsed < 60_000) return formatter.format(0, "minute");
+  if (elapsed < 3_600_000) return formatter.format(-Math.floor(elapsed / 60_000), "minute");
+  if (elapsed < 86_400_000) return formatter.format(-Math.floor(elapsed / 3_600_000), "hour");
+  return formatter.format(-Math.floor(elapsed / 86_400_000), "day");
 }
 
 export function Sidebar(props: SidebarProps) {
+  const { language, locale, setLanguage, t } = useI18n();
   return (
     <aside className="sidebar">
       <div className="sidebar-project">
-        <button className="project-button" onClick={props.onChooseProject} title={props.projectPath}>
+        <button className="project-button" onClick={props.onChooseProject} title={`${t("sidebar.chooseProject")}: ${props.projectPath}`}>
           <span className="project-mark">π</span>
           <span className="project-copy">
             <strong>{props.projectName}</strong>
@@ -35,21 +38,21 @@ export function Sidebar(props: SidebarProps) {
           </span>
           <FolderOpen size={15} aria-hidden="true" />
         </button>
-        <button className="icon-button sidebar-collapse" onClick={props.onCollapse} aria-label="Collapse sidebar">
+        <button className="icon-button sidebar-collapse" onClick={props.onCollapse} aria-label={t("sidebar.collapse")}>
           <PanelLeftClose size={17} />
         </button>
       </div>
 
       <button className="new-thread-button" onClick={props.onNewSession} disabled={props.disabled}>
         <MessageSquarePlus size={16} />
-        New thread
+        {t("sidebar.newThread")}
         <kbd>Ctrl N</kbd>
       </button>
 
-      <div className="sidebar-label">Threads</div>
-      <nav className="session-list" aria-label="Conversation sessions">
+      <div className="sidebar-label">{t("sidebar.threads")}</div>
+      <nav className="session-list" aria-label={t("sidebar.sessions")}>
         {props.sessions.length === 0 ? (
-          <p className="sidebar-empty">Your conversations will appear here.</p>
+          <p className="sidebar-empty">{t("sidebar.empty")}</p>
         ) : (
           props.sessions.map((session) => (
             <button
@@ -59,13 +62,20 @@ export function Sidebar(props: SidebarProps) {
               disabled={props.disabled}
             >
               <span>{session.title}</span>
-              <time>{relativeTime(session.modifiedAt)}</time>
+              <time>{relativeTime(session.modifiedAt, locale)}</time>
             </button>
           ))
         )}
       </nav>
       {props.taskPlan && <TaskPlanPanel plan={props.taskPlan} />}
-      <div className="sidebar-footer">Local sessions · pi</div>
+      <label className="sidebar-language">
+        <span>{t("sidebar.language")}</span>
+        <select value={language} onChange={(event) => setLanguage(event.target.value as UiLanguage)}>
+          <option value="zh-CN">{t("language.zh")}</option>
+          <option value="en">{t("language.en")}</option>
+        </select>
+      </label>
+      <div className="sidebar-footer">{t("sidebar.footer")}</div>
     </aside>
   );
 }

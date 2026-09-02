@@ -6,9 +6,11 @@ import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { useAgent } from "./hooks/use-agent";
+import { useI18n } from "./i18n/i18n";
 
 export default function App() {
   const { state, isLoading, actions } = useAgent();
+  const { t } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [validationOpen, setValidationOpen] = useState(false);
 
@@ -24,7 +26,7 @@ export default function App() {
   }, [actions, state.projectPath]);
 
   if (isLoading) {
-    return <div className="loading-screen"><LoaderCircle className="spin" size={22} /><span>Opening project…</span></div>;
+    return <div className="loading-screen"><LoaderCircle className="spin" size={22} /><span>{t("app.openingProject")}</span></div>;
   }
 
   if (!state.projectPath || !state.projectName) {
@@ -32,10 +34,10 @@ export default function App() {
       <div className="project-gate">
         <div className="brand-mark">π</div>
         <h1>pi ecode</h1>
-        <p>A quiet desktop workspace for your coding agent.</p>
+        <p>{t("app.tagline")}</p>
         <button onClick={() => void actions.chooseProject()}>
           <FolderOpen size={17} />
-          Open a project
+          {t("app.openProject")}
         </button>
         {state.error && <div className="error-banner">{state.error}</div>}
       </div>
@@ -96,8 +98,8 @@ export default function App() {
           <div className="compaction-progress" role="status">
             <span className="working-dot" />
             {state.context.compactionMethod === "native"
-              ? "Compacting context · requesting provider checkpoint…"
-              : "Compacting context · generating a conversation summary…"}
+              ? t("compaction.native")
+              : t("compaction.summary")}
           </div>
         )}
         <Conversation
