@@ -105,6 +105,7 @@ export default function App() {
           projectName={state.projectName}
           error={state.error}
           notice={state.notice}
+          taskPlan={state.taskPlan}
         />
         <Composer
           isStreaming={state.isStreaming}
