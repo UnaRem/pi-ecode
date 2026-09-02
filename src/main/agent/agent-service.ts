@@ -8,6 +8,7 @@ import {
   createAgentSessionFromServices,
   createAgentSessionRuntime,
   createAgentSessionServices,
+  createEventBus,
   getAgentDir,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
@@ -114,6 +115,11 @@ export class AgentService {
     (request) => this.emit({ type: "extension-ui", request }),
     (message) => this.emit({ type: "notice", message }),
   );
+  private readonly extensionEventBus = createEventBus();
+  private readonly removeQuestionnaireListener = this.extensionEventBus.on(
+    "rpiv:ask-user:prompt",
+    (payload) => this.extensionUi.setQuestionnaireMetadata(payload),
+  );
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
@@ -158,6 +164,7 @@ export class AgentService {
         cwd: targetCwd,
         resourceLoaderOptions: {
           extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.taskPlan.asExtension()],
+          eventBus: this.extensionEventBus,
           extensionsOverride: (base) => ({
             ...base,
             extensions: base.extensions.filter((extension) => (
@@ -661,6 +668,8 @@ export class AgentService {
 
   async dispose(): Promise<void> {
     await this.disposeRuntime();
+    this.removeQuestionnaireListener();
+    this.extensionEventBus.clear();
     await this.validation.dispose();
     this.listeners.clear();
   }

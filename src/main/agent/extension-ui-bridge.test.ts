@@ -38,6 +38,37 @@ describe("ExtensionUiBridge", () => {
     expect(test.bridge.current).toBeNull();
   });
 
+  it("enriches rpiv multi-select input with checkbox metadata", async () => {
+    const test = createHarness();
+    test.bridge.setQuestionnaireMetadata({
+      questions: [{
+        question: "Which checks?",
+        header: "Checks",
+        multiSelect: true,
+        options: [
+          { label: "Tests", description: "Run tests" },
+          { label: "Build", description: "Run build" },
+        ],
+      }],
+    });
+    const result = test.context.input("[Checks] Which checks?\n\n1. Tests\n2. Build", "1,3");
+    const request = test.requests[0];
+    if (!request) throw new Error("Expected a UI request");
+
+    expect(request).toMatchObject({
+      method: "multi-select",
+      title: "[Checks] Which checks?",
+      questionIndex: 0,
+      questionCount: 1,
+      options: [
+        { value: "1", label: "Tests", description: "Run tests" },
+        { value: "2", label: "Build", description: "Run build" },
+      ],
+    });
+    expect(test.bridge.respond({ requestId: request.id, value: ["1", "2"] })).toBe(true);
+    await expect(result).resolves.toBe("1,2");
+  });
+
   it("maps extension notifications to the host notice channel", () => {
     const test = createHarness();
     test.context.notify("Ready", "info");
