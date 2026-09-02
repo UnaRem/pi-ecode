@@ -174,6 +174,31 @@ export interface CandidateState {
   history: UpdateRecord[];
 }
 
+export type ExtensionUiMethod = "select" | "confirm" | "input" | "editor" | "multi-select";
+
+export interface ExtensionUiOption {
+  value: string;
+  label: string;
+  description?: string;
+}
+
+export interface ExtensionUiRequest {
+  id: string;
+  method: ExtensionUiMethod;
+  title: string;
+  message?: string;
+  options?: ExtensionUiOption[];
+  placeholder?: string;
+  prefill?: string;
+  questionIndex?: number;
+  questionCount?: number;
+}
+
+export interface ExtensionUiResponse {
+  requestId: string;
+  value: string | string[] | boolean | null;
+}
+
 export interface AgentSnapshot {
   projectPath: string | null;
   projectName: string | null;
@@ -192,6 +217,7 @@ export interface AgentSnapshot {
   pendingCount: number;
   error: string | null;
   taskPlan: TaskPlan | null;
+  extensionUi?: ExtensionUiRequest | null;
   history: WorkspaceHistoryState;
   validation: ValidationState;
   review: ChangeReview;
