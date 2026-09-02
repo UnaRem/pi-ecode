@@ -257,7 +257,6 @@ export class NativeCompaction {
     const baseUrl = auth?.auth.baseUrl ?? model.baseUrl;
     const branch = event.branchEntries;
     const previous = latestNative(branch);
-    if (latestCompaction(branch) && !previous) return undefined;
     if (previous && normalizedBaseUrl(previous.details.baseUrl) !== normalizedBaseUrl(baseUrl)) {
       throw new Error("Native compaction endpoint changed; preserving the existing opaque checkpoint.");
     }

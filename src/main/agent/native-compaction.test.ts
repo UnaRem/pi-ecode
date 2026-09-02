@@ -110,6 +110,29 @@ describe("NativeCompaction", () => {
     });
   });
 
+  it("migrates an existing pi text summary to a remote v2 checkpoint", async () => {
+    const textCompaction = {
+      type: "compaction",
+      id: "text-compact-1",
+      parentId: "parent",
+      timestamp: new Date().toISOString(),
+      summary: "legacy text summary",
+      firstKeptEntryId: "kept-1",
+      tokensBefore: 40_000,
+    } as SessionEntry;
+    const branch = [textCompaction];
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(sse());
+    const session = fakeSession(branch);
+    const handlers = register(new NativeCompaction(() => session, fetcher));
+
+    const result = await handlers.compact?.(compactEvent(branch), context(branch));
+
+    expect(fetcher).toHaveBeenCalledOnce();
+    const body = JSON.parse(String((fetcher.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, any>;
+    expect(JSON.stringify(body.input)).toContain("old question");
+    expect(result?.compaction?.details).toMatchObject({ kind: "pi-ecode.remote-compaction-v2" });
+  });
+
   it("replaces only the pi summary sentinel during provider replay", async () => {
     const details = {
       kind: "pi-ecode.remote-compaction-v2",
