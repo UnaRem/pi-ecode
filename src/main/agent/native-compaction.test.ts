@@ -97,12 +97,24 @@ describe("NativeCompaction", () => {
 
     const result = await handlers.compact?.(compactEvent(), context());
 
-    expect(fetcher).toHaveBeenCalledWith(
-      "https://gateway.example/v1/responses",
-      expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer secret", accept: "text/event-stream" }) }),
-    );
-    const body = JSON.parse(String((fetcher.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, any>;
-    expect(body).toMatchObject({ model: "model-1", instructions: "project instructions", stream: true, store: false });
+    expect(fetcher).toHaveBeenCalledWith("https://gateway.example/v1/responses", expect.any(Object));
+    const requestInit = fetcher.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(requestInit.headers);
+    expect(headers.get("authorization")).toBe("Bearer secret");
+    expect(headers.get("x-codex-beta-features")).toBe("remote_compaction_v2");
+    expect(headers.get("session-id")).toBe("session-1");
+    const body = JSON.parse(String(requestInit.body)) as Record<string, any>;
+    expect(body).toMatchObject({
+      model: "model-1",
+      instructions: "project instructions",
+      tool_choice: "auto",
+      parallel_tool_calls: true,
+      include: ["reasoning.encrypted_content"],
+      prompt_cache_key: "session-1",
+      text: { verbosity: "low" },
+      stream: true,
+      store: false,
+    });
     expect(body.input.at(-1)).toEqual({ type: "compaction_trigger" });
     expect(result?.compaction).toMatchObject({
       summary: "[pi-ecode:remote-compaction-v2]",
@@ -163,6 +175,19 @@ describe("NativeCompaction", () => {
       { type: "compaction", encrypted_content: "opaque" },
       { role: "user", content: [{ type: "input_text", text: "recent" }] },
     ]);
+  });
+
+  it("reports a provider error and cancels instead of falling back to pi summary", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      JSON.stringify({ error: { message: "bad compact payload" } }),
+      { status: 400, statusText: "Bad Request" },
+    ));
+    const reportFailure = vi.fn();
+    const session = fakeSession();
+    const handlers = register(new NativeCompaction(() => session, fetcher, reportFailure));
+
+    await expect(handlers.compact?.(compactEvent(), context())).resolves.toEqual({ cancel: true });
+    expect(reportFailure).toHaveBeenCalledWith(expect.stringContaining("bad compact payload"));
   });
 
   it("returns cancel when the remote request is aborted", async () => {

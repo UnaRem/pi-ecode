@@ -32,9 +32,20 @@ describe("remote compaction v2 client", () => {
       `event: response.completed\ndata: ${JSON.stringify({ type: "response.completed", response: { id: "r1", status: "completed", output: [opaque] } })}\n\n`,
       { status: 200 },
     ));
-    await expect(requestRemoteCompaction({ model, baseUrl: "https://example.com/v1", headers: {}, request, signal: new AbortController().signal, fetcher }))
-      .resolves.toMatchObject({ responseId: "r1", output: [opaque] });
+    await expect(requestRemoteCompaction({
+      model,
+      baseUrl: "https://example.com/v1",
+      headers: { "X-Codex-Beta-Features": "existing_feature" },
+      request,
+      sessionId: "session-1",
+      signal: new AbortController().signal,
+      fetcher,
+    })).resolves.toMatchObject({ responseId: "r1", output: [opaque] });
 
+    const requestInit = fetcher.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(requestInit.headers);
+    expect(headers.get("x-codex-beta-features")).toBe("existing_feature,remote_compaction_v2");
+    expect(headers.get("x-client-request-id")).toBe("session-1");
     expect(() => parseSseEvents("not-sse")).toThrow("no SSE events");
   });
 
@@ -43,7 +54,7 @@ describe("remote compaction v2 client", () => {
       JSON.stringify({ error: { message: "unsupported compaction model" } }),
       { status: 400, statusText: "Bad Request" },
     ));
-    const operation = requestRemoteCompaction({ model, baseUrl: "https://example.com/v1", headers: {}, request, signal: new AbortController().signal, fetcher });
+    const operation = requestRemoteCompaction({ model, baseUrl: "https://example.com/v1", headers: {}, request, sessionId: "session-1", signal: new AbortController().signal, fetcher });
     await expect(operation).rejects.toMatchObject({
       name: "RemoteCompactionError",
       status: 400,

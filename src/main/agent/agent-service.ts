@@ -98,7 +98,11 @@ export class AgentService {
   private compactOperation: Promise<void> | undefined;
   private compactCancelRequested = false;
   private contextEstimate: number | null = null;
-  private readonly nativeCompaction = new NativeCompaction(() => this.runtime?.session);
+  private readonly nativeCompaction = new NativeCompaction(
+    () => this.runtime?.session,
+    fetch,
+    (message) => this.emit({ type: "error", message }),
+  );
   private readonly streamContinuity = new StreamContinuity();
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
   private readonly validation = new ValidationService((validation) => {

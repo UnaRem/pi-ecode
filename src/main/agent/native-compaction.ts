@@ -20,7 +20,7 @@ import {
 const NATIVE_SUMMARY_MARKER = "[pi-ecode:remote-compaction-v2]";
 const DETAILS_KIND = "pi-ecode.remote-compaction-v2";
 const LEGACY_DETAILS_KIND = "pi-ecode.openai-native-compaction.v1";
-const EXTRA_FIELDS = ["tools", "parallel_tool_calls", "reasoning", "service_tier", "prompt_cache_key", "text"] as const;
+const EXTRA_FIELDS = ["tools", "tool_choice", "parallel_tool_calls", "reasoning", "include", "service_tier", "prompt_cache_key", "text"] as const;
 
 type NativeOutput = Array<Record<string, unknown> & { type: "compaction"; encrypted_content: string }>;
 
@@ -203,6 +203,7 @@ export class NativeCompaction {
   constructor(
     private readonly getSession: () => AgentSession | undefined,
     private readonly fetcher: typeof fetch = fetch,
+    private readonly reportFailure: (message: string) => void = () => undefined,
   ) {}
 
   asExtension(): InlineExtension {
@@ -269,13 +270,15 @@ export class NativeCompaction {
         baseUrl,
         headers: authHeaders(model, auth?.auth ?? {}),
         request: { model: model.id, input, instructions: ctx.getSystemPrompt(), ...extras },
+        sessionId: session.sessionId,
         signal: event.signal,
         fetcher: this.fetcher,
       });
     } catch (error) {
       if (event.signal.aborted || (error instanceof Error && error.name === "AbortError")) return { cancel: true };
       if (error instanceof RemoteCompactionError && error.unsupported && !previous) return undefined;
-      throw error;
+      this.reportFailure(error instanceof Error ? error.message : String(error));
+      return { cancel: true };
     }
     const estimatedTokensAfter = Math.min(
       event.preparation.tokensBefore,

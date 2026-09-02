@@ -5,8 +5,10 @@ export interface RemoteCompactionRequest {
   input: unknown[];
   instructions: string;
   tools?: unknown[];
+  tool_choice?: unknown;
   parallel_tool_calls?: boolean;
   reasoning?: Record<string, unknown>;
+  include?: string[];
   service_tier?: string;
   prompt_cache_key?: string;
   text?: Record<string, unknown>;
@@ -36,6 +38,11 @@ interface ParsedSseEvent {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergeFeatureHeader(existing: string | null): string {
+  const features = (existing ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  return [...new Set([...features, "remote_compaction_v2"])].join(",");
 }
 
 function safeResponseText(text: string): string {
@@ -111,19 +118,33 @@ export async function requestRemoteCompaction(args: {
   baseUrl: string;
   headers: Record<string, string>;
   request: RemoteCompactionRequest;
+  sessionId: string;
   signal: AbortSignal;
   fetcher?: typeof fetch;
 }): Promise<RemoteCompactionResult> {
   const endpoint = responsesUrl(args.model, args.baseUrl);
+  const request = structuredClone(args.request);
+  const include = [...new Set([...(request.include ?? []), "reasoning.encrypted_content"])];
   const body = {
-    ...structuredClone(args.request),
-    input: [...structuredClone(args.request.input), { type: "compaction_trigger" }],
+    ...request,
+    input: [...request.input, { type: "compaction_trigger" }],
+    tool_choice: request.tool_choice ?? "auto",
+    parallel_tool_calls: request.parallel_tool_calls ?? true,
+    include,
+    prompt_cache_key: request.prompt_cache_key ?? args.sessionId,
+    text: request.text ?? { verbosity: "low" },
     stream: true,
     store: false,
   };
+  const headers = new Headers(args.headers);
+  headers.set("accept", "text/event-stream");
+  headers.set("content-type", "application/json");
+  headers.set("session-id", args.sessionId);
+  headers.set("x-client-request-id", args.sessionId);
+  headers.set("x-codex-beta-features", mergeFeatureHeader(headers.get("x-codex-beta-features")));
   const response = await (args.fetcher ?? fetch)(endpoint, {
     method: "POST",
-    headers: { ...args.headers, accept: "text/event-stream", "content-type": "application/json" },
+    headers,
     body: JSON.stringify(body),
     signal: args.signal,
   });
