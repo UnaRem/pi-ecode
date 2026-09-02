@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Sparkles } from "lucide-react";
 import type { ConversationItem } from "@shared/contracts";
 import { ConversationOutline } from "./ConversationOutline";
@@ -55,12 +55,9 @@ export function Conversation(props: ConversationProps) {
     requestAnimationFrame(() => scrollToBottom("auto"));
   }, [latestUserId]);
 
-  useEffect(() => {
-    if (!followingRef.current) return;
-    requestAnimationFrame(() => {
-      const container = containerRef.current;
-      if (container && followingRef.current) container.scrollTop = container.scrollHeight;
-    });
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (container && followingRef.current) container.scrollTop = container.scrollHeight;
   }, [props.timeline, props.isStreaming]);
 
   useEffect(() => {
