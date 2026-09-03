@@ -19,7 +19,6 @@ import type {
   ConversationMessage,
   ImageAttachment,
   ModelOption,
-  SessionSummary,
   ThinkingLevel,
   ValidationState,
   CandidateState,
@@ -41,6 +40,7 @@ import { ExtensionUiBridge } from "./extension-ui-bridge.js";
 import { AuthService } from "./auth-service.js";
 import { EDIT_TOOL_COMPATIBILITY_GUIDANCE } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
+import { listSessionSummaries } from "./session-summaries.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
   projectPath: null,
@@ -298,7 +298,7 @@ export class AgentService {
     }
     const session = this.runtime.session;
     const [sessions, availableModels, history, review] = await Promise.all([
-      this.listSessions(),
+      listSessionSummaries(this.projectPath),
       session.modelRuntime.getAvailable().catch(() => session.modelRuntime.getAvailableSnapshot()),
       this.history.getState(session),
       this.history.getReview(session),
@@ -354,7 +354,7 @@ export class AgentService {
 
   async switchSession(sessionPath: string): Promise<AgentSnapshot> {
     const runtime = this.requireRuntime();
-    const sessions = await this.listSessions();
+    const sessions = await listSessionSummaries(this.projectPath);
     if (!sessions.some((session) => session.path === sessionPath)) {
       throw new Error("That session does not belong to the active project.");
     }
@@ -757,20 +757,8 @@ export class AgentService {
     });
   }
 
-  private async listSessions(): Promise<SessionSummary[]> {
-    if (!this.projectPath) return [];
-    const sessions = await SessionManager.list(this.projectPath);
-    return sessions.map((session) => ({
-      path: session.path,
-      id: session.id,
-      title: session.name || session.firstMessage || "New conversation",
-      modifiedAt: session.modified.getTime(),
-      messageCount: session.messageCount,
-    }));
-  }
-
   private async refreshSessions(): Promise<void> {
-    this.emit({ type: "sessions", sessions: await this.listSessions() });
+    this.emit({ type: "sessions", sessions: await listSessionSummaries(this.projectPath) });
   }
 
   respondExtensionUi(response: ExtensionUiResponse): boolean {
