@@ -52,7 +52,7 @@ export default function App() {
     return (
       <div className="project-gate">
         <div className="brand-mark"><img src="./ecode-icon.png" alt="" /></div>
-        <h1>pi ecode</h1>
+        <h1>PiECode</h1>
         <p>{t("app.tagline")}</p>
         <button onClick={() => void actions.chooseProject()}>
           <FolderOpen size={17} />

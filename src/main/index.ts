@@ -42,7 +42,7 @@ function createWindow(): void {
     height: 780,
     minWidth: 820,
     minHeight: 560,
-    title: "pi ecode",
+    title: "PiECode",
     icon: join(app.getAppPath(), "resources", "ecode-icon.png"),
     backgroundColor: "#f7f7f5",
     show: false,
