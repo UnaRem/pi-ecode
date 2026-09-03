@@ -1,6 +1,7 @@
+import { useState, type AnimationEvent } from "react";
 import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
-import { TaskPlanPanel } from "./TaskPlanPanel";
+import { TaskPlanPresence } from "./TaskPlanPanel";
 import { useI18n, type UiLanguage } from "../i18n/i18n";
 
 interface SidebarProps {
@@ -29,8 +30,12 @@ function relativeTime(timestamp: number, locale: string): string {
 
 export function Sidebar(props: SidebarProps) {
   const { language, locale, setLanguage, t } = useI18n();
+  const [isClosing, setIsClosing] = useState(false);
+  const finishClosing = (event: AnimationEvent<HTMLElement>): void => {
+    if (isClosing && event.currentTarget === event.target) props.onCollapse();
+  };
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isClosing ? "closing" : ""}`} onAnimationEnd={finishClosing}>
       <div className="sidebar-project">
         <button className="project-button" onClick={props.onChooseProject} title={`${t("sidebar.chooseProject")}: ${props.projectPath}`}>
           <span className="project-mark">π</span>
@@ -40,7 +45,7 @@ export function Sidebar(props: SidebarProps) {
           </span>
           <FolderOpen size={15} aria-hidden="true" />
         </button>
-        <button className="icon-button sidebar-collapse" onClick={props.onCollapse} aria-label={t("sidebar.collapse")}>
+        <button className="icon-button sidebar-collapse" onClick={() => setIsClosing(true)} disabled={isClosing} aria-label={t("sidebar.collapse")}>
           <PanelLeftClose size={17} />
         </button>
       </div>
@@ -69,12 +74,7 @@ export function Sidebar(props: SidebarProps) {
           ))
         )}
       </nav>
-      {props.taskPlan && (
-        <section className="sidebar-task-section">
-          <div className="sidebar-label">{t("task.section")}</div>
-          <TaskPlanPanel plan={props.taskPlan} />
-        </section>
-      )}
+      <TaskPlanPresence plan={props.taskPlan} />
       <button className={`sidebar-settings ${props.settingsActive ? "active" : ""}`} onClick={props.onOpenSettings}>
         <Settings size={15} />
         {t("sidebar.settings")}

@@ -1,7 +1,36 @@
 import { Check, Circle, LoaderCircle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type AnimationEvent } from "react";
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
+
+export function TaskPlanPresence({ plan }: { plan: TaskPlan | null }) {
+  const { t } = useI18n();
+  const [visiblePlan, setVisiblePlan] = useState(plan);
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  useEffect(() => {
+    if (plan) {
+      setVisiblePlan(plan);
+      setIsLeaving(false);
+    } else {
+      setIsLeaving(true);
+    }
+  }, [plan]);
+
+  const finishLeaving = (event: AnimationEvent<HTMLElement>): void => {
+    if (!isLeaving || event.animationName !== "task-plan-leave") return;
+    setVisiblePlan(null);
+    setIsLeaving(false);
+  };
+  if (!visiblePlan) return null;
+
+  return (
+    <section className={isLeaving ? "sidebar-task-section leaving" : "sidebar-task-section"} onAnimationEnd={finishLeaving}>
+      <div className="sidebar-label">{t("task.section")}</div>
+      <TaskPlanPanel plan={visiblePlan} />
+    </section>
+  );
+}
 
 export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
   const { t } = useI18n();

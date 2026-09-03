@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskPlan } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
-import { TaskPlanPanel } from "./TaskPlanPanel";
+import { TaskPlanPanel, TaskPlanPresence } from "./TaskPlanPanel";
 
 describe("TaskPlanPanel", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -29,5 +29,19 @@ describe("TaskPlanPanel", () => {
     expect(markup).toContain("sidebar-task-segment pending");
     expect(markup).toContain('aria-label="Completed 1/3 steps"');
     expect(markup).not.toContain("Step 2/3");
+
+    const presenceMarkup = renderToStaticMarkup(
+      <I18nProvider><TaskPlanPresence plan={plan} /></I18nProvider>,
+    );
+    expect(presenceMarkup).toContain('class="sidebar-task-section"');
+    expect(presenceMarkup).not.toContain("<button");
+  });
+
+  it("renders nothing before a task plan appears", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(
+      <I18nProvider><TaskPlanPresence plan={null} /></I18nProvider>,
+    );
+    expect(markup).toBe("");
   });
 });
