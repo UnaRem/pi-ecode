@@ -4,6 +4,7 @@ import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest } from "../../shared/settings-contracts.js";
 import type { AgentService } from "../agent/agent-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
+import { ProjectGitService } from "../project-git-service.js";
 
 function isExtensionUiResponse(value: unknown): value is ExtensionUiResponse {
   if (!value || typeof value !== "object") return false;
@@ -40,6 +41,7 @@ function isSaveConfigRequest(value: unknown): value is SaveConfigRequest {
 }
 
 export function registerIpc(service: AgentService, settings: SettingsService): () => void {
+  const projectGit = new ProjectGitService(() => service.activeProjectPath ?? null);
   ipcMain.handle(IPC_CHANNELS.chooseProject, async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
     const result = owner
@@ -103,6 +105,8 @@ export function registerIpc(service: AgentService, settings: SettingsService): (
     isAuthPromptResponse(response) && service.respondAuthPrompt(response)
   ));
   ipcMain.handle(IPC_CHANNELS.cancelAuth, () => service.cancelAuth());
+  ipcMain.handle(IPC_CHANNELS.getProjectGitStatus, () => projectGit.getStatus());
+  ipcMain.handle(IPC_CHANNELS.pushProject, () => projectGit.push());
 
   const unsubscribe = service.subscribe((agentEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {

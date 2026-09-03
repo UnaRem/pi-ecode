@@ -180,6 +180,12 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .validation-toggle.passed { color: var(--accent); background: var(--accent-soft); }
 .validation-toggle.failed { color: var(--danger); }
 .validation-toggle.stale { color: #8b7042; }
+.git-push-control { position: relative; display: inline-flex; }
+.git-push-button { display: flex; align-items: center; gap: 5px; height: 29px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px; color: var(--muted); background: transparent; font-size: 10.5px; white-space: nowrap; cursor: pointer; }
+.git-push-button:hover { border-color: #cbc6df; color: #65439a; background: #f4f0fb; }
+.git-push-button.ready { border-color: #d7c9ec; color: #68449c; background: #f3eefb; }
+.git-push-button.synced { color: var(--accent); background: var(--accent-soft); }
+.git-push-error { position: absolute; z-index: 20; top: 34px; right: 0; width: 280px; padding: 8px 10px; border: 1px solid #e5c6c2; border-radius: 7px; color: var(--danger); background: #fff8f6; box-shadow: 0 6px 20px rgba(70, 35, 30, .12); font-size: 10px; line-height: 1.45; white-space: normal; }
 .select-shell { position: relative; display: flex; align-items: center; }
 .select-shell select { max-width: 200px; height: 30px; padding: 0 28px 0 9px; border: 1px solid transparent; border-radius: 7px; color: #555550; background: transparent; font-size: 11px; appearance: none; cursor: pointer; }
 .select-shell select:hover { border-color: var(--line); background: #fff; }
@@ -460,6 +466,8 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 @media (max-width: 900px) {
   .sidebar { --sidebar-width: 224px; }
   .thinking-select { display: none; }
+  .validation-toggle, .git-push-button { width: 29px; justify-content: center; padding: 0; }
+  .validation-toggle > span, .git-push-button > span { display: none; }
   .conversation-inner { width: calc(100% - 38px); }
   .conversation-outline { display: none; }
   .composer-area { padding-inline: 19px; }

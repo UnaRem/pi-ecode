@@ -35,6 +35,8 @@ const api: DesktopApi = {
   logoutProvider: (providerId) => ipcRenderer.invoke(IPC_CHANNELS.logoutProvider, providerId),
   respondAuthPrompt: (response) => ipcRenderer.invoke(IPC_CHANNELS.respondAuthPrompt, response),
   cancelAuth: () => ipcRenderer.invoke(IPC_CHANNELS.cancelAuth),
+  getProjectGitStatus: () => ipcRenderer.invoke(IPC_CHANNELS.getProjectGitStatus),
+  pushProject: () => ipcRenderer.invoke(IPC_CHANNELS.pushProject),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => listener(agentEvent);
     ipcRenderer.on(IPC_CHANNELS.event, handler);

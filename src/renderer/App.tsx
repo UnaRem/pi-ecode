@@ -83,6 +83,7 @@ export default function App() {
         <Topbar
           sidebarOpen={sidebarOpen}
           projectName={state.projectName}
+          projectPath={state.projectPath}
           sessionTitle={sessionTitle}
           models={state.models}
           selectedModel={state.selectedModel}

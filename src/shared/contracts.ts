@@ -32,6 +32,8 @@ export const IPC_CHANNELS = {
   logoutProvider: "settings:auth-logout",
   respondAuthPrompt: "settings:auth-respond",
   cancelAuth: "settings:auth-cancel",
+  getProjectGitStatus: "git:project-status",
+  pushProject: "git:push-project",
   settingsEvent: "settings:event",
   event: "agent:event",
 } as const;
@@ -278,6 +280,17 @@ export type AgentEvent =
   | { type: "notice"; message: string }
   | { type: "error"; message: string };
 
+export type ProjectGitAvailability = "ready" | "not-repository" | "detached" | "no-upstream" | "error";
+
+export interface ProjectGitStatus {
+  availability: ProjectGitAvailability;
+  branch: string | null;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  message: string | null;
+}
+
 export interface DesktopApi {
   chooseProject(): Promise<string | null>;
   openProject(path: string): Promise<AgentSnapshot>;
@@ -310,6 +323,8 @@ export interface DesktopApi {
   logoutProvider(providerId: string): Promise<SettingsSnapshot>;
   respondAuthPrompt(response: AuthPromptResponse): Promise<boolean>;
   cancelAuth(): Promise<void>;
+  getProjectGitStatus(): Promise<ProjectGitStatus>;
+  pushProject(): Promise<ProjectGitStatus>;
   subscribe(listener: (event: AgentEvent) => void): () => void;
   subscribeSettings(listener: (event: SettingsChangedEvent | AuthFlowEvent) => void): () => void;
 }

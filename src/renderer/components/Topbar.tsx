@@ -3,6 +3,7 @@ import { ChevronDown, LoaderCircle, PanelLeftOpen, Pencil, ShieldCheck } from "l
 import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import type { MessageKey } from "../i18n/messages";
+import { GitPushButton } from "./GitPushButton";
 
 const THINKING_KEYS: Record<ThinkingLevel, MessageKey> = {
   off: "thinking.off",
@@ -17,6 +18,7 @@ const THINKING_KEYS: Record<ThinkingLevel, MessageKey> = {
 interface TopbarProps {
   sidebarOpen: boolean;
   projectName: string;
+  projectPath: string;
   sessionTitle: string | null;
   models: ModelOption[];
   selectedModel: string | null;
@@ -116,6 +118,7 @@ export function Topbar(props: TopbarProps) {
             : <ShieldCheck size={15} />}
           <span>{props.validation.status === "passed" ? t("topbar.verified") : props.validation.status === "stale" ? t("topbar.stale") : t("topbar.verify")}</span>
         </button>
+        <GitPushButton projectKey={props.projectPath} disabled={props.disabled} validationStatus={props.validation.status} />
         <label className="select-shell provider-select">
           <span className="sr-only">{t("topbar.provider")}</span>
           <select value={selectedProvider} disabled={props.disabled || providers.length === 0} onChange={(event) => selectProvider(event.target.value)}>
