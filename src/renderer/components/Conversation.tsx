@@ -13,7 +13,9 @@ interface ConversationProps {
   workingStartedAt: number | null;
   projectName: string;
   error: string | null;
+  canContinue: boolean;
   notice: string | null;
+  onContinue: () => void;
 }
 
 const BOTTOM_THRESHOLD = 48;
@@ -38,6 +40,66 @@ function useWorkingDuration(startedAt: number | null): string | null {
   return startedAt === null ? null : formatWorkingDuration(now - startedAt);
 }
 
+interface ConversationBodyProps extends ConversationProps {
+  userElements: { current: Map<string, HTMLElement> };
+  workingLabel: string;
+}
+
+function ConversationBody(props: ConversationBodyProps) {
+  const { t } = useI18n();
+  const renderGroups = useMemo(() => groupConsecutiveTools(props.timeline), [props.timeline]);
+  const isEmpty = props.timeline.length === 0;
+  const lastItem = props.timeline.at(-1);
+  const hasLiveAssistant = props.isStreaming && lastItem?.kind === "message" && lastItem.message.role === "assistant";
+  return (
+    <div className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
+      {isEmpty ? (
+        <section className="welcome">
+          <div className="welcome-icon"><Sparkles size={21} /></div>
+          <h1>{t("conversation.welcomeTitle")}</h1>
+          <p>{t("conversation.welcomeBody", { project: props.projectName })}</p>
+        </section>
+      ) : (
+        <>
+          {renderGroups.map((group) => group.kind === "message" ? (
+            <article
+              key={group.id}
+              ref={(element) => {
+                if (group.item.message.role !== "user") return;
+                if (element) props.userElements.current.set(group.item.message.id, element);
+                else props.userElements.current.delete(group.item.message.id);
+              }}
+              data-message-id={group.item.message.id}
+              className={`message ${group.item.message.role} ${group.item.message.isError ? "error" : ""}`}
+            >
+              <div className="message-role">{group.item.message.role === "user" ? t("conversation.you") : "pi"}</div>
+              <div className="message-content">
+                {hasLiveAssistant && group.id === lastItem?.id && <div className="working-time"><span className="working-dot" /> {props.workingLabel}</div>}
+                {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
+                {group.item.message.images && group.item.message.images.length > 0 && <ImageGallery images={group.item.message.images} variant="message" />}
+                {hasLiveAssistant && group.id === lastItem?.id && <span className="stream-caret" aria-label={t("conversation.generating")} />}
+              </div>
+            </article>
+          ) : <ToolBatch key={group.id} tools={group.tools} />)}
+          {props.isStreaming && !hasLiveAssistant && (
+            <article className="message assistant waiting">
+              <div className="message-role">pi</div>
+              <div className="message-content"><span className="working-dot" /> {props.workingLabel}</div>
+            </article>
+          )}
+        </>
+      )}
+      {props.error && (
+        <div className={`error-banner ${props.canContinue ? "recoverable" : ""}`} role="alert">
+          <span>{props.error}</span>
+          {props.canContinue && <button onClick={props.onContinue} disabled={props.isStreaming}>{t("conversation.continue")}</button>}
+        </div>
+      )}
+      {props.notice && <div className="notice-banner" role="status">{props.notice}</div>}
+    </div>
+  );
+}
+
 export function Conversation(props: ConversationProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLElement>(null);
@@ -50,7 +112,6 @@ export function Conversation(props: ConversationProps) {
   const latestUserId = userMessages.at(-1)?.id ?? null;
   const [activeUserId, setActiveUserId] = useState<string | null>(latestUserId);
   const conversationKey = userMessages.at(0)?.id ?? "empty";
-  const renderGroups = useMemo(() => groupConsecutiveTools(props.timeline), [props.timeline]);
   const workingDuration = useWorkingDuration(props.isStreaming ? props.workingStartedAt : null);
   const workingLabel = workingDuration
     ? t("conversation.workingTime", { time: workingDuration })
@@ -117,10 +178,6 @@ export function Conversation(props: ConversationProps) {
     element.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const isEmpty = props.timeline.length === 0;
-  const lastItem = props.timeline.at(-1);
-  const hasLiveAssistant = props.isStreaming && lastItem?.kind === "message" && lastItem.message.role === "assistant";
-
   return (
     <main
       ref={containerRef}
@@ -136,52 +193,7 @@ export function Conversation(props: ConversationProps) {
         onSelect={selectTurn}
         onLatest={() => scrollToBottom("smooth")}
       />
-      <div className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
-        {isEmpty ? (
-          <section className="welcome">
-            <div className="welcome-icon"><Sparkles size={21} /></div>
-            <h1>{t("conversation.welcomeTitle")}</h1>
-            <p>{t("conversation.welcomeBody", { project: props.projectName })}</p>
-          </section>
-        ) : (
-          <>
-            {renderGroups.map((group) => group.kind === "message" ? (
-              <article
-                key={group.id}
-                ref={(element) => {
-                  if (group.item.message.role !== "user") return;
-                  if (element) userElements.current.set(group.item.message.id, element);
-                  else userElements.current.delete(group.item.message.id);
-                }}
-                data-message-id={group.item.message.id}
-                className={`message ${group.item.message.role} ${group.item.message.isError ? "error" : ""}`}
-              >
-                <div className="message-role">{group.item.message.role === "user" ? t("conversation.you") : "pi"}</div>
-                <div className="message-content">
-                  {hasLiveAssistant && group.id === lastItem?.id && (
-                    <div className="working-time"><span className="working-dot" /> {workingLabel}</div>
-                  )}
-                  {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
-                  {group.item.message.images && group.item.message.images.length > 0 && (
-                    <ImageGallery images={group.item.message.images} variant="message" />
-                  )}
-                  {hasLiveAssistant && group.id === lastItem?.id && (
-                    <span className="stream-caret" aria-label={t("conversation.generating")} />
-                  )}
-                </div>
-              </article>
-            ) : <ToolBatch key={group.id} tools={group.tools} />)}
-            {props.isStreaming && !hasLiveAssistant && (
-              <article className="message assistant waiting">
-                <div className="message-role">pi</div>
-                <div className="message-content"><span className="working-dot" /> {workingLabel}</div>
-              </article>
-            )}
-          </>
-        )}
-        {props.error && <div className="error-banner" role="alert">{props.error}</div>}
-        {props.notice && <div className="notice-banner" role="status">{props.notice}</div>}
-      </div>
+      <ConversationBody {...props} userElements={userElements} workingLabel={workingLabel} />
     </main>
   );
 }

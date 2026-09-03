@@ -130,6 +130,22 @@ describe("reduceAgentEvent", () => {
     expect(state.error).toBeNull();
   });
 
+  it("tracks whether an interrupted response can continue", () => {
+    const interrupted = reduceAgentEvent(INITIAL_AGENT_STATE, {
+      type: "state",
+      patch: { error: "502 Bad Gateway", canContinue: true },
+    });
+    expect(interrupted.error).toBe("502 Bad Gateway");
+    expect(interrupted.canContinue).toBe(true);
+
+    const resumed = reduceAgentEvent(interrupted, {
+      type: "state",
+      patch: { isStreaming: true, error: null, canContinue: false },
+    });
+    expect(resumed.canContinue).toBe(false);
+    expect(resumed.error).toBeNull();
+  });
+
   it("keeps the busy state when a recoverable error is reported", () => {
     const state = reduceAgentEvent({ ...INITIAL_AGENT_STATE, isStreaming: true }, {
       type: "error",

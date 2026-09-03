@@ -343,6 +343,10 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .tool-detail .tool-output { color: #6a6a66; background: #fafaf8; }
 .error-banner, .notice-banner { padding: 10px 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.45; }
 .error-banner { border: 1px solid #e5c6c2; color: #8f3f36; background: #f9ebe8; }
+.error-banner.recoverable { display: flex; align-items: center; gap: 12px; }
+.error-banner.recoverable > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.error-banner.recoverable > button { flex: 0 0 auto; height: 28px; padding: 0 11px; border: 1px solid #d79f98; border-radius: 7px; color: #873c34; background: #fff8f6; font-size: 10.5px; font-weight: 600; cursor: pointer; }
+.error-banner.recoverable > button:hover { border-color: #bd7067; background: #fff; }
 .notice-banner { border: 1px solid #cbded6; color: #41685d; background: #eaf3ef; }
 
 .composer-area { flex: 0 0 auto; padding: 0 28px 12px; background: var(--bg); }

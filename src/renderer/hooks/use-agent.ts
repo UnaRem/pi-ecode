@@ -70,6 +70,11 @@ export function useAgent() {
     await run(() => window.piDesktop.renameSession(title));
   }, [run]);
 
+  const continueAfterError = useCallback(async () => {
+    dispatch({ type: "state", patch: { error: null, canContinue: false } });
+    await run(() => window.piDesktop.continueAfterError());
+  }, [run]);
+
   const send = useCallback(async (message: string, images: ImageAttachment[] = []) => {
     dispatch({ type: "state", patch: { error: null } });
     await run(() => window.piDesktop.prompt(message, images));
@@ -141,6 +146,7 @@ export function useAgent() {
       newSession,
       switchSession,
       renameSession,
+      continueAfterError,
       send,
       compact,
       cancelCompact,

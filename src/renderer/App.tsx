@@ -116,7 +116,9 @@ export default function App() {
           workingStartedAt={state.workingStartedAt}
           projectName={state.projectName}
           error={state.error}
+          canContinue={state.canContinue}
           notice={state.notice}
+          onContinue={() => void actions.continueAfterError()}
         />
         <Composer
           isStreaming={state.isStreaming}
