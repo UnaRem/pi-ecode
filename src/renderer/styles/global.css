@@ -297,6 +297,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .message.error .message-content { color: var(--danger); }
 .message.streaming { margin-top: 22px; }
 .message.waiting .message-content { color: var(--muted); font-size: 12px; }
+.working-time { margin-bottom: 5px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .working-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
 .stream-caret { display: inline-block; width: 5px; height: 16px; margin-left: 3px; vertical-align: -3px; border-radius: 1px; background: #777; animation: blink 1s steps(2) infinite; }
 .timeline-tool { margin: -11px 0 20px 55px; }

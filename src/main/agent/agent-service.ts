@@ -39,6 +39,7 @@ import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
 import { ExtensionUiBridge } from "./extension-ui-bridge.js";
 import { AuthService } from "./auth-service.js";
+import { EDIT_TOOL_COMPATIBILITY_GUIDANCE } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
@@ -56,6 +57,7 @@ const EMPTY_SNAPSHOT: AgentSnapshot = {
   thinkingLevel: "off",
   thinkingLevels: ["off"],
   isStreaming: false,
+  workingStartedAt: null,
   pendingCount: 0,
   error: null,
   taskPlan: null,
@@ -117,11 +119,9 @@ export class AgentService {
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
   private readonly promptLifecycle = new PromptLifecycle((session) => {
-    const isStreaming = this.isPromptActive(session);
-    this.emit({
-      type: "state",
-      patch: { isStreaming, pendingCount: session.pendingMessageCount, ...(isStreaming ? { error: null } : {}) },
-    });
+    const isStreaming = this.promptLifecycle.isActive(session);
+    this.emit({ type: "state", patch: { isStreaming, workingStartedAt: this.promptLifecycle.workingStartedAt,
+      pendingCount: session.pendingMessageCount, ...(isStreaming ? { error: null } : {}) } });
   });
   private compactOperation: Promise<void> | undefined;
   private contextEstimate: number | null = null;
@@ -328,7 +328,8 @@ export class AgentService {
       selectedModel: model ? `${model.provider}/${model.id}` : null,
       thinkingLevel: session.thinkingLevel,
       thinkingLevels: session.getAvailableThinkingLevels(),
-      isStreaming: this.isPromptActive(session),
+      isStreaming: this.promptLifecycle.isActive(session),
+      workingStartedAt: this.promptLifecycle.workingStartedAt,
       pendingCount: session.pendingMessageCount,
       error: this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
       taskPlan: this.taskPlan.current,
@@ -514,10 +515,6 @@ export class AgentService {
     });
   }
 
-  private isPromptActive(session: AgentSession): boolean {
-    return this.promptLifecycle.isActive(session);
-  }
-
   private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
     return async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
       const services = await createAgentSessionServices({
@@ -525,6 +522,7 @@ export class AgentService {
         resourceLoaderOptions: {
           extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.taskPlan.asExtension()],
           eventBus: this.extensionEventBus,
+          appendSystemPromptOverride: (base) => [...base, EDIT_TOOL_COMPATIBILITY_GUIDANCE],
           extensionsOverride: (base) => ({
             ...base,
             extensions: base.extensions.filter((extension) => (
@@ -574,7 +572,7 @@ export class AgentService {
         this.emit({ type: "state", patch: { isStreaming: true, error: null } });
         break;
       case "agent_settled":
-        this.emit({ type: "state", patch: { isStreaming: this.isPromptActive(session), pendingCount: session.pendingMessageCount } });
+        this.emit({ type: "state", patch: { isStreaming: this.promptLifecycle.isActive(session), pendingCount: session.pendingMessageCount } });
         this.emitContext(session);
         void this.refreshSessions();
         queueMicrotask(() => {

@@ -14,11 +14,16 @@ export class PromptLifecycle {
   private starting = false;
   private stopRequested = false;
   private pendingSteering: PendingSteer[] = [];
+  private startedAt: number | null = null;
 
   constructor(private readonly onStateChanged: (session: AgentSession) => void) {}
 
   isActive(session: AgentSession): boolean {
     return Boolean(this.starting || this.operation || session.isStreaming);
+  }
+
+  get workingStartedAt(): number | null {
+    return this.startedAt;
   }
 
   async prompt(session: AgentSession, text: string, images: PromptImages): Promise<void> {
@@ -31,6 +36,7 @@ export class PromptLifecycle {
     const isStarting = !session.isStreaming;
     if (isStarting) {
       this.starting = true;
+      this.startedAt = Date.now();
       this.onStateChanged(session);
     }
     const operation = session.prompt(text, {
@@ -45,6 +51,7 @@ export class PromptLifecycle {
       if (this.operation === operation) {
         this.starting = false;
         this.operation = undefined;
+        this.startedAt = null;
         this.onStateChanged(session);
       }
     }
@@ -66,6 +73,7 @@ export class PromptLifecycle {
     this.operation = undefined;
     this.starting = false;
     this.stopRequested = false;
+    this.startedAt = null;
     for (const pending of this.pendingSteering.splice(0)) pending.resolve();
   }
 

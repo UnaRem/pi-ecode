@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent } from "../../shared/contracts.js";
 import { AgentService } from "./agent-service.js";
@@ -8,7 +8,10 @@ interface PromptOptions {
 }
 
 describe("AgentService prompt lifecycle", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("shows work immediately and steers messages submitted during preflight", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     let finishPrompt: (() => void) | undefined;
     let finishPreflight: ((accepted: boolean) => void) | undefined;
     const session = {
@@ -26,9 +29,15 @@ describe("AgentService prompt lifecycle", () => {
     service.subscribe((event) => events.push(event));
 
     const firstPrompt = service.prompt("first");
-    expect(events.at(-1)).toEqual({ type: "state", patch: { isStreaming: true, pendingCount: 0, error: null } });
+    expect(events.at(-1)).toEqual({
+      type: "state",
+      patch: { isStreaming: true, workingStartedAt: 1_000, pendingCount: 0, error: null },
+    });
+    now.mockReturnValue(5_000);
     const steeringPrompt = service.prompt("continue");
 
+    const lifecycle = service as unknown as { promptLifecycle: { workingStartedAt: number | null } };
+    expect(lifecycle.promptLifecycle.workingStartedAt).toBe(1_000);
     expect(session.prompt).toHaveBeenCalledTimes(1);
     expect(session.steer).not.toHaveBeenCalled();
     finishPreflight?.(true);
@@ -36,7 +45,10 @@ describe("AgentService prompt lifecycle", () => {
     expect(session.steer).toHaveBeenCalledWith("continue", []);
     finishPrompt?.();
     await firstPrompt;
-    expect(events.at(-1)).toEqual({ type: "state", patch: { isStreaming: false, pendingCount: 0 } });
+    expect(events.at(-1)).toEqual({
+      type: "state",
+      patch: { isStreaming: false, workingStartedAt: null, pendingCount: 0 },
+    });
   });
 
   it("honors stop requests made before agent_start", async () => {

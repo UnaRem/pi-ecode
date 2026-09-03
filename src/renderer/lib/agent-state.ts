@@ -22,6 +22,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   thinkingLevel: "off",
   thinkingLevels: ["off"],
   isStreaming: false,
+  workingStartedAt: null,
   pendingCount: 0,
   error: null,
   taskPlan: null,

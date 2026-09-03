@@ -10,12 +10,33 @@ import { useI18n } from "../i18n/i18n";
 interface ConversationProps {
   timeline: ConversationItem[];
   isStreaming: boolean;
+  workingStartedAt: number | null;
   projectName: string;
   error: string | null;
   notice: string | null;
 }
 
 const BOTTOM_THRESHOLD = 48;
+
+export function formatWorkingDuration(elapsedMs: number): string {
+  const totalSeconds = Math.floor(Math.max(0, elapsedMs) / 1000);
+  const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, "0");
+  const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, "0");
+  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+function useWorkingDuration(startedAt: number | null): string | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (startedAt === null) return;
+    const update = (): void => setNow(Date.now());
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
+  }, [startedAt]);
+  return startedAt === null ? null : formatWorkingDuration(now - startedAt);
+}
 
 export function Conversation(props: ConversationProps) {
   const { t } = useI18n();
@@ -30,6 +51,10 @@ export function Conversation(props: ConversationProps) {
   const [activeUserId, setActiveUserId] = useState<string | null>(latestUserId);
   const conversationKey = userMessages.at(0)?.id ?? "empty";
   const renderGroups = useMemo(() => groupConsecutiveTools(props.timeline), [props.timeline]);
+  const workingDuration = useWorkingDuration(props.isStreaming ? props.workingStartedAt : null);
+  const workingLabel = workingDuration
+    ? t("conversation.workingTime", { time: workingDuration })
+    : t("conversation.working");
 
   const setFollowing = (following: boolean): void => {
     followingRef.current = following;
@@ -127,6 +152,9 @@ export function Conversation(props: ConversationProps) {
               >
                 <div className="message-role">{group.item.message.role === "user" ? t("conversation.you") : "pi"}</div>
                 <div className="message-content">
+                  {hasLiveAssistant && group.id === lastItem?.id && (
+                    <div className="working-time"><span className="working-dot" /> {workingLabel}</div>
+                  )}
                   {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
                   {group.item.message.images && group.item.message.images.length > 0 && (
                     <ImageGallery images={group.item.message.images} variant="message" />
@@ -140,7 +168,7 @@ export function Conversation(props: ConversationProps) {
             {props.isStreaming && !hasLiveAssistant && (
               <article className="message assistant waiting">
                 <div className="message-role">pi</div>
-                <div className="message-content"><span className="working-dot" /> {t("conversation.working")}</div>
+                <div className="message-content"><span className="working-dot" /> {workingLabel}</div>
               </article>
             )}
           </>
