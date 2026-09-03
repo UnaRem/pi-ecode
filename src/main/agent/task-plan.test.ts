@@ -47,7 +47,7 @@ describe("TaskPlanService", () => {
     expect(test.appended).toHaveLength(1);
   });
 
-  it("stores complete plan state and enforces ordered progress", async () => {
+  it("stores complete plan state and accepts truthful progress updates", async () => {
     const service = new TaskPlanService(vi.fn());
     const test = harness(service);
     const tool = test.getTool();
@@ -58,10 +58,11 @@ describe("TaskPlanService", () => {
 
     expect(service.current).toMatchObject({ title: "Implement feature", items: [{ id: "inspect", status: "pending" }] });
     expect(initial.details).toMatchObject({ kind: "pi-ecode.task-plan", version: 1 });
-    await expect(tool.execute("call-2", {
+    await tool.execute("call-2", {
       title: "Implement feature",
       items: [{ id: "inspect", text: "Inspect current code", status: "completed" }],
-    }, new AbortController().signal)).rejects.toThrow("must move through in_progress");
+    }, new AbortController().signal);
+    expect(service.current?.items).toEqual([{ id: "inspect", text: "Inspect current code", status: "completed" }]);
   });
 
   it("restores the latest plan from the active session branch", async () => {

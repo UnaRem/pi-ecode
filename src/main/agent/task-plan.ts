@@ -49,7 +49,7 @@ function planFromEntry(entry: SessionEntry): TaskPlan | null | undefined {
   return planFromDetails(entry.message.details) ?? undefined;
 }
 
-function validatePlan(title: string, items: TaskPlanItem[], previous: TaskPlan | null): TaskPlan {
+function validatePlan(title: string, items: TaskPlanItem[]): TaskPlan {
   const normalizedTitle = title.trim();
   if (!normalizedTitle) throw new Error("Task plan title cannot be empty.");
   const normalizedItems = items.map((item) => ({ ...item, id: item.id.trim(), text: item.text.trim() }));
@@ -59,12 +59,6 @@ function validatePlan(title: string, items: TaskPlanItem[], previous: TaskPlan |
   }
   if (normalizedItems.filter((item) => item.status === "in_progress").length > 1) {
     throw new Error("Only one task plan item can be in progress.");
-  }
-  const previousById = new Map(previous?.items.map((item) => [item.id, item]));
-  for (const item of normalizedItems) {
-    if (previousById.get(item.id)?.status === "pending" && item.status === "completed") {
-      throw new Error(`Task plan item ${item.id} must move through in_progress before completed.`);
-    }
   }
   return { title: normalizedTitle, items: normalizedItems, updatedAt: Date.now() };
 }
@@ -113,12 +107,13 @@ export class TaskPlanService {
       promptGuidelines: [
         "Use task_plan before the first implementation tool whenever coding, diagnosis, or research requires two or more concrete steps; simple answers do not need a plan.",
         "Keep at most one task_plan item in_progress, update it as work advances, and complete the plan before the final response.",
+        "Submit the current truthful state; an item may move directly from pending to completed if it finishes between plan updates.",
         "When a steering message changes scope or order, update task_plan before continuing implementation tools.",
       ],
       parameters: TaskPlanParameters,
       execute: async (_toolCallId, params, signal) => {
         signal?.throwIfAborted();
-        const plan = validatePlan(params.title, params.items, this.plan);
+        const plan = validatePlan(params.title, params.items);
         this.setPlan(plan);
         const completed = plan.items.filter((item) => item.status === "completed").length;
         return {
