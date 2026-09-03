@@ -39,6 +39,7 @@ import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
 import { ExtensionUiBridge } from "./extension-ui-bridge.js";
 import { AuthService } from "./auth-service.js";
+import { PromptLifecycle } from "./prompt-lifecycle.js";
 
 const EMPTY_SNAPSHOT: AgentSnapshot = {
   projectPath: null,
@@ -115,6 +116,13 @@ export class AgentService {
   private liveAssistantId: string | undefined;
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
+  private readonly promptLifecycle = new PromptLifecycle((session) => {
+    const isStreaming = this.isPromptActive(session);
+    this.emit({
+      type: "state",
+      patch: { isStreaming, pendingCount: session.pendingMessageCount, ...(isStreaming ? { error: null } : {}) },
+    });
+  });
   private compactOperation: Promise<void> | undefined;
   private contextEstimate: number | null = null;
   private compactionStatus: CompactionStatus = { status: "idle" };
@@ -255,7 +263,8 @@ export class AgentService {
   }
 
   get runtimeBusy(): boolean {
-    return Boolean(this.runtime?.session.isStreaming || this.runtime?.session.isCompacting);
+    const session = this.runtime?.session;
+    return Boolean(session && (this.promptLifecycle.isActive(session) || session.isCompacting));
   }
 
   async reloadRuntimeConfiguration(): Promise<void> {
@@ -319,7 +328,7 @@ export class AgentService {
       selectedModel: model ? `${model.provider}/${model.id}` : null,
       thinkingLevel: session.thinkingLevel,
       thinkingLevels: session.getAvailableThinkingLevels(),
-      isStreaming: session.isStreaming,
+      isStreaming: this.isPromptActive(session),
       pendingCount: session.pendingMessageCount,
       error: this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
       taskPlan: this.taskPlan.current,
@@ -357,20 +366,12 @@ export class AgentService {
     const session = this.requireRuntime().session;
     const text = message.trim();
     if (!text && images.length === 0) return;
-    const sdkImages = images.map((image) => ({
-      type: "image" as const,
-      data: image.data,
-      mimeType: image.mimeType,
-    }));
+    const promptText = text || "Describe the attached image.";
+    const sdkImages = images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }));
     try {
-      await session.prompt(text || "Describe the attached image.", {
-        ...(session.isStreaming ? { streamingBehavior: "steer" as const } : {}),
-        ...(sdkImages.length > 0 ? { images: sdkImages } : {}),
-      });
+      await this.promptLifecycle.prompt(session, promptText, sdkImages);
     } catch (error) {
-      const message = errorText(error);
-      this.emit({ type: "error", message });
-      this.emit({ type: "state", patch: { isStreaming: session.isStreaming, error: message } });
+      this.emit({ type: "error", message: errorText(error) });
       throw error;
     }
   }
@@ -412,11 +413,9 @@ export class AgentService {
     const session = this.requireRuntime().session;
     this.extensionUi.cancelPending();
     if (session.isCompacting) session.abortCompaction();
-    session.clearQueue();
-    await session.abort();
+    await this.promptLifecycle.stop(session);
     await this.history.settlePending(session);
     await this.emitHistory(session);
-    this.emit({ type: "state", patch: { isStreaming: false, pendingCount: 0 } });
   }
 
   async setModel(provider: string, modelId: string): Promise<void> {
@@ -515,6 +514,10 @@ export class AgentService {
     });
   }
 
+  private isPromptActive(session: AgentSession): boolean {
+    return this.promptLifecycle.isActive(session);
+  }
+
   private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
     return async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
       const services = await createAgentSessionServices({
@@ -571,7 +574,7 @@ export class AgentService {
         this.emit({ type: "state", patch: { isStreaming: true, error: null } });
         break;
       case "agent_settled":
-        this.emit({ type: "state", patch: { isStreaming: false, pendingCount: session.pendingMessageCount } });
+        this.emit({ type: "state", patch: { isStreaming: this.isPromptActive(session), pendingCount: session.pendingMessageCount } });
         this.emitContext(session);
         void this.refreshSessions();
         queueMicrotask(() => {
@@ -782,6 +785,7 @@ export class AgentService {
     this.unsubscribe = undefined;
     if (this.runtime) await this.runtime.dispose();
     this.runtime = undefined;
+    this.promptLifecycle.reset();
     this.liveTools.clear();
   }
 

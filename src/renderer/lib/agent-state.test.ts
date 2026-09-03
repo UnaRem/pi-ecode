@@ -130,6 +130,15 @@ describe("reduceAgentEvent", () => {
     expect(state.error).toBeNull();
   });
 
+  it("keeps the busy state when a recoverable error is reported", () => {
+    const state = reduceAgentEvent({ ...INITIAL_AGENT_STATE, isStreaming: true }, {
+      type: "error",
+      message: "Temporary provider failure",
+    });
+    expect(state.error).toBe("Temporary provider failure");
+    expect(state.isStreaming).toBe(true);
+  });
+
   it("does not append duplicate finalized messages", () => {
     const event = {
       type: "message" as const,

@@ -142,6 +142,6 @@ export function reduceAgentEvent(state: AgentViewState, event: AgentEvent): Agen
     case "notice":
       return { ...state, notice: event.message, error: null };
     case "error":
-      return { ...state, error: event.message, isStreaming: false };
+      return { ...state, error: event.message };
   }
 }
