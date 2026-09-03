@@ -74,7 +74,7 @@ export function Sidebar(props: SidebarProps) {
           ))
         )}
       </nav>
-      <TaskPlanPresence plan={props.taskPlan} />
+      <TaskPlanPresence plan={props.taskPlan} active={props.disabled} />
       <button className={`sidebar-settings ${props.settingsActive ? "active" : ""}`} onClick={props.onOpenSettings}>
         <Settings size={15} />
         {t("sidebar.settings")}

@@ -295,7 +295,8 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .sidebar-task-progress { position: relative; display: flex; gap: 3px; height: 5px; margin: 7px 3px 8px; }
 .sidebar-task-segment { min-width: 0; flex: 1; border-radius: 2px; background: #dddeda; }
 .sidebar-task-segment.in_progress, .sidebar-task-segment.current { background: #58a5df; }
-.sidebar-task-segment.current { position: relative; z-index: 3; transform-origin: center bottom; animation: task-progress-arrive 2.1s cubic-bezier(.22, .72, .32, 1) infinite; }
+.sidebar-task-segment.current { position: relative; z-index: 3; transform-origin: center bottom; }
+.sidebar-task-progress.active .sidebar-task-segment.current { animation: task-progress-arrive 2.1s cubic-bezier(.22, .72, .32, 1) infinite; }
 .sidebar-task-segment.completed { background: #9fc8bd; }
 .sidebar-task-flow { position: absolute; z-index: 2; top: -3px; bottom: -3px; left: 0; overflow: hidden; border-radius: 4px; pointer-events: none; }
 .sidebar-task-flow::after { position: absolute; top: 2px; bottom: 2px; left: 0; width: 32%; border-radius: 3px; content: ""; background: linear-gradient(90deg, transparent, rgba(136, 232, 255, .5) 28%, #d8fbff 62%, rgba(88, 165, 223, .86) 82%, transparent); filter: drop-shadow(0 0 4px rgba(77, 190, 235, .9)); animation: task-progress-travel 2.1s ease-in-out infinite; }

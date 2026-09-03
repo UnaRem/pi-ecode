@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type AnimationEvent } from "react";
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 
-export function TaskPlanPresence({ plan }: { plan: TaskPlan | null }) {
+export function TaskPlanPresence({ plan, active }: { plan: TaskPlan | null; active: boolean }) {
   const { t } = useI18n();
   const [visiblePlan, setVisiblePlan] = useState(plan);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -27,12 +27,12 @@ export function TaskPlanPresence({ plan }: { plan: TaskPlan | null }) {
   return (
     <section className={isLeaving ? "sidebar-task-section leaving" : "sidebar-task-section"} onAnimationEnd={finishLeaving}>
       <div className="sidebar-label">{t("task.section")}</div>
-      <TaskPlanPanel plan={visiblePlan} />
+      <TaskPlanPanel plan={visiblePlan} active={active} />
     </section>
   );
 }
 
-export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
+export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolean }) {
   const { t } = useI18n();
   const currentItemRef = useRef<HTMLLIElement>(null);
   const completedCount = plan.items.filter((item) => item.status === "completed").length;
@@ -70,7 +70,7 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
         })}
       </ol>
       <div
-        className="sidebar-task-progress"
+        className={`sidebar-task-progress ${active ? "active" : "idle"}`}
         role="progressbar"
         aria-label={t("task.complete", { done: completedCount, total: plan.items.length })}
         aria-valuemin={0}
@@ -84,7 +84,7 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
             aria-hidden="true"
           />
         ))}
-        {flowTargetIndex >= 0 && <span className="sidebar-task-flow" style={{ width: flowWidth }} aria-hidden="true" />}
+        {active && flowTargetIndex >= 0 && <span className="sidebar-task-flow" style={{ width: flowWidth }} aria-hidden="true" />}
       </div>
     </section>
   );
