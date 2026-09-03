@@ -42,6 +42,7 @@ import { EDIT_TOOL_COMPATIBILITY_GUIDANCE } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
 import { listSessionSummaries } from "./session-summaries.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
+import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -62,7 +63,7 @@ export class AgentService {
   private readonly promptLifecycle = new PromptLifecycle((session) => {
     const isStreaming = this.promptLifecycle.isActive(session);
     this.emit({ type: "state", patch: { isStreaming, workingStartedAt: this.promptLifecycle.workingStartedAt,
-      pendingCount: session.pendingMessageCount, ...(isStreaming ? { error: null } : {}) } });
+      pendingCount: session.pendingMessageCount, ...(isStreaming ? { error: null, canContinue: false } : {}) } });
   });
   private compactOperation: Promise<void> | undefined;
   private contextEstimate: number | null = null;
@@ -249,6 +250,7 @@ export class AgentService {
     const model = session.model;
     const usage = session.getContextUsage();
     const contextFiles = session.resourceLoader.getAgentsFiles().agentsFiles.map((file) => file.path);
+    const failure = providerFailure(session.messages);
 
     return {
       projectPath: this.projectPath,
@@ -273,7 +275,8 @@ export class AgentService {
       isStreaming: this.promptLifecycle.isActive(session),
       workingStartedAt: this.promptLifecycle.workingStartedAt,
       pendingCount: session.pendingMessageCount,
-      error: this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
+      error: failure?.message ?? this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
+      canContinue: failure?.canContinue ?? false,
       taskPlan: this.taskPlan.current,
       extensionUi: this.extensionUi.current,
       history,
@@ -308,6 +311,18 @@ export class AgentService {
   renameSession(title: string): void {
     const normalizedTitle = title.replace(/\s+/gu, " ").trim().slice(0, 80);
     this.requireRuntime().session.setSessionName(normalizedTitle);
+  }
+
+  async continueAfterError(): Promise<void> {
+    const session = this.requireRuntime().session;
+    const failure = providerFailure(session.messages);
+    if (!session.isIdle || !failure?.canContinue) throw new Error("The interrupted response is not ready to continue.");
+    try {
+      await this.promptLifecycle.continueAfterError(session, PROVIDER_RECOVERY_PROMPT);
+    } catch (error) {
+      this.emit({ type: "error", message: errorText(error) });
+      throw error;
+    }
   }
 
   async prompt(message: string, images: ImageAttachment[] = []): Promise<void> {
@@ -516,10 +531,14 @@ export class AgentService {
         this.liveAssistantText = "";
         this.validation.invalidate();
         this.candidate.invalidate();
-        this.emit({ type: "state", patch: { isStreaming: true, error: null } });
+        this.emit({ type: "state", patch: { isStreaming: true, error: null, canContinue: false } });
         break;
-      case "agent_settled":
-        this.emit({ type: "state", patch: { isStreaming: this.promptLifecycle.isActive(session), pendingCount: session.pendingMessageCount } });
+      case "agent_settled": {
+        const failure = providerFailure(session.messages);
+        this.emit({ type: "state", patch: {
+          isStreaming: this.promptLifecycle.isActive(session), pendingCount: session.pendingMessageCount,
+          error: failure?.message ?? null, canContinue: failure?.canContinue ?? false,
+        } });
         this.emitContext(session);
         void this.refreshSessions();
         queueMicrotask(() => {
@@ -527,13 +546,14 @@ export class AgentService {
           void this.refreshReview(session);
         });
         break;
+      }
       case "queue_update":
         this.emit({ type: "state", patch: { pendingCount: event.steering.length + event.followUp.length } });
         break;
       case "auto_retry_start":
         this.emit({
           type: "state",
-          patch: { error: `Connection interrupted · retrying ${event.attempt}/${event.maxAttempts}…` },
+          patch: { error: `Connection interrupted · retrying ${event.attempt}/${event.maxAttempts}…`, canContinue: false },
         });
         break;
       case "auto_retry_end":

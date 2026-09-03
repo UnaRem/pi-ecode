@@ -10,6 +10,7 @@ const api: DesktopApi = {
   newSession: () => ipcRenderer.invoke(IPC_CHANNELS.newSession),
   switchSession: (path) => ipcRenderer.invoke(IPC_CHANNELS.switchSession, path),
   renameSession: (title) => ipcRenderer.invoke(IPC_CHANNELS.renameSession, title),
+  continueAfterError: () => ipcRenderer.invoke(IPC_CHANNELS.continueAfterError),
   prompt: (message, images) => ipcRenderer.invoke(IPC_CHANNELS.prompt, message, images),
   stop: () => ipcRenderer.invoke(IPC_CHANNELS.stop),
   setModel: (provider, modelId) => ipcRenderer.invoke(IPC_CHANNELS.setModel, provider, modelId),

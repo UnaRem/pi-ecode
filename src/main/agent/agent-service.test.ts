@@ -22,6 +22,25 @@ describe("AgentService prompt lifecycle", () => {
     expect(savedTitle).toHaveLength(80);
   });
 
+  it("continues a transient provider failure with a hidden control message", async () => {
+    const session = {
+      isIdle: true,
+      isStreaming: false,
+      pendingMessageCount: 0,
+      messages: [{ role: "assistant", content: [], stopReason: "error", errorMessage: "502 Bad Gateway" }],
+      sendCustomMessage: vi.fn(async () => undefined),
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+
+    await service.continueAfterError();
+
+    expect(session.sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
+      customType: "pi-ecode.provider-recovery",
+      display: false,
+    }), { triggerTurn: true });
+  });
+
   it("shows work immediately and steers messages submitted during preflight", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     let finishPrompt: (() => void) | undefined;
@@ -43,7 +62,7 @@ describe("AgentService prompt lifecycle", () => {
     const firstPrompt = service.prompt("first");
     expect(events.at(-1)).toEqual({
       type: "state",
-      patch: { isStreaming: true, workingStartedAt: 1_000, pendingCount: 0, error: null },
+      patch: { isStreaming: true, workingStartedAt: 1_000, pendingCount: 0, error: null, canContinue: false },
     });
     now.mockReturnValue(5_000);
     const steeringPrompt = service.prompt("continue");

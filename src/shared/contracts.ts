@@ -7,6 +7,7 @@ export const IPC_CHANNELS = {
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
   renameSession: "agent:rename-session",
+  continueAfterError: "agent:continue-after-error",
   prompt: "agent:prompt",
   stop: "agent:stop",
   setModel: "agent:set-model",
@@ -248,6 +249,7 @@ export interface AgentSnapshot {
   workingStartedAt: number | null;
   pendingCount: number;
   error: string | null;
+  canContinue: boolean;
   taskPlan: TaskPlan | null;
   extensionUi: ExtensionUiRequest | null;
   history: WorkspaceHistoryState;
@@ -267,7 +269,7 @@ export type AgentEvent =
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
   | { type: "extension-ui"; request: ExtensionUiRequest | null }
-  | { type: "state"; patch: Partial<Pick<AgentSnapshot, "sessionTitle" | "isStreaming" | "workingStartedAt" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error">> }
+  | { type: "state"; patch: Partial<Pick<AgentSnapshot, "sessionTitle" | "isStreaming" | "workingStartedAt" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error" | "canContinue">> }
   | { type: "sessions"; sessions: SessionSummary[] }
   | { type: "history"; history: WorkspaceHistoryState; editorText?: string; editorImages?: ImageAttachment[]; notice?: string }
   | { type: "validation"; validation: ValidationState }
@@ -283,6 +285,7 @@ export interface DesktopApi {
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   renameSession(title: string): Promise<void>;
+  continueAfterError(): Promise<void>;
   prompt(message: string, images?: ImageAttachment[]): Promise<void>;
   stop(): Promise<void>;
   setModel(provider: string, modelId: string): Promise<void>;

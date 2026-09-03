@@ -57,6 +57,29 @@ export class PromptLifecycle {
     }
   }
 
+  async continueAfterError(session: AgentSession, instruction: string): Promise<void> {
+    if (this.stopRequested || this.isActive(session)) throw new Error("Wait for the current agent run to finish before continuing.");
+    this.starting = true;
+    this.startedAt = Date.now();
+    this.onStateChanged(session);
+    const operation = session.sendCustomMessage({
+      customType: "pi-ecode.provider-recovery",
+      content: instruction,
+      display: false,
+    }, { triggerTurn: true });
+    this.operation = operation;
+    this.starting = false;
+    try {
+      await operation;
+    } finally {
+      if (this.operation === operation) {
+        this.operation = undefined;
+        this.startedAt = null;
+        this.onStateChanged(session);
+      }
+    }
+  }
+
   async stop(session: AgentSession): Promise<void> {
     this.stopRequested = true;
     session.clearQueue();

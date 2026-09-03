@@ -18,6 +18,7 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
   workingStartedAt: null,
   pendingCount: 0,
   error: null,
+  canContinue: false,
   taskPlan: null,
   extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },

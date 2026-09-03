@@ -25,6 +25,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   workingStartedAt: null,
   pendingCount: 0,
   error: null,
+  canContinue: false,
   taskPlan: null,
   extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
