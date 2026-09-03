@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type AnimationEvent } from "react";
 
-export const STARTUP_MINIMUM_MS = 1_200;
+export const STARTUP_MINIMUM_MS = 1_800;
 
 export function remainingStartupTime(startedAt: number, now: number): number {
   return Math.max(0, STARTUP_MINIMUM_MS - (now - startedAt));
@@ -31,10 +31,10 @@ export function StartupScreen({ ready, onFinished }: StartupScreenProps) {
   };
 
   return (
-    <main className={isLeaving ? "startup-screen leaving" : "startup-screen"} onAnimationEnd={finish} aria-label="pi ecode">
+    <main className={isLeaving ? "startup-screen leaving" : "startup-screen"} onAnimationEnd={finish} aria-label="PiECode">
       <div className="startup-brand">
         <img src="./ecode-icon.png" alt="" />
-        <h1>pi ecode</h1>
+        <h1>PiECode</h1>
       </div>
     </main>
   );

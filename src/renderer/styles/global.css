@@ -32,9 +32,9 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .loading-screen { gap: 10px; color: var(--muted); font-size: 13px; }
 .startup-screen { height: 100%; display: grid; place-items: center; overflow: hidden; background: #f7f7f5; }
 .startup-brand { position: relative; top: -14px; display: flex; flex-direction: column; align-items: center; }
-.startup-brand img { width: 104px; height: 104px; border: 1px solid rgba(45, 45, 42, .08); border-radius: 28px; object-fit: cover; box-shadow: 0 10px 32px rgba(45, 45, 42, .09); animation: startup-icon-enter 700ms cubic-bezier(.2, .75, .25, 1); }
-.startup-brand h1 { margin: 20px 0 0; color: #252523; font-size: 23px; font-weight: 580; letter-spacing: -.025em; animation: startup-name-enter 580ms 120ms ease-out backwards; }
-.startup-screen.leaving { animation: startup-screen-leave 450ms cubic-bezier(.4, 0, .2, 1) both; }
+.startup-brand img { width: 256px; height: 256px; border: 1px solid rgba(45, 45, 42, .08); border-radius: 64px; object-fit: cover; box-shadow: 0 18px 48px rgba(45, 45, 42, .1); animation: startup-icon-enter 1000ms cubic-bezier(.2, .75, .25, 1); }
+.startup-brand h1 { margin: 28px 0 0; color: #252523; font-size: 30px; font-weight: 580; letter-spacing: -.025em; animation: startup-name-enter 800ms 200ms ease-out backwards; }
+.startup-screen.leaving { animation: startup-screen-leave 650ms cubic-bezier(.4, 0, .2, 1) both; }
 @keyframes startup-icon-enter { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
 @keyframes startup-name-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes startup-screen-leave { from { opacity: 1; } to { opacity: 0; } }
