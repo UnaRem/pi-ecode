@@ -25,8 +25,10 @@ describe("TaskPlanPanel", () => {
 
     expect(markup.match(/sidebar-task-segment/g)).toHaveLength(3);
     expect(markup).toContain("sidebar-task-segment completed");
-    expect(markup).toContain("sidebar-task-segment in_progress");
+    expect(markup).toContain("sidebar-task-segment in_progress current");
     expect(markup).toContain("sidebar-task-segment pending");
+    expect(markup).toContain('class="sidebar-task-flow"');
+    expect(markup).toContain('style="width:66.67%"');
     expect(markup).toContain('aria-label="Completed 1/3 steps"');
     expect(markup).not.toContain("Step 2/3");
 

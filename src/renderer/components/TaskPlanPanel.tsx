@@ -39,6 +39,8 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
   const activeIndex = plan.items.findIndex((item) => item.status === "in_progress");
   const nextIndex = plan.items.findIndex((item) => item.status === "pending");
   const currentIndex = activeIndex >= 0 ? activeIndex : nextIndex;
+  const flowTargetIndex = currentIndex >= 0 ? currentIndex : plan.items.length - 1;
+  const flowWidth = plan.items.length > 0 ? `${(((flowTargetIndex + 1) / plan.items.length) * 100).toFixed(2)}%` : "0%";
 
   useEffect(() => {
     currentItemRef.current?.scrollIntoView({ block: "nearest" });
@@ -75,9 +77,14 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
         aria-valuemax={plan.items.length}
         aria-valuenow={completedCount}
       >
-        {plan.items.map((item) => (
-          <span key={item.id} className={`sidebar-task-segment ${item.status}`} aria-hidden="true" />
+        {plan.items.map((item, index) => (
+          <span
+            key={item.id}
+            className={`sidebar-task-segment ${item.status} ${index === flowTargetIndex ? "current" : ""}`}
+            aria-hidden="true"
+          />
         ))}
+        {flowTargetIndex >= 0 && <span className="sidebar-task-flow" style={{ width: flowWidth }} aria-hidden="true" />}
       </div>
     </section>
   );

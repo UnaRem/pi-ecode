@@ -280,11 +280,15 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .sidebar-task-items li.in_progress .sidebar-task-icon { color: #58a5df; }
 .sidebar-task-items li.completed { color: #999994; text-decoration: line-through; }
 .sidebar-task-items li.completed .sidebar-task-icon { color: #999994; }
-.sidebar-task-progress { display: flex; gap: 3px; height: 5px; margin: 7px 3px 8px; }
+.sidebar-task-progress { position: relative; display: flex; gap: 3px; height: 5px; margin: 7px 3px 8px; }
 .sidebar-task-segment { min-width: 0; flex: 1; border-radius: 2px; background: #dddeda; }
-.sidebar-task-segment.in_progress { background: #58a5df; animation: task-progress-pulse 1.6s ease-in-out infinite; }
-@keyframes task-progress-pulse { 50% { filter: brightness(1.16); box-shadow: 0 0 6px rgba(88, 165, 223, .75); } }
+.sidebar-task-segment.in_progress, .sidebar-task-segment.current { background: #58a5df; }
+.sidebar-task-segment.current { position: relative; z-index: 3; transform-origin: center bottom; animation: task-progress-arrive 2.1s ease-in-out infinite; }
 .sidebar-task-segment.completed { background: #638779; }
+.sidebar-task-flow { position: absolute; z-index: 2; top: -3px; bottom: -3px; left: 0; overflow: hidden; border-radius: 4px; pointer-events: none; }
+.sidebar-task-flow::after { position: absolute; top: 2px; bottom: 2px; left: 0; width: 32%; border-radius: 3px; content: ""; background: linear-gradient(90deg, transparent, rgba(136, 232, 255, .5) 28%, #d8fbff 62%, rgba(88, 165, 223, .86) 82%, transparent); filter: drop-shadow(0 0 4px rgba(77, 190, 235, .9)); animation: task-progress-travel 2.1s ease-in-out infinite; }
+@keyframes task-progress-travel { 0%, 8% { transform: translateX(-105%); opacity: 0; } 18% { opacity: 1; } 78% { transform: translateX(315%); opacity: 1; } 88%, 100% { transform: translateX(315%); opacity: 0; } }
+@keyframes task-progress-arrive { 0%, 70%, 100% { transform: translateY(0) scaleY(1); filter: brightness(1); box-shadow: none; } 80% { transform: translateY(-2px) scaleY(1.75); filter: brightness(1.32); box-shadow: 0 0 8px 2px rgba(88, 185, 235, .82); } 91% { transform: translateY(0) scaleY(1); filter: brightness(1.08); box-shadow: 0 0 3px rgba(88, 165, 223, .4); } }
 .welcome { max-width: 430px; text-align: center; }
 .welcome-icon { display: grid; place-items: center; width: 42px; height: 42px; margin: 0 auto 18px; border: 1px solid var(--line); border-radius: 12px; color: var(--accent); background: var(--surface); box-shadow: 0 2px 5px rgba(0, 0, 0, .04); }
 .welcome h1 { margin: 0 0 9px; font-size: 24px; font-weight: 620; letter-spacing: -.035em; }
@@ -388,12 +392,15 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .extension-question-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 9px; }
 .extension-question-actions button { height: 27px; padding: 0 10px; border: 1px solid #d5d5d0; border-radius: 7px; color: #666661; background: #f8f8f6; font-size: 9.5px; cursor: pointer; }
 .extension-question-actions button.primary { border-color: #416f62; color: #fff; background: #416f62; }
-.composer { position: relative; width: min(760px, 100%); margin: 0 auto; padding: 9px 10px 8px 13px; border: 1px solid #cecec8; border-radius: 13px; background: #fff; box-shadow: 0 5px 18px rgba(40, 40, 35, .07), 0 1px 2px rgba(0, 0, 0, .05); }
+@property --composer-flow-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.composer { position: relative; isolation: isolate; width: min(760px, 100%); margin: 0 auto; padding: 9px 10px 8px 13px; border: 1px solid #cecec8; border-radius: 13px; background: #fff; box-shadow: 0 5px 18px rgba(40, 40, 35, .07), 0 1px 2px rgba(0, 0, 0, .05); }
 .composer:focus-within { border-color: #a9aaa3; box-shadow: 0 6px 22px rgba(40,40,35,.09), 0 0 0 1px rgba(80,90,80,.05); }
-.composer.working { border-color: #b7c9c2; }
-/* Mask the center so the moving highlight stays on the composer border. */
-.composer.working::before { position: absolute; z-index: 2; inset: -1px; padding: 1px; border-radius: 14px; pointer-events: none; content: ""; background: linear-gradient(105deg, transparent 24%, #72aa9b 43%, #d8fff4 50%, #72aa9b 57%, transparent 76%); background-size: 240% 100%; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: composer-border-flow 2s linear infinite; }
-@keyframes composer-border-flow { from { background-position: 180% 0; } to { background-position: -180% 0; } }
+.composer.working { border-color: transparent; box-shadow: 0 7px 26px rgba(87, 89, 226, .2), 0 0 18px rgba(46, 211, 220, .2); }
+.composer.working::before, .composer.working::after { position: absolute; border-radius: 16px; pointer-events: none; content: ""; background: conic-gradient(from var(--composer-flow-angle), #ff4fc8, #9b65ff, #3a9dff, #39e6d2, #73ec8d, #ffe26b, #ff856b, #ff4fc8); animation: composer-border-flow 1.55s linear infinite; }
+/* Keep the saturated runner on the border while a blurred copy creates the larger halo. */
+.composer.working::before { z-index: 2; inset: -3px; padding: 3px; -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.composer.working::after { z-index: -1; inset: -9px; opacity: .62; filter: blur(11px) saturate(1.35); }
+@keyframes composer-border-flow { to { --composer-flow-angle: 360deg; } }
 .image-strip { display: flex; gap: 7px; padding: 2px 2px 8px; overflow-x: auto; }
 .image-chip { position: relative; width: 74px; flex: 0 0 auto; padding: 3px; border: 1px solid var(--line-soft); border-radius: 8px; background: #f6f6f3; }
 .image-preview-button { display: block; width: 100%; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; cursor: zoom-in; }
