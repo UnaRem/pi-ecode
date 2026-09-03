@@ -30,7 +30,8 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 
 .loading-screen, .project-gate { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); }
 .loading-screen { gap: 10px; color: var(--muted); font-size: 13px; }
-.project-gate .brand-mark { display: grid; place-items: center; width: 50px; height: 50px; margin-bottom: 18px; border-radius: 14px; color: white; background: #282826; font-family: Georgia, serif; font-size: 29px; }
+.project-gate .brand-mark { width: 58px; height: 58px; margin-bottom: 18px; border-radius: 16px; overflow: hidden; box-shadow: 0 5px 18px rgba(97, 43, 143, .16); }
+.project-gate .brand-mark img { display: block; width: 100%; height: 100%; }
 .project-gate h1 { margin: 0; font-size: 25px; letter-spacing: -.04em; }
 .project-gate p { margin: 9px 0 25px; color: var(--muted); font-size: 14px; }
 .project-gate > button { display: flex; align-items: center; gap: 9px; padding: 10px 16px; border: 1px solid #2f2f2d; border-radius: 9px; color: #fff; background: #2f2f2d; cursor: pointer; box-shadow: 0 1px 1px rgba(0, 0, 0, .12); }

@@ -45,7 +45,7 @@ export default function App() {
   if (!state.projectPath || !state.projectName) {
     return (
       <div className="project-gate">
-        <div className="brand-mark">π</div>
+        <div className="brand-mark"><img src="/ecode-icon.svg" alt="" /></div>
         <h1>pi ecode</h1>
         <p>{t("app.tagline")}</p>
         <button onClick={() => void actions.chooseProject()}>

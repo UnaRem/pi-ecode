@@ -43,6 +43,7 @@ function createWindow(): void {
     minWidth: 820,
     minHeight: 560,
     title: "pi ecode",
+    icon: join(app.getAppPath(), "resources", "ecode-icon.png"),
     backgroundColor: "#f7f7f5",
     show: false,
     autoHideMenuBar: true,
