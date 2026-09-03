@@ -1,11 +1,14 @@
 import { useState } from "react";
+import { ArrowDown } from "lucide-react";
 import type { ConversationMessage } from "@shared/contracts";
 import { useI18n, type Translate } from "../i18n/i18n";
 
 interface ConversationOutlineProps {
   messages: ConversationMessage[];
   activeId: string | null;
+  showLatest: boolean;
   onSelect: (id: string) => void;
+  onLatest: () => void;
 }
 
 function messagePreview(message: ConversationMessage, t: Translate): string {
@@ -23,7 +26,7 @@ interface OutlinePreview {
 export function ConversationOutline(props: ConversationOutlineProps) {
   const { t } = useI18n();
   const [preview, setPreview] = useState<OutlinePreview | null>(null);
-  if (props.messages.length < 2) return null;
+  if (props.messages.length < 2 && !props.showLatest) return null;
 
   const showPreview = (message: ConversationMessage, index: number, marker: HTMLElement): void => {
     const outline = marker.closest<HTMLElement>(".conversation-outline");
@@ -40,20 +43,32 @@ export function ConversationOutline(props: ConversationOutlineProps) {
   return (
     <nav className="conversation-outline" aria-label={t("conversation.overview")}>
       <div className="outline-track">
-        {props.messages.map((message, index) => (
+        <div className="outline-markers">
+          {props.messages.map((message, index) => (
+            <button
+              key={message.id}
+              className={`outline-marker ${message.id === props.activeId ? "active" : ""}`}
+              onClick={() => props.onSelect(message.id)}
+              onMouseEnter={(event) => showPreview(message, index, event.currentTarget)}
+              onMouseLeave={() => setPreview(null)}
+              onFocus={(event) => showPreview(message, index, event.currentTarget)}
+              onBlur={() => setPreview(null)}
+              aria-label={t("conversation.goTurn", { turn: index + 1, preview: messagePreview(message, t) })}
+            >
+              <span className="outline-line" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+        {props.showLatest && (
           <button
-            key={message.id}
-            className={`outline-marker ${message.id === props.activeId ? "active" : ""}`}
-            onClick={() => props.onSelect(message.id)}
-            onMouseEnter={(event) => showPreview(message, index, event.currentTarget)}
-            onMouseLeave={() => setPreview(null)}
-            onFocus={(event) => showPreview(message, index, event.currentTarget)}
-            onBlur={() => setPreview(null)}
-            aria-label={t("conversation.goTurn", { turn: index + 1, preview: messagePreview(message, t) })}
+            className="outline-latest"
+            onClick={props.onLatest}
+            aria-label={t("conversation.jumpLatest")}
+            title={t("conversation.jumpLatest")}
           >
-            <span className="outline-line" aria-hidden="true" />
+            <ArrowDown size={14} />
           </button>
-        ))}
+        )}
       </div>
       {preview && (
         <span className="outline-preview" role="tooltip" style={{ top: preview.top }}>

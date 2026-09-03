@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { ConversationItem } from "@shared/contracts";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
@@ -129,7 +129,13 @@ export function Conversation(props: ConversationProps) {
       onScroll={onScroll}
       onWheel={(event) => { if (event.deltaY < 0) setFollowing(false); }}
     >
-      <ConversationOutline messages={userMessages} activeId={activeUserId} onSelect={selectTurn} />
+      <ConversationOutline
+        messages={userMessages}
+        activeId={activeUserId}
+        showLatest={!isFollowing}
+        onSelect={selectTurn}
+        onLatest={() => scrollToBottom("smooth")}
+      />
       <div className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
         {isEmpty ? (
           <section className="welcome">
@@ -176,12 +182,6 @@ export function Conversation(props: ConversationProps) {
         {props.error && <div className="error-banner" role="alert">{props.error}</div>}
         {props.notice && <div className="notice-banner" role="status">{props.notice}</div>}
       </div>
-      {!isFollowing && (
-        <button className="jump-to-latest" onClick={() => scrollToBottom("smooth")} aria-label={t("conversation.jumpLatest")}>
-          <ArrowDown size={15} />
-          {t("conversation.latest")}
-        </button>
-      )}
     </main>
   );
 }

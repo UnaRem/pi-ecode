@@ -17,6 +17,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const selectedModel = state.models.find((model) => `${model.provider}/${model.id}` === state.selectedModel);
+  const activeSession = state.sessions.find((session) => session.path === state.sessionFile);
+  const sessionTitle = state.sessionTitle ?? (activeSession?.messageCount ? activeSession.title : null);
 
   const leaveSettings = useCallback((): boolean => {
     if (settingsDirty && !window.confirm(t("settings.confirmDiscard"))) return false;
@@ -81,7 +83,7 @@ export default function App() {
         <Topbar
           sidebarOpen={sidebarOpen}
           projectName={state.projectName}
-          sessionTitle={state.sessionTitle}
+          sessionTitle={sessionTitle}
           models={state.models}
           selectedModel={state.selectedModel}
           thinkingLevel={state.thinkingLevel}
