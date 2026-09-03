@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Composer } from "./components/Composer";
 import { Conversation } from "./components/Conversation";
 import { Sidebar } from "./components/Sidebar";
+import { StartupScreen } from "./components/StartupScreen";
 import { Topbar } from "./components/Topbar";
 import { ValidationPanelPresence } from "./components/ValidationPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -12,6 +13,7 @@ import { useI18n } from "./i18n/i18n";
 export default function App() {
   const { state, isLoading, actions } = useAgent();
   const { t } = useI18n();
+  const [startupVisible, setStartupVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [validationOpen, setValidationOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -37,6 +39,10 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [actions, settingsOpen, state.projectPath]);
+
+  if (startupVisible) {
+    return <StartupScreen ready={!isLoading} onFinished={() => setStartupVisible(false)} />;
+  }
 
   if (isLoading) {
     return <div className="loading-screen"><LoaderCircle className="spin" size={22} /><span>{t("app.openingProject")}</span></div>;

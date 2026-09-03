@@ -30,6 +30,14 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 
 .loading-screen, .project-gate { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); }
 .loading-screen { gap: 10px; color: var(--muted); font-size: 13px; }
+.startup-screen { height: 100%; display: grid; place-items: center; overflow: hidden; background: #f7f7f5; }
+.startup-brand { display: flex; flex-direction: column; align-items: center; transform: translateY(-2vh); }
+.startup-brand img { width: 82px; height: 82px; border: 1px solid rgba(45, 45, 42, .08); border-radius: 22px; object-fit: cover; box-shadow: 0 8px 28px rgba(45, 45, 42, .08); animation: startup-icon-enter 700ms cubic-bezier(.2, .75, .25, 1) both; }
+.startup-brand h1 { margin: 17px 0 0; color: #252523; font-size: 19px; font-weight: 580; letter-spacing: -.025em; animation: startup-name-enter 580ms 120ms ease-out both; }
+.startup-screen.leaving { animation: startup-screen-leave 450ms cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes startup-icon-enter { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes startup-name-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes startup-screen-leave { from { opacity: 1; } to { opacity: 0; } }
 .project-gate .brand-mark { width: 58px; height: 58px; margin-bottom: 18px; border-radius: 16px; overflow: hidden; box-shadow: 0 5px 18px rgba(97, 43, 143, .16); }
 .project-gate .brand-mark img { display: block; width: 100%; height: 100%; }
 .project-gate h1 { margin: 0; font-size: 25px; letter-spacing: -.04em; }
@@ -407,11 +415,12 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .extension-question-actions button { height: 27px; padding: 0 10px; border: 1px solid #d5d5d0; border-radius: 7px; color: #666661; background: #f8f8f6; font-size: 9.5px; cursor: pointer; }
 .extension-question-actions button.primary { border-color: #416f62; color: #fff; background: #416f62; }
 @property --composer-flow-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-.composer { position: relative; isolation: isolate; width: min(760px, 100%); margin: 0 auto; padding: 9px 10px 8px 13px; border: 1px solid #cecec8; border-radius: 13px; background: #fff; box-shadow: 0 5px 18px rgba(40, 40, 35, .07), 0 1px 2px rgba(0, 0, 0, .05); }
+.composer { position: relative; isolation: isolate; width: min(760px, 100%); margin: 0 auto; padding: 9px 10px 8px 13px; border: 1px solid #cecec8; border-radius: 13px; background: #fff; box-shadow: 0 5px 18px rgba(40, 40, 35, .07), 0 1px 2px rgba(0, 0, 0, .05); transition: border-color 420ms ease, box-shadow 420ms ease; }
 .composer:focus-within { border-color: #a9aaa3; box-shadow: 0 6px 22px rgba(40,40,35,.09), 0 0 0 1px rgba(80,90,80,.05); }
-.composer.working { border-color: transparent; box-shadow: 0 7px 26px rgba(87, 89, 226, .16), 0 0 15px rgba(46, 211, 220, .14); }
-/* The masked conic gradient paints only the border; drop-shadow supplies an outer glow without filling the editor. */
-.composer.working::before { position: absolute; z-index: 2; inset: -3px; padding: 3px; border-radius: 16px; pointer-events: none; content: ""; background: conic-gradient(from var(--composer-flow-angle), #ff4fc8, #9b65ff, #3a9dff, #39e6d2, #73ec8d, #ffe26b, #ff856b, #ff4fc8); filter: drop-shadow(0 0 7px rgba(102, 92, 255, .6)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: composer-border-flow 1.55s linear infinite; }
+.composer.working { border-color: transparent; box-shadow: 0 7px 26px rgba(87, 89, 226, .16), 0 0 15px rgba(46, 211, 220, .14); transition-duration: 320ms; }
+/* Keep the masked border mounted so it can fade out after the runner pauses. */
+.composer::before { position: absolute; z-index: 2; inset: -3px; padding: 3px; border-radius: 16px; pointer-events: none; content: ""; opacity: 0; background: conic-gradient(from var(--composer-flow-angle), #ff4fc8, #9b65ff, #3a9dff, #39e6d2, #73ec8d, #ffe26b, #ff856b, #ff4fc8); filter: drop-shadow(0 0 7px rgba(102, 92, 255, .6)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: composer-border-flow 1.55s linear infinite; animation-play-state: paused; transition: opacity 420ms ease; }
+.composer.working::before { opacity: 1; animation-play-state: running; transition-duration: 320ms; }
 @keyframes composer-border-flow { to { --composer-flow-angle: 360deg; } }
 .image-strip { display: flex; gap: 7px; padding: 2px 2px 8px; overflow-x: auto; }
 .image-chip { position: relative; width: 74px; flex: 0 0 auto; padding: 3px; border: 1px solid var(--line-soft); border-radius: 8px; background: #f6f6f3; }
