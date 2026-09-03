@@ -48,6 +48,7 @@ interface ConversationBodyProps extends ConversationProps {
 function ConversationBody(props: ConversationBodyProps) {
   const { t } = useI18n();
   const renderGroups = useMemo(() => groupConsecutiveTools(props.timeline), [props.timeline]);
+  const firstUserId = renderGroups.find((group) => group.kind === "message" && group.item.message.role === "user")?.id;
   const isEmpty = props.timeline.length === 0;
   const lastItem = props.timeline.at(-1);
   const hasLiveAssistant = props.isStreaming && lastItem?.kind === "message" && lastItem.message.role === "assistant";
@@ -70,7 +71,12 @@ function ConversationBody(props: ConversationBodyProps) {
                 else props.userElements.current.delete(group.item.message.id);
               }}
               data-message-id={group.item.message.id}
-              className={`message ${group.item.message.role} ${group.item.message.isError ? "error" : ""}`}
+              className={[
+                "message",
+                group.item.message.role,
+                group.item.message.isError ? "error" : null,
+                group.item.message.role === "user" && group.id !== firstUserId ? "turn-start" : null,
+              ].filter(Boolean).join(" ")}
             >
               <div className="message-role">{group.item.message.role === "user" ? t("conversation.you") : "pi"}</div>
               <div className="message-content">

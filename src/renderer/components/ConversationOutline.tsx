@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { ArrowDown } from "lucide-react";
 import type { ConversationMessage } from "@shared/contracts";
 import { useI18n, type Translate } from "../i18n/i18n";
@@ -42,8 +42,11 @@ export function ConversationOutline(props: ConversationOutlineProps) {
 
   return (
     <nav className="conversation-outline" aria-label={t("conversation.overview")}>
-      <div className="outline-track">
-        <div className="outline-markers">
+      <div className={`outline-track ${props.showLatest ? "has-latest" : ""}`}>
+        <div
+          className="outline-markers"
+          style={{ "--outline-natural-height": `${props.messages.length * 13}px` } as CSSProperties}
+        >
           {props.messages.map((message, index) => (
             <button
               key={message.id}
