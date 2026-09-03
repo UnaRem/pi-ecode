@@ -324,6 +324,7 @@ export class AgentService {
         provider: item.provider,
         name: item.name,
         reasoning: item.reasoning,
+        supportsImages: item.input.includes("image"),
       })),
       selectedModel: model ? `${model.provider}/${model.id}` : null,
       thinkingLevel: session.thinkingLevel,

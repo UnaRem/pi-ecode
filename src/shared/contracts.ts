@@ -41,6 +41,7 @@ export interface ModelOption {
   provider: string;
   name: string;
   reasoning: boolean;
+  supportsImages: boolean;
 }
 
 export interface SessionSummary {

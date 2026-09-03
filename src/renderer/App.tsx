@@ -16,6 +16,7 @@ export default function App() {
   const [validationOpen, setValidationOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const selectedModel = state.models.find((model) => `${model.provider}/${model.id}` === state.selectedModel);
 
   const leaveSettings = useCallback((): boolean => {
     if (settingsDirty && !window.confirm(t("settings.confirmDiscard"))) return false;
@@ -118,6 +119,7 @@ export default function App() {
           isStreaming={state.isStreaming}
           pendingCount={state.pendingCount}
           modelReady={Boolean(state.selectedModel)}
+          supportsImages={selectedModel?.supportsImages ?? false}
           restoredText={state.restoredEditorText}
           restoredImages={state.restoredEditorImages}
           restoreVersion={state.editorRestoreVersion}
