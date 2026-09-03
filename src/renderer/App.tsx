@@ -4,7 +4,7 @@ import { Composer } from "./components/Composer";
 import { Conversation } from "./components/Conversation";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
-import { ValidationPanel } from "./components/ValidationPanel";
+import { ValidationPanelPresence } from "./components/ValidationPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { useAgent } from "./hooks/use-agent";
 import { useI18n } from "./i18n/i18n";
@@ -98,19 +98,18 @@ export default function App() {
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
           onToggleValidation={() => setValidationOpen((open) => !open)}
         />
-        {validationOpen && (
-          <ValidationPanel
-            validation={state.validation}
-            review={state.review}
-            candidate={state.candidate}
-            onRun={() => void actions.runValidation()}
-            onStop={() => void actions.stopValidation()}
-            onRejectFile={(path) => void actions.rejectReviewFile(path)}
-            onPrepareCandidate={() => void actions.prepareCandidate()}
-            onActivateCandidate={() => void actions.activateCandidate()}
-            onClose={() => setValidationOpen(false)}
-          />
-        )}
+        <ValidationPanelPresence
+          open={validationOpen}
+          validation={state.validation}
+          review={state.review}
+          candidate={state.candidate}
+          onRun={() => void actions.runValidation()}
+          onStop={() => void actions.stopValidation()}
+          onRejectFile={(path) => void actions.rejectReviewFile(path)}
+          onPrepareCandidate={() => void actions.prepareCandidate()}
+          onActivateCandidate={() => void actions.activateCandidate()}
+          onClose={() => setValidationOpen(false)}
+        />
         <Conversation
           timeline={state.timeline}
           isStreaming={state.isStreaming}

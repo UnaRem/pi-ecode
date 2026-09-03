@@ -7,6 +7,7 @@ import {
   Square,
   X,
 } from "lucide-react";
+import { useEffect, useState, type AnimationEvent } from "react";
 import type { CandidateState, ChangeReview, ValidationState, ValidationStep } from "@shared/contracts";
 import { useI18n, type Translate } from "../i18n/i18n";
 import type { MessageKey } from "../i18n/messages";
@@ -56,6 +57,32 @@ function StepIcon({ step }: { step: ValidationStep }) {
   if (step.status === "passed") return <Check size={14} />;
   if (step.status === "failed") return <CircleAlert size={14} />;
   return <CircleDashed size={14} />;
+}
+
+export function ValidationPanelPresence({ open, ...panelProps }: ValidationPanelProps & { open: boolean }) {
+  const [isMounted, setIsMounted] = useState(open);
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setIsMounted(true);
+      setIsLeaving(false);
+    } else if (isMounted) {
+      setIsLeaving(true);
+    }
+  }, [isMounted, open]);
+
+  const finishLeaving = (event: AnimationEvent<HTMLDivElement>): void => {
+    if (!isLeaving || event.currentTarget !== event.target || event.animationName !== "validation-panel-leave") return;
+    setIsMounted(false);
+    setIsLeaving(false);
+  };
+  if (!isMounted) return null;
+  return (
+    <div className={isLeaving ? "validation-panel-shell leaving" : "validation-panel-shell"} onAnimationEnd={finishLeaving}>
+      <ValidationPanel {...panelProps} />
+    </div>
+  );
 }
 
 export function ValidationPanel(props: ValidationPanelProps) {
