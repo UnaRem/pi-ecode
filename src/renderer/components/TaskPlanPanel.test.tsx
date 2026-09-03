@@ -25,8 +25,12 @@ describe("TaskPlanPanel", () => {
 
     expect(markup.match(/sidebar-task-segment/g)).toHaveLength(3);
     expect(markup).toContain("sidebar-task-segment completed");
-    expect(markup).toContain("sidebar-task-segment in_progress current");
+    expect(markup).toContain("sidebar-task-segment in_progress current flow-path");
     expect(markup).toContain("sidebar-task-segment pending");
+    expect(markup.match(/flow-path/g)).toHaveLength(2);
+    expect(markup).toContain("--task-flow-cycle:1900ms");
+    expect(markup).toContain("--task-flow-delay:0ms");
+    expect(markup).toContain("--task-flow-delay:684ms");
     expect(markup).toContain('class="sidebar-task-flow"');
     expect(markup).toContain('style="width:66.67%"');
     expect(markup).toContain('aria-label="Completed 1/3 steps"');

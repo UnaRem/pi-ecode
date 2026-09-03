@@ -1,5 +1,5 @@
 import { Check, Circle, LoaderCircle } from "lucide-react";
-import { useEffect, useRef, useState, type AnimationEvent } from "react";
+import { useEffect, useRef, useState, type AnimationEvent, type CSSProperties } from "react";
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 
@@ -40,7 +40,14 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
   const nextIndex = plan.items.findIndex((item) => item.status === "pending");
   const currentIndex = activeIndex >= 0 ? activeIndex : nextIndex;
   const flowTargetIndex = currentIndex >= 0 ? currentIndex : plan.items.length - 1;
-  const flowWidth = plan.items.length > 0 ? `${(((flowTargetIndex + 1) / plan.items.length) * 100).toFixed(2)}%` : "0%";
+  const flowSegmentCount = flowTargetIndex + 1;
+  const flowWidth = plan.items.length > 0 ? `${((flowSegmentCount / plan.items.length) * 100).toFixed(2)}%` : "0%";
+  const flowCycleMs = Math.max(1_900, flowSegmentCount * 360 + 700);
+  const flowStepMs = flowSegmentCount > 0 ? (flowCycleMs * 0.72) / flowSegmentCount : 0;
+  const flowStyle = {
+    "--task-flow-cycle": `${flowCycleMs}ms`,
+    "--task-flow-beam-width": `${(80 / Math.max(1, flowSegmentCount)).toFixed(2)}%`,
+  } as CSSProperties;
 
   useEffect(() => {
     currentItemRef.current?.scrollIntoView({ block: "nearest" });
@@ -71,19 +78,32 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
       </ol>
       <div
         className={`sidebar-task-progress ${active ? "active" : "idle"}`}
+        style={flowStyle}
         role="progressbar"
         aria-label={t("task.complete", { done: completedCount, total: plan.items.length })}
         aria-valuemin={0}
         aria-valuemax={plan.items.length}
         aria-valuenow={completedCount}
       >
-        {plan.items.map((item, index) => (
-          <span
-            key={item.id}
-            className={`sidebar-task-segment ${item.status} ${index === flowTargetIndex ? "current" : ""}`}
-            aria-hidden="true"
-          />
-        ))}
+        {plan.items.map((item, index) => {
+          const isFlowPath = active && index <= flowTargetIndex;
+          const segmentStyle = isFlowPath
+            ? { "--task-flow-delay": `${Math.round(index * flowStepMs)}ms` } as CSSProperties
+            : undefined;
+          return (
+            <span
+              key={item.id}
+              className={[
+                "sidebar-task-segment",
+                item.status,
+                index === flowTargetIndex ? "current" : null,
+                isFlowPath ? "flow-path" : null,
+              ].filter(Boolean).join(" ")}
+              style={segmentStyle}
+              aria-hidden="true"
+            />
+          );
+        })}
         {active && flowTargetIndex >= 0 && <span className="sidebar-task-flow" style={{ width: flowWidth }} aria-hidden="true" />}
       </div>
     </section>
