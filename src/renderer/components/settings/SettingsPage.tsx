@@ -2,7 +2,7 @@ import { ArrowLeft, LoaderCircle, RefreshCw, Save, Settings2, Undo2 } from "luci
 import { useEffect, useMemo, useState } from "react";
 import type { ConfigDocument, ConfigTarget, JsonObject } from "@shared/settings-contracts";
 import { useSettings } from "../../hooks/use-settings";
-import { useI18n } from "../../i18n/i18n";
+import { useI18n, type UiLanguage } from "../../i18n/i18n";
 import { GeneralSettingsForm } from "./GeneralSettingsForm";
 import { ModelsSettingsForm } from "./ModelsSettingsForm";
 import { AuthSettingsPanel } from "./AuthSettingsPanel";
@@ -18,7 +18,7 @@ interface SettingsPageProps {
 type SettingsController = ReturnType<typeof useSettings>;
 
 function SettingsNavigation(props: { target: SettingsSection; effectiveCount: number; onChange: (target: SettingsSection) => void }) {
-  const { t } = useI18n();
+  const { language, setLanguage, t } = useI18n();
   const sections: Array<[SettingsSection, string]> = [
     ["global-settings", t("settings.global")],
     ["project-settings", t("settings.project")],
@@ -34,6 +34,13 @@ function SettingsNavigation(props: { target: SettingsSection; effectiveCount: nu
         </button>
       ))}
       <div className="settings-nav-note">{t("settings.effectiveCount", { count: props.effectiveCount })}</div>
+      <label className="settings-language">
+        <span>{t("sidebar.language")}</span>
+        <select value={language} onChange={(event) => setLanguage(event.target.value as UiLanguage)}>
+          <option value="zh-CN">{t("language.zh")}</option>
+          <option value="en">{t("language.en")}</option>
+        </select>
+      </label>
     </nav>
   );
 }

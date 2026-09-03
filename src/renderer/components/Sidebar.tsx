@@ -2,7 +2,7 @@ import { useState, type AnimationEvent } from "react";
 import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
 import { TaskPlanPresence } from "./TaskPlanPanel";
-import { useI18n, type UiLanguage } from "../i18n/i18n";
+import { useI18n } from "../i18n/i18n";
 
 interface SidebarProps {
   projectName: string;
@@ -29,7 +29,7 @@ function relativeTime(timestamp: number, locale: string): string {
 }
 
 export function Sidebar(props: SidebarProps) {
-  const { language, locale, setLanguage, t } = useI18n();
+  const { locale, t } = useI18n();
   const [isClosing, setIsClosing] = useState(false);
   const finishClosing = (event: AnimationEvent<HTMLElement>): void => {
     if (isClosing && event.currentTarget === event.target) props.onCollapse();
@@ -79,13 +79,6 @@ export function Sidebar(props: SidebarProps) {
         <Settings size={15} />
         {t("sidebar.settings")}
       </button>
-      <label className="sidebar-language">
-        <span>{t("sidebar.language")}</span>
-        <select value={language} onChange={(event) => setLanguage(event.target.value as UiLanguage)}>
-          <option value="zh-CN">{t("language.zh")}</option>
-          <option value="en">{t("language.en")}</option>
-        </select>
-      </label>
       <div className="sidebar-footer">{t("sidebar.footer")}</div>
     </aside>
   );
