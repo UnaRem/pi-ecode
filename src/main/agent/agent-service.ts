@@ -41,66 +41,7 @@ import { AuthService } from "./auth-service.js";
 import { EDIT_TOOL_COMPATIBILITY_GUIDANCE } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
 import { listSessionSummaries } from "./session-summaries.js";
-
-const EMPTY_SNAPSHOT: AgentSnapshot = {
-  projectPath: null,
-  projectName: null,
-  sessionId: null,
-  sessionFile: null,
-  sessionTitle: null,
-  sessions: [],
-  messages: [],
-  tools: [],
-  timeline: [],
-  models: [],
-  selectedModel: null,
-  thinkingLevel: "off",
-  thinkingLevels: ["off"],
-  isStreaming: false,
-  workingStartedAt: null,
-  pendingCount: 0,
-  error: null,
-  taskPlan: null,
-  extensionUi: null,
-  history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
-  validation: {
-    supported: false,
-    isSelfProject: false,
-    status: "idle",
-    runId: null,
-    activeStep: null,
-    steps: [],
-    verifiedAt: null,
-    message: null,
-  },
-  review: {
-    available: false,
-    baseCommit: null,
-    headCommit: null,
-    files: [],
-    patch: "",
-    truncated: false,
-    message: null,
-  },
-  candidate: {
-    status: "idle",
-    candidateId: null,
-    candidatePath: null,
-    preparedAt: null,
-    message: null,
-    history: [],
-  },
-  context: {
-    tokens: null,
-    contextWindow: null,
-    percent: null,
-    isCompacting: false,
-    isEstimated: false,
-    compactionMethod: null,
-    compaction: { status: "idle" },
-  },
-  policy: { contextFiles: [], workflow: "manual-review", gitCommits: "required-after-verification" },
-};
+import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -294,7 +235,7 @@ export class AgentService {
 
   async getSnapshot(): Promise<AgentSnapshot> {
     if (!this.runtime || !this.projectPath) {
-      return { ...EMPTY_SNAPSHOT, error: this.startupError ?? null };
+      return { ...EMPTY_AGENT_SNAPSHOT, error: this.startupError ?? null };
     }
     const session = this.runtime.session;
     const [sessions, availableModels, history, review] = await Promise.all([
