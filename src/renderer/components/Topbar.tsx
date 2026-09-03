@@ -1,4 +1,5 @@
-import { ChevronDown, LoaderCircle, PanelLeftOpen, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { ChevronDown, LoaderCircle, PanelLeftOpen, Pencil, ShieldCheck } from "lucide-react";
 import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import type { MessageKey } from "../i18n/messages";
@@ -25,9 +26,52 @@ interface TopbarProps {
   validation: ValidationState;
   policy: RuntimePolicy;
   onOpenSidebar: () => void;
+  onRenameSession: (title: string) => void;
   onSetModel: (value: string) => void;
   onSetThinking: (value: ThinkingLevel) => void;
   onToggleValidation: () => void;
+}
+
+export function normalizeSessionTitle(title: string): string {
+  return title.replace(/\s+/gu, " ").trim().slice(0, 80);
+}
+
+function SessionTitleEditor(props: { title: string; onRename: (title: string) => void }) {
+  const { t } = useI18n();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(props.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(props.title);
+    else requestAnimationFrame(() => inputRef.current?.select());
+  }, [editing, props.title]);
+
+  const finish = (): void => {
+    setEditing(false);
+    if (cancelledRef.current) {
+      cancelledRef.current = false;
+      setDraft(props.title);
+      return;
+    }
+    const normalizedTitle = normalizeSessionTitle(draft);
+    if (normalizedTitle !== props.title) props.onRename(normalizedTitle);
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === "Enter") event.currentTarget.blur();
+    if (event.key !== "Escape") return;
+    cancelledRef.current = true;
+    event.currentTarget.blur();
+  };
+
+  if (editing) return <input ref={inputRef} className="session-title-input" value={draft} maxLength={80} onChange={(event) => setDraft(event.target.value)} onBlur={finish} onKeyDown={onKeyDown} aria-label={t("topbar.renameSession")} />;
+  return (
+    <span className="session-title-display">
+      <strong title={props.title}>{props.title}</strong>
+      <button onClick={() => setEditing(true)} aria-label={t("topbar.renameSession")} title={t("topbar.renameSession")}><Pencil size={12} /></button>
+    </span>
+  );
 }
 
 export function Topbar(props: TopbarProps) {
@@ -48,7 +92,7 @@ export function Topbar(props: TopbarProps) {
             <PanelLeftOpen size={18} />
           </button>
         )}
-        <strong>{props.sessionTitle || t("topbar.newThread")}</strong>
+        <SessionTitleEditor title={props.sessionTitle || t("topbar.newThread")} onRename={props.onRenameSession} />
         <span>/</span>
         <small>{props.projectName}</small>
         <span

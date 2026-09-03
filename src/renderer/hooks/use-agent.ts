@@ -66,6 +66,10 @@ export function useAgent() {
     if (snapshot) dispatch({ type: "snapshot", snapshot });
   }, [run, state.isStreaming, state.sessionFile]);
 
+  const renameSession = useCallback(async (title: string) => {
+    await run(() => window.piDesktop.renameSession(title));
+  }, [run]);
+
   const send = useCallback(async (message: string, images: ImageAttachment[] = []) => {
     dispatch({ type: "state", patch: { error: null } });
     await run(() => window.piDesktop.prompt(message, images));
@@ -136,6 +140,7 @@ export function useAgent() {
       chooseProject,
       newSession,
       switchSession,
+      renameSession,
       send,
       compact,
       cancelCompact,

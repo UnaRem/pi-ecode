@@ -164,6 +164,12 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .topbar-title { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .topbar-title strong { max-width: 290px; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .topbar-title span, .topbar-title small { color: var(--faint); font-size: 11px; }
+.session-title-display { min-width: 0; display: flex; align-items: center; gap: 3px; }
+.session-title-display strong { color: var(--text); }
+.session-title-display button { display: grid; width: 23px; height: 23px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 5px; color: var(--faint); background: transparent; cursor: pointer; opacity: 0; transition: opacity .15s ease, color .15s ease, background .15s ease; }
+.session-title-display:hover button, .session-title-display button:focus-visible { opacity: 1; }
+.session-title-display button:hover { color: var(--accent); background: var(--accent-soft); }
+.session-title-input { width: min(290px, 32vw); height: 27px; padding: 0 7px; border: 1px solid #aebfb9; border-radius: 6px; color: var(--text); background: #fff; font-size: 12px; }
 .topbar-title .policy-indicator { padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px; font-size: 8.5px; white-space: nowrap; }
 .topbar-title .policy-indicator.loaded { border-color: #c8d9d2; color: var(--accent); background: var(--accent-soft); }
 .topbar-title .policy-indicator.missing { border-color: #e5c6c2; color: var(--danger); background: #f9ebe8; }

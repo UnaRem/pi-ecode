@@ -92,6 +92,7 @@ export default function App() {
           validation={state.validation}
           policy={state.policy}
           onOpenSidebar={() => setSidebarOpen(true)}
+          onRenameSession={(title) => void actions.renameSession(title)}
           onSetModel={(value) => void actions.setModel(value)}
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
           onToggleValidation={() => setValidationOpen((open) => !open)}

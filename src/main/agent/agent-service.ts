@@ -364,6 +364,11 @@ export class AgentService {
     return snapshot;
   }
 
+  renameSession(title: string): void {
+    const normalizedTitle = title.replace(/\s+/gu, " ").trim().slice(0, 80);
+    this.requireRuntime().session.setSessionName(normalizedTitle);
+  }
+
   async prompt(message: string, images: ImageAttachment[] = []): Promise<void> {
     const session = this.requireRuntime().session;
     const text = message.trim();
@@ -716,6 +721,10 @@ export class AgentService {
       }
       case "thinking_level_changed":
         this.emitModelState(session);
+        break;
+      case "session_info_changed":
+        this.emit({ type: "state", patch: { sessionTitle: event.name ?? null } });
+        void this.refreshSessions();
         break;
     }
   }

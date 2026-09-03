@@ -10,6 +10,18 @@ interface PromptOptions {
 describe("AgentService prompt lifecycle", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("normalizes and persists a renamed session", () => {
+    const session = { setSessionName: vi.fn() } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+
+    service.renameSession(`  Renamed\nconversation ${"x".repeat(90)}  `);
+
+    const savedTitle = vi.mocked(session.setSessionName).mock.calls[0]?.[0] ?? "";
+    expect(savedTitle).toBe("Renamed conversation " + "x".repeat(59));
+    expect(savedTitle).toHaveLength(80);
+  });
+
   it("shows work immediately and steers messages submitted during preflight", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     let finishPrompt: (() => void) | undefined;
