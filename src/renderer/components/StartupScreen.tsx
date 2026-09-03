@@ -33,7 +33,7 @@ export function StartupScreen({ ready, onFinished }: StartupScreenProps) {
   return (
     <main className={isLeaving ? "startup-screen leaving" : "startup-screen"} onAnimationEnd={finish} aria-label="pi ecode">
       <div className="startup-brand">
-        <img src="/ecode-icon.png" alt="" />
+        <img src="./ecode-icon.png" alt="" />
         <h1>pi ecode</h1>
       </div>
     </main>

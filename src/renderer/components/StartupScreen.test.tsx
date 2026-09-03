@@ -10,7 +10,7 @@ describe("StartupScreen", () => {
 
   it("renders the current icon and product name", () => {
     const markup = renderToStaticMarkup(<StartupScreen ready={false} onFinished={vi.fn()} />);
-    expect(markup).toContain('src="/ecode-icon.png"');
+    expect(markup).toContain('src="./ecode-icon.png"');
     expect(markup).toContain("pi ecode");
     expect(markup).toContain('class="startup-screen"');
   });
