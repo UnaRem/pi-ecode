@@ -10,7 +10,6 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
   const activeIndex = plan.items.findIndex((item) => item.status === "in_progress");
   const nextIndex = plan.items.findIndex((item) => item.status === "pending");
   const currentIndex = activeIndex >= 0 ? activeIndex : nextIndex;
-  const isComplete = completedCount === plan.items.length;
 
   useEffect(() => {
     currentItemRef.current?.scrollIntoView({ block: "nearest" });
@@ -39,11 +38,17 @@ export function TaskPlanPanel({ plan }: { plan: TaskPlan }) {
           );
         })}
       </ol>
-      <div className={`sidebar-task-step ${isComplete ? "complete" : ""}`}>
-        {isComplete ? <Check size={13} /> : <LoaderCircle className="spin" size={14} />}
-        <span>{isComplete
-          ? t("task.complete", { done: completedCount, total: plan.items.length })
-          : t("task.current", { current: Math.max(1, currentIndex + 1), total: plan.items.length })}</span>
+      <div
+        className="sidebar-task-progress"
+        role="progressbar"
+        aria-label={t("task.complete", { done: completedCount, total: plan.items.length })}
+        aria-valuemin={0}
+        aria-valuemax={plan.items.length}
+        aria-valuenow={completedCount}
+      >
+        {plan.items.map((item) => (
+          <span key={item.id} className={`sidebar-task-segment ${item.status}`} aria-hidden="true" />
+        ))}
       </div>
     </section>
   );

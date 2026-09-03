@@ -7,7 +7,7 @@ describe("translate", () => {
   });
 
   it("interpolates values without changing unknown dynamic content", () => {
-    expect(translate("en", "task.current", { current: 2, total: 4 })).toBe("Step 2/4");
+    expect(translate("en", "task.complete", { done: 2, total: 4 })).toBe("Completed 2/4 steps");
     expect(translate("zh-CN", "conversation.welcomeBody", { project: "demo" })).toContain("demo");
   });
 });

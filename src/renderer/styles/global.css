@@ -263,9 +263,10 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .sidebar-task-items li.in_progress .sidebar-task-icon { color: #58a5df; }
 .sidebar-task-items li.completed { color: #999994; text-decoration: line-through; }
 .sidebar-task-items li.completed .sidebar-task-icon { color: #999994; }
-.sidebar-task-step { width: max-content; max-width: calc(100% - 24px); display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 25px; margin: 5px auto 0; padding: 0 8px; color: #676763; font-size: 10.5px; }
-.sidebar-task-step svg { color: #58a5df; }
-.sidebar-task-step.complete svg { color: #638779; }
+.sidebar-task-progress { display: flex; gap: 3px; height: 5px; margin: 7px 3px 8px; }
+.sidebar-task-segment { min-width: 0; flex: 1; border-radius: 2px; background: #dddeda; }
+.sidebar-task-segment.in_progress { background: #58a5df; }
+.sidebar-task-segment.completed { background: #638779; }
 .welcome { max-width: 430px; text-align: center; }
 .welcome-icon { display: grid; place-items: center; width: 42px; height: 42px; margin: 0 auto 18px; border: 1px solid var(--line); border-radius: 12px; color: var(--accent); background: var(--surface); box-shadow: 0 2px 5px rgba(0, 0, 0, .04); }
 .welcome h1 { margin: 0 0 9px; font-size: 24px; font-weight: 620; letter-spacing: -.035em; }
