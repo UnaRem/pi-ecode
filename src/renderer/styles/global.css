@@ -46,7 +46,8 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .sidebar-project { display: flex; align-items: center; gap: 3px; margin-bottom: 12px; }
 .project-button { min-width: 0; flex: 1; display: flex; align-items: center; gap: 9px; height: 42px; padding: 4px 7px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
 .project-button:hover { background: rgba(0, 0, 0, .04); }
-.project-mark { display: grid; place-items: center; flex: 0 0 auto; width: 29px; height: 29px; border-radius: 8px; color: #fff; background: #323230; font: 18px Georgia, serif; }
+.project-mark { flex: 0 0 auto; width: 29px; height: 29px; overflow: hidden; border: 1px solid #deded9; border-radius: 8px; background: #fff; }
+.project-mark img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .project-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .project-copy strong { overflow: hidden; text-overflow: ellipsis; font-size: 13px; white-space: nowrap; }
 .project-copy small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }

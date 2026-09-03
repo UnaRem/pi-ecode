@@ -38,7 +38,7 @@ export function Sidebar(props: SidebarProps) {
     <aside className={`sidebar ${isClosing ? "closing" : ""}`} onAnimationEnd={finishClosing}>
       <div className="sidebar-project">
         <button className="project-button" onClick={props.onChooseProject} title={`${t("sidebar.chooseProject")}: ${props.projectPath}`}>
-          <span className="project-mark">π</span>
+          <span className="project-mark"><img src="/ecode-icon.png" alt="" /></span>
           <span className="project-copy">
             <strong>{props.projectName}</strong>
             <small>{props.projectPath}</small>
