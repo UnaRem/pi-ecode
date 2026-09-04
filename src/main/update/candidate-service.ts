@@ -81,6 +81,7 @@ export class CandidateService {
   private sourceRoot: string | undefined;
   private currentRuntimePath: string | undefined;
   private readonly recoveredAtStartup = process.env.PI_ECODE_RECOVERED === "1";
+  private readonly isBrandedDevelopmentRuntime = process.env.PI_ECODE_DEVELOPMENT_RUNTIME === "1";
   private ledger: UpdateRecord[] = [];
   private state = idleState();
 
@@ -141,7 +142,9 @@ export class CandidateService {
 
   async prepare(): Promise<CandidateState> {
     if (!this.sourceRoot) throw new Error("Open the pi-ecode source project before preparing an update.");
-    if (app.isPackaged) throw new Error("Candidate activation currently requires an unpackaged development runtime.");
+    if (app.isPackaged && !this.isBrandedDevelopmentRuntime) {
+      throw new Error("Candidate activation currently requires a development runtime.");
+    }
     this.state = { ...idleState(this.ledger), status: "preparing", message: "Staging verified build…" };
     this.publish();
     try {

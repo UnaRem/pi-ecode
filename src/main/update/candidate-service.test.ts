@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const electronState = vi.hoisted(() => ({ appPath: "", quit: vi.fn() }));
+const electronState = vi.hoisted(() => ({ appPath: "", isPackaged: false, quit: vi.fn() }));
 vi.mock("electron", () => ({
   app: {
+    get isPackaged() { return electronState.isPackaged; },
     getAppPath: () => electronState.appPath,
     quit: electronState.quit,
   },
@@ -17,7 +18,9 @@ import { CandidateService } from "./candidate-service.js";
 const temporaryPaths: string[] = [];
 
 afterEach(async () => {
+  electronState.isPackaged = false;
   electronState.quit.mockClear();
+  delete process.env.PI_ECODE_DEVELOPMENT_RUNTIME;
   await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
@@ -75,6 +78,21 @@ describe("CandidateService", () => {
     expect(await realpath(join(result.candidatePath!, "node_modules"))).toBe(await realpath(join(source, "node_modules")));
     expect(service.getState().history[0]).toMatchObject({ id: result.candidateId, status: "prepared" });
     expect(JSON.parse(await readFile(join(updates, "ledger.json"), "utf8"))).toHaveLength(1);
+  });
+
+  it("allows candidate preparation from the branded development executable", async () => {
+    const source = await runtimeRoot("branded");
+    const updates = await mkdtemp(join(tmpdir(), "pi-ecode-branded-updates-"));
+    temporaryPaths.push(updates);
+    electronState.appPath = source;
+    electronState.isPackaged = true;
+    process.env.PI_ECODE_DEVELOPMENT_RUNTIME = "1";
+    const service = new CandidateService(updates, () => undefined);
+
+    await service.initialize();
+    service.configure(source);
+
+    await expect(service.prepare()).resolves.toMatchObject({ status: "ready" });
   });
 
   it("retains only the three newest candidate artifact directories", async () => {

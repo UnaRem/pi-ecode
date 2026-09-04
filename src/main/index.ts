@@ -5,7 +5,7 @@ import { registerIpc } from "./ipc/register-ipc.js";
 import { SettingsService } from "./settings/settings-service.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
-const APP_ID = "com.pi-ecode.desktop";
+const APP_ID = "com.piecode.desktop";
 if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 
 const service = new AgentService((url) => shell.openExternal(url));
