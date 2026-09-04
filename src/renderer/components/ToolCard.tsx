@@ -26,10 +26,10 @@ export function ToolCard({ tool }: { tool: ToolActivity }) {
   const [expanded, setExpanded] = useState(false);
   const category = toolCategory(tool.name, tool.input);
   const statusIcon = tool.status === "running"
-    ? <LoaderCircle className="spin" size={14} />
+    ? <LoaderCircle className="spin" size={14} aria-hidden="true" />
     : tool.status === "error"
-      ? <CircleAlert size={14} />
-      : <Check size={14} />;
+      ? <CircleAlert size={14} aria-hidden="true" />
+      : <Check size={14} aria-hidden="true" />;
 
   return (
     <section
@@ -40,7 +40,7 @@ export function ToolCard({ tool }: { tool: ToolActivity }) {
         <ChevronRight className="tool-chevron" size={14} />
         <span className="tool-status">{statusIcon}</span>
         <span className="tool-title">{tool.title}</span>
-        <small>{tool.status === "running" ? t("tool.running") : tool.status === "error" ? t("tool.failed") : t("tool.done")}</small>
+        <span className="sr-only">{tool.status === "running" ? t("tool.running") : tool.status === "error" ? t("tool.failed") : t("tool.done")}</span>
       </button>
       {!expanded && tool.output && <pre className="tool-preview">{previewLines(tool.output)}</pre>}
       {expanded && (
