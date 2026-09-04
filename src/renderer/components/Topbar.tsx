@@ -1,19 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ChevronDown, LoaderCircle, PanelLeftOpen, Pencil, ShieldCheck } from "lucide-react";
+import { LoaderCircle, PanelLeftOpen, Pencil, ShieldCheck } from "lucide-react";
 import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
-import type { MessageKey } from "../i18n/messages";
 import { GitPushButton } from "./GitPushButton";
-
-const THINKING_KEYS: Record<ThinkingLevel, MessageKey> = {
-  off: "thinking.off",
-  minimal: "thinking.minimal",
-  low: "thinking.low",
-  medium: "thinking.medium",
-  high: "thinking.high",
-  xhigh: "thinking.xhigh",
-  max: "thinking.max",
-};
+import { TopbarSelect, type TopbarSelectOption } from "./TopbarSelect";
 
 interface TopbarProps {
   sidebarOpen: boolean;
@@ -36,6 +26,10 @@ interface TopbarProps {
 
 export function normalizeSessionTitle(title: string): string {
   return title.replace(/\s+/gu, " ").trim().slice(0, 80);
+}
+
+export function thinkingSelectOptions(levels: ThinkingLevel[]): TopbarSelectOption[] {
+  return levels.map((level) => ({ value: level, label: level }));
 }
 
 function SessionTitleEditor(props: { title: string; onRename: (title: string) => void }) {
@@ -82,6 +76,9 @@ export function Topbar(props: TopbarProps) {
   const selectedProvider = modelSeparator > 0 ? props.selectedModel?.slice(0, modelSeparator) ?? "" : props.models[0]?.provider ?? "";
   const providers = [...new Set(props.models.map((model) => model.provider))];
   const providerModels = props.models.filter((model) => model.provider === selectedProvider);
+  const providerOptions = providers.map((provider) => ({ value: provider, label: provider }));
+  const modelOptions = providerModels.map((model) => ({ value: `${model.provider}/${model.id}`, label: model.name }));
+  const thinkingOptions = thinkingSelectOptions(props.thinkingLevels);
   const selectProvider = (provider: string): void => {
     const model = props.models.find((option) => option.provider === provider);
     if (model) props.onSetModel(`${model.provider}/${model.id}`);
@@ -119,38 +116,32 @@ export function Topbar(props: TopbarProps) {
           <span>{props.validation.status === "passed" ? t("topbar.verified") : props.validation.status === "stale" ? t("topbar.stale") : t("topbar.verify")}</span>
         </button>
         <GitPushButton projectKey={props.projectPath} disabled={props.disabled} validationStatus={props.validation.status} />
-        <label className="select-shell provider-select">
-          <span className="sr-only">{t("topbar.provider")}</span>
-          <select value={selectedProvider} disabled={props.disabled || providers.length === 0} onChange={(event) => selectProvider(event.target.value)}>
-            {providers.length === 0 && <option value="">{t("topbar.noModel")}</option>}
-            {providers.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
-          </select>
-          <ChevronDown size={14} aria-hidden="true" />
-        </label>
-        <label className="select-shell model-select">
-          <span className="sr-only">{t("topbar.model")}</span>
-          <select value={props.selectedModel ?? ""} disabled={props.disabled || providerModels.length === 0} onChange={(event) => props.onSetModel(event.target.value)}>
-            {providerModels.map((model) => (
-              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name}</option>
-            ))}
-          </select>
-          <ChevronDown size={14} aria-hidden="true" />
-        </label>
-        <label className="select-shell thinking-select">
-          <span className="sr-only">{t("topbar.thinking")}</span>
-          <select
-            value={props.thinkingLevel}
-            disabled={props.disabled || props.thinkingLevels.length <= 1}
-            onChange={(event) => props.onSetThinking(event.target.value as ThinkingLevel)}
-          >
-            {props.thinkingLevels.map((level) => (
-              <option key={level} value={level}>{level === "off"
-                ? t("topbar.noThinking")
-                : t("topbar.thinkingValue", { level: t(THINKING_KEYS[level]) })}</option>
-            ))}
-          </select>
-          <ChevronDown size={14} aria-hidden="true" />
-        </label>
+        <TopbarSelect
+          className="provider-select"
+          label={t("topbar.provider")}
+          value={selectedProvider}
+          options={providerOptions}
+          disabled={props.disabled || providerOptions.length === 0}
+          placeholder={t("topbar.noModel")}
+          onChange={selectProvider}
+        />
+        <TopbarSelect
+          className="model-select"
+          label={t("topbar.model")}
+          value={props.selectedModel ?? ""}
+          options={modelOptions}
+          disabled={props.disabled || modelOptions.length === 0}
+          placeholder={t("topbar.noModel")}
+          onChange={props.onSetModel}
+        />
+        <TopbarSelect
+          className="thinking-select"
+          label={t("topbar.thinking")}
+          value={props.thinkingLevel}
+          options={thinkingOptions}
+          disabled={props.disabled || thinkingOptions.length <= 1}
+          onChange={(value) => props.onSetThinking(value as ThinkingLevel)}
+        />
       </div>
     </header>
   );

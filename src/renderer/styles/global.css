@@ -195,13 +195,29 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .git-push-button.ready { border-color: #d7c9ec; color: #68449c; background: #f3eefb; }
 .git-push-button.synced { color: var(--accent); background: var(--accent-soft); }
 .git-push-error { position: absolute; z-index: 20; top: 34px; right: 0; width: 280px; padding: 8px 10px; border: 1px solid #e5c6c2; border-radius: 7px; color: var(--danger); background: #fff8f6; box-shadow: 0 6px 20px rgba(70, 35, 30, .12); font-size: 10px; line-height: 1.45; white-space: normal; }
-.select-shell { position: relative; display: flex; align-items: center; }
-.select-shell select { max-width: 200px; height: 30px; padding: 0 28px 0 9px; border: 1px solid transparent; border-radius: 7px; color: #555550; background: transparent; font-size: 11px; appearance: none; cursor: pointer; }
-.select-shell select:hover { border-color: var(--line); background: #fff; }
-.select-shell svg { position: absolute; right: 8px; pointer-events: none; color: var(--faint); }
-.provider-select select { max-width: 128px; }
-.model-select select { max-width: 190px; }
-.thinking-select select { max-width: 125px; }
+.select-shell { position: relative; display: inline-flex; align-items: center; }
+.select-trigger { display: flex; height: 30px; align-items: center; gap: 7px; padding: 0 8px 0 10px; border: 1px solid transparent; border-radius: 7px; color: #555550; background: transparent; font-size: 11px; white-space: nowrap; cursor: pointer; transition: border-color .15s ease, color .15s ease, background .15s ease, box-shadow .15s ease; }
+.select-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.select-trigger > svg { flex: 0 0 auto; color: var(--faint); transition: color .15s ease, transform .18s ease; }
+.select-trigger:hover, .select-shell.open .select-trigger { border-color: var(--line); color: var(--text); background: #fff; }
+.select-shell.open .select-trigger { border-color: #becdc8; box-shadow: 0 0 0 2px rgba(78, 111, 101, .08); }
+.select-shell.open .select-trigger > svg { color: var(--accent); transform: rotate(180deg); }
+.select-trigger:focus-visible { border-color: #9db8af; outline: 2px solid rgba(78, 111, 101, .16); outline-offset: 1px; }
+.select-trigger:disabled { color: var(--faint); opacity: .62; }
+.select-menu { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; min-width: 100%; max-height: min(320px, calc(100vh - 76px)); padding: 5px; overflow-y: auto; border: 1px solid #d8d8d3; border-radius: 9px; background: rgba(255, 255, 253, .98); box-shadow: 0 10px 30px rgba(42, 42, 37, .14), 0 2px 7px rgba(42, 42, 37, .07); animation: select-menu-enter 120ms cubic-bezier(.2, .75, .25, 1) both; }
+.select-option { width: 100%; min-height: 29px; display: grid; grid-template-columns: 15px minmax(0, 1fr); align-items: center; gap: 6px; padding: 4px 8px; border: 0; border-radius: 6px; color: #555550; background: transparent; font-size: 10.5px; text-align: left; cursor: pointer; }
+.select-option > svg { color: var(--accent); opacity: 0; }
+.select-option > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-option:hover, .select-option:focus-visible { color: var(--text); background: #f1f2ef; outline: none; }
+.select-option[aria-selected="true"] { color: #355e53; background: var(--accent-soft); }
+.select-option[aria-selected="true"] > svg { opacity: 1; }
+.provider-select .select-trigger { max-width: 128px; }
+.provider-select .select-menu { width: 160px; }
+.model-select .select-trigger { max-width: 190px; }
+.model-select .select-menu { width: 240px; }
+.thinking-select .select-trigger { min-width: 76px; max-width: 125px; }
+.thinking-select .select-menu { width: 140px; }
+@keyframes select-menu-enter { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
 .validation-panel-shell { --validation-panel-height: calc((100vh - 53px) * .62); position: relative; max-height: var(--validation-panel-height); flex: 0 0 auto; overflow: hidden; transform-origin: top; animation: validation-panel-enter 260ms cubic-bezier(.2, .8, .2, 1) both; }
 .validation-panel-shell.leaving { pointer-events: none; animation: validation-panel-leave 220ms ease-in both; }
