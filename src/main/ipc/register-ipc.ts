@@ -1,7 +1,7 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
-import type { AuthPromptResponse, AuthType, SaveConfigRequest } from "../../shared/settings-contracts.js";
+import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
 import type { AgentService } from "../agent/agent-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
 import { ProjectGitService } from "../project-git-service.js";
@@ -37,6 +37,14 @@ function isSaveConfigRequest(value: unknown): value is SaveConfigRequest {
     && Boolean(request.value)
     && typeof request.value === "object"
     && !Array.isArray(request.value)
+    && (request.expectedRevision === null || typeof request.expectedRevision === "string");
+}
+
+function isSaveInstructionFileRequest(value: unknown): value is SaveInstructionFileRequest {
+  if (!value || typeof value !== "object") return false;
+  const request = value as Partial<SaveInstructionFileRequest>;
+  return (request.target === "global-append-system" || request.target === "project-agents")
+    && typeof request.content === "string"
     && (request.expectedRevision === null || typeof request.expectedRevision === "string");
 }
 
@@ -89,6 +97,10 @@ export function registerIpc(service: AgentService, settings: SettingsService): (
   ipcMain.handle(IPC_CHANNELS.saveConfig, (_event, request: unknown) => {
     if (!isSaveConfigRequest(request)) throw new Error("Invalid settings save request.");
     return settings.save(request);
+  });
+  ipcMain.handle(IPC_CHANNELS.saveInstructionFile, (_event, request: unknown) => {
+    if (!isSaveInstructionFileRequest(request)) throw new Error("Invalid instruction file save request.");
+    return settings.saveInstructionFile(request);
   });
   ipcMain.handle(IPC_CHANNELS.reloadSettings, () => settings.reload());
   ipcMain.handle(IPC_CHANNELS.loginProvider, async (_event, providerId: unknown, type: unknown) => {

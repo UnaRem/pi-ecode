@@ -6,6 +6,7 @@ export interface JsonObject { [key: string]: JsonValue }
 
 export type SettingsScope = "global" | "project";
 export type ConfigTarget = "global-settings" | "project-settings" | "models" | "pi-fff";
+export type InstructionFileTarget = "global-append-system" | "project-agents";
 export type AuthType = "api_key" | "oauth";
 
 export interface ConfigDocument {
@@ -13,6 +14,14 @@ export interface ConfigDocument {
   exists: boolean;
   revision: string | null;
   value: JsonObject;
+  error: string | null;
+}
+
+export interface InstructionFileDocument {
+  path: string;
+  exists: boolean;
+  revision: string | null;
+  content: string;
   error: string | null;
 }
 
@@ -36,6 +45,7 @@ export interface SettingsSnapshot {
   effectiveSettings: JsonObject;
   models: ConfigDocument;
   fff: ConfigDocument;
+  instructionFiles: Record<InstructionFileTarget, InstructionFileDocument>;
   fffLoaded: boolean;
   projectTrusted: boolean;
   providers: ProviderStatus[];
@@ -46,6 +56,12 @@ export interface SettingsSnapshot {
 export interface SaveConfigRequest {
   target: ConfigTarget;
   value: JsonObject;
+  expectedRevision: string | null;
+}
+
+export interface SaveInstructionFileRequest {
+  target: InstructionFileTarget;
+  content: string;
   expectedRevision: string | null;
 }
 
@@ -84,6 +100,7 @@ export interface AuthFlowEvent {
 export interface SettingsApi {
   getSettings(): Promise<SettingsSnapshot>;
   saveConfig(request: SaveConfigRequest): Promise<SettingsSnapshot>;
+  saveInstructionFile(request: SaveInstructionFileRequest): Promise<SettingsSnapshot>;
   reloadSettings(): Promise<SettingsSnapshot>;
   loginProvider(providerId: string, type: AuthType): Promise<void>;
   logoutProvider(providerId: string): Promise<SettingsSnapshot>;

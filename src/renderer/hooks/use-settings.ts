@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AuthFlowState, AuthPromptResponse, AuthType, ConfigTarget, SaveConfigRequest, SettingsSnapshot } from "@shared/settings-contracts";
+import type { AuthFlowState, AuthPromptResponse, AuthType, ConfigTarget, SaveConfigRequest, SaveInstructionFileRequest, SettingsSnapshot } from "@shared/settings-contracts";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -37,6 +37,21 @@ export function useSettings(enabled: boolean) {
     setError(null);
     try {
       const next = await window.piDesktop.saveConfig(request);
+      setSnapshot(next);
+      return next;
+    } catch (saveError) {
+      setError(errorMessage(saveError));
+      return undefined;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const saveInstructionFile = useCallback(async (request: SaveInstructionFileRequest) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await window.piDesktop.saveInstructionFile(request);
       setSnapshot(next);
       return next;
     } catch (saveError) {
@@ -95,5 +110,5 @@ export function useSettings(enabled: boolean) {
     return target === "models" ? snapshot.models : snapshot.fff;
   }, [snapshot]);
 
-  return { snapshot, loading, error, authFlow, load, save, reload, login, logout, respondAuth, cancelAuth, documentFor };
+  return { snapshot, loading, error, authFlow, load, save, saveInstructionFile, reload, login, logout, respondAuth, cancelAuth, documentFor };
 }

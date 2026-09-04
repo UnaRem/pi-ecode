@@ -1,4 +1,4 @@
-import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
+import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
 
 export const IPC_CHANNELS = {
   chooseProject: "desktop:choose-project",
@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   respondExtensionUi: "extension-ui:respond",
   getSettings: "settings:get",
   saveConfig: "settings:save",
+  saveInstructionFile: "settings:save-instruction-file",
   reloadSettings: "settings:reload",
   loginProvider: "settings:auth-login",
   logoutProvider: "settings:auth-logout",
@@ -318,6 +319,7 @@ export interface DesktopApi {
   respondExtensionUi(response: ExtensionUiResponse): Promise<boolean>;
   getSettings(): Promise<SettingsSnapshot>;
   saveConfig(request: SaveConfigRequest): Promise<SettingsSnapshot>;
+  saveInstructionFile(request: SaveInstructionFileRequest): Promise<SettingsSnapshot>;
   reloadSettings(): Promise<SettingsSnapshot>;
   loginProvider(providerId: string, type: AuthType): Promise<void>;
   logoutProvider(providerId: string): Promise<SettingsSnapshot>;

@@ -51,6 +51,45 @@ describe("SettingsService", () => {
     expect(harness.applyCount()).toBe(1);
   });
 
+  it("loads and saves only the fixed instruction file targets", async () => {
+    const harness = await createHarness();
+    const globalPath = join(harness.agentDir, "APPEND_SYSTEM.md");
+    const projectPath = join(harness.projectPath, "AGENTS.md");
+    await writeFile(globalPath, "Global instructions");
+    await writeFile(projectPath, "Project instructions");
+    const snapshot = await harness.service.getSnapshot();
+
+    expect(snapshot.instructionFiles["global-append-system"]).toMatchObject({ path: globalPath, content: "Global instructions" });
+    expect(snapshot.instructionFiles["project-agents"]).toMatchObject({ path: projectPath, content: "Project instructions" });
+    await harness.service.saveInstructionFile({
+      target: "project-agents",
+      content: "Updated project instructions",
+      expectedRevision: snapshot.instructionFiles["project-agents"].revision,
+    });
+
+    expect(await readFile(projectPath, "utf8")).toBe("Updated project instructions");
+    expect(harness.applyCount()).toBe(1);
+  });
+
+  it("prevents stale or oversized instruction file writes", async () => {
+    const harness = await createHarness();
+    const request = { target: "global-append-system" as const, content: "First", expectedRevision: null };
+    await harness.service.saveInstructionFile(request);
+    await expect(harness.service.saveInstructionFile({ ...request, content: "Stale" })).rejects.toThrow("changed on disk");
+    await expect(harness.service.saveInstructionFile({ ...request, content: "x".repeat(1_000_001) })).rejects.toThrow("1 MB");
+  });
+
+  it("defers instruction file application while the agent is busy", async () => {
+    const harness = await createHarness();
+    harness.setBusy(true);
+    await harness.service.saveInstructionFile({ target: "global-append-system", content: "Later", expectedRevision: null });
+    expect(harness.applyCount()).toBe(0);
+    expect((await harness.service.getSnapshot()).pendingReload).toBe(true);
+    harness.setBusy(false);
+    await harness.service.applyPendingIfIdle();
+    expect(harness.applyCount()).toBe(1);
+  });
+
   it("masks model credentials and preserves them when saving", async () => {
     const harness = await createHarness();
     const path = join(harness.agentDir, "models.json");

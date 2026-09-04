@@ -166,6 +166,26 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .settings-error { border-color: #e6c5c0; color: var(--danger); background: #faece9; white-space: pre-wrap; }
 .settings-conflict button { margin-left: 9px; border: 0; color: var(--accent); background: transparent; font-size: 10px; text-decoration: underline; cursor: pointer; }
 .settings-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 220px; color: var(--muted); font-size: 11px; }
+.instruction-files-editor { max-width: 880px; margin: 0 auto; }
+.instruction-file-tabs { display: flex; gap: 5px; margin-bottom: 10px; }
+.instruction-file-tabs button { display: flex; min-height: 31px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid transparent; border-radius: 7px; color: var(--muted); background: transparent; font-size: 10.5px; cursor: pointer; }
+.instruction-file-tabs button:hover { border-color: var(--line); color: var(--text); background: #fff; }
+.instruction-file-tabs button.active { border-color: #c8d9d2; color: var(--accent); background: var(--accent-soft); }
+.instruction-file-card { overflow: hidden; border: 1px solid var(--line-soft); border-radius: 10px; background: rgba(255,255,255,.72); }
+.instruction-file-card > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border-bottom: 1px solid var(--line-soft); }
+.instruction-file-card > header > div { min-width: 0; }
+.instruction-file-card > header strong { display: block; margin-bottom: 3px; font-size: 11px; }
+.instruction-file-card > header code { display: block; overflow: hidden; color: var(--faint); font: 9px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.instruction-file-card > header > span { flex: 0 0 auto; padding: 3px 6px; border-radius: 5px; font-size: 8.5px; }
+.instruction-file-card > header > span.exists { color: var(--accent); background: var(--accent-soft); }
+.instruction-file-card > header > span.missing { color: #8b7042; background: #f4ecdc; }
+.instruction-file-card > p { margin: 10px 13px 8px; color: var(--muted); font-size: 10px; }
+.instruction-file-card > textarea { display: block; width: calc(100% - 26px); height: clamp(240px, 48vh, 520px); margin: 0 13px 13px; padding: 12px; resize: vertical; border: 1px solid #d9d9d4; border-radius: 8px; color: var(--text); background: #fff; font: 11px/1.6 "Cascadia Code", "SFMono-Regular", Consolas, monospace; tab-size: 2; }
+.instruction-file-card .settings-error, .instruction-file-card .settings-conflict { margin: 10px 13px; }
+.instruction-file-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-height: 45px; }
+.instruction-file-actions > span { margin-right: auto; color: var(--faint); font-size: 9.5px; }
+.instruction-file-actions button { display: flex; height: 31px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 10px; cursor: pointer; }
+.instruction-file-actions button.primary { border-color: #376356; color: #fff; background: var(--accent); }
 .settings-actions { min-height: 51px; flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding: 8px 20px; border-top: 1px solid var(--line); background: rgba(255,255,255,.65); }
 .settings-actions > span { margin-right: auto; color: var(--faint); font-size: 9.5px; }
 .settings-actions button { display: flex; align-items: center; gap: 6px; height: 31px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 10px; cursor: pointer; }

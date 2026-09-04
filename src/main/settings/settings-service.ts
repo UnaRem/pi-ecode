@@ -6,10 +6,13 @@ import type {
   AuthType,
   ConfigDocument,
   ConfigTarget,
+  InstructionFileDocument,
+  InstructionFileTarget,
   JsonObject,
   JsonValue,
   ProviderStatus,
   SaveConfigRequest,
+  SaveInstructionFileRequest,
   SettingsSnapshot,
 } from "../../shared/settings-contracts.js";
 import { REDACTED_CONFIG_VALUE } from "../../shared/settings-contracts.js";
@@ -32,6 +35,7 @@ interface LoadedDocument extends ConfigDocument {
 }
 
 const SENSITIVE_KEYS = /^(apiKey|authorization|x-api-key|x-auth-token)$/i;
+const MAX_INSTRUCTION_FILE_BYTES = 1_000_000;
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -109,11 +113,13 @@ export class SettingsService {
 
   async getSnapshot(): Promise<SettingsSnapshot> {
     const paths = this.paths();
-    const [globalSettings, projectSettings, models, fff, providers] = await Promise.all([
+    const [globalSettings, projectSettings, models, fff, globalAppendSystem, projectAgents, providers] = await Promise.all([
       this.loadDocument(paths.globalSettings, false),
       this.loadDocument(paths.projectSettings, false),
       this.loadDocument(paths.models, true),
       this.loadDocument(paths.fff, false),
+      this.loadInstructionFile(paths.globalAppendSystem),
+      this.loadInstructionFile(paths.projectAgents),
       this.providerStatuses(),
     ]);
     const snapshot: SettingsSnapshot = {
@@ -122,6 +128,10 @@ export class SettingsService {
       effectiveSettings: mergeObjects(globalSettings.rawValue, projectSettings.rawValue),
       models: this.publicDocument(models),
       fff: this.publicDocument(fff),
+      instructionFiles: {
+        "global-append-system": globalAppendSystem,
+        "project-agents": projectAgents,
+      },
       fffLoaded: this.options.isFffLoaded(),
       projectTrusted: this.options.isProjectTrusted(),
       providers,
@@ -143,6 +153,22 @@ export class SettingsService {
     const restored = restoreSensitive(request.value, current.rawValue);
     if (!isObject(restored)) throw new Error("Configuration root must be an object.");
     await this.writeAtomic(path, restored);
+    const diskSnapshot = await this.getSnapshot();
+    this.assertSnapshotValid(diskSnapshot);
+    await this.requestRuntimeApply();
+    const snapshot = await this.getSnapshot();
+    this.options.onChanged(snapshot, "save");
+    return snapshot;
+  }
+
+  async saveInstructionFile(request: SaveInstructionFileRequest): Promise<SettingsSnapshot> {
+    if (Buffer.byteLength(request.content, "utf8") > MAX_INSTRUCTION_FILE_BYTES) {
+      throw new Error("Instruction files must not exceed 1 MB.");
+    }
+    const path = this.pathForInstructionFile(request.target);
+    const current = await this.loadInstructionFile(path);
+    if (current.revision !== request.expectedRevision) throw new Error("The instruction file changed on disk. Reload it before saving.");
+    await this.writeContentAtomic(path, request.content, request.target === "global-append-system" ? 0o600 : 0o644);
     const diskSnapshot = await this.getSnapshot();
     this.assertSnapshotValid(diskSnapshot);
     await this.requestRuntimeApply();
@@ -178,13 +204,15 @@ export class SettingsService {
     }
   }
 
-  private paths(): { globalSettings: string; projectSettings: string; models: string; fff: string } {
+  private paths(): Record<"globalSettings" | "projectSettings" | "models" | "fff" | "globalAppendSystem" | "projectAgents", string> {
     const projectPath = this.options.getProjectPath();
     return {
       globalSettings: join(this.options.agentDir, "settings.json"),
       projectSettings: projectPath ? join(projectPath, ".pi", "settings.json") : join(this.options.agentDir, "missing-project-settings.json"),
       models: join(this.options.agentDir, "models.json"),
       fff: join(this.options.agentDir, "pi-fff.json"),
+      globalAppendSystem: join(this.options.agentDir, "APPEND_SYSTEM.md"),
+      projectAgents: projectPath ? join(projectPath, "AGENTS.md") : join(this.options.agentDir, "missing-project-agents.md"),
     };
   }
 
@@ -193,6 +221,11 @@ export class SettingsService {
     if (target === "global-settings") return paths.globalSettings;
     if (target === "project-settings") return paths.projectSettings;
     return target === "models" ? paths.models : paths.fff;
+  }
+
+  private pathForInstructionFile(target: InstructionFileTarget): string {
+    const paths = this.paths();
+    return target === "global-append-system" ? paths.globalAppendSystem : paths.projectAgents;
   }
 
   private async loadDocument(path: string, redact: boolean): Promise<LoadedDocument> {
@@ -207,16 +240,31 @@ export class SettingsService {
     }
   }
 
+  private async loadInstructionFile(path: string): Promise<InstructionFileDocument> {
+    try {
+      const content = await readFile(path, "utf8");
+      return { path, exists: true, revision: revision(content), content, error: null };
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+      if (code === "ENOENT") return { path, exists: false, revision: null, content: "", error: null };
+      return { path, exists: true, revision: null, content: "", error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
   private publicDocument(document: LoadedDocument): ConfigDocument {
     const { rawValue: _rawValue, ...publicDocument } = document;
     return publicDocument;
   }
 
-  private async writeAtomic(path: string, value: JsonObject): Promise<void> {
+  private writeAtomic(path: string, value: JsonObject): Promise<void> {
+    return this.writeContentAtomic(path, `${JSON.stringify(value, null, 2)}\n`, 0o600);
+  }
+
+  private async writeContentAtomic(path: string, content: string, mode: number): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
     const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
     try {
-      await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+      await writeFile(temporaryPath, content, { encoding: "utf8", mode });
       this.suppressWatchUntil = Date.now() + 750;
       await rename(temporaryPath, path);
     } finally {
@@ -282,6 +330,9 @@ export class SettingsService {
       for (const [target, document] of documents) {
         if (document.error) throw new Error(`${document.path}: ${document.error}`);
         validateConfig(target, document.value);
+      }
+      for (const document of Object.values(snapshot.instructionFiles)) {
+        if (document.error) throw new Error(`${document.path}: ${document.error}`);
       }
       return null;
     } catch (error) {

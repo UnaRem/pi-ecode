@@ -2,13 +2,14 @@ import { ArrowLeft, LoaderCircle, RefreshCw, Save, Settings2, Undo2 } from "luci
 import { useEffect, useMemo, useState } from "react";
 import type { ConfigDocument, ConfigTarget, JsonObject } from "@shared/settings-contracts";
 import { useSettings } from "../../hooks/use-settings";
-import { useI18n, type UiLanguage } from "../../i18n/i18n";
+import { useI18n, type Translate, type UiLanguage } from "../../i18n/i18n";
 import { GeneralSettingsForm } from "./GeneralSettingsForm";
 import { ModelsSettingsForm } from "./ModelsSettingsForm";
 import { AuthSettingsPanel } from "./AuthSettingsPanel";
 import { FffSettingsForm } from "./FffSettingsForm";
+import { InstructionFilesEditor } from "./InstructionFilesEditor";
 
-type SettingsSection = ConfigTarget | "auth";
+type SettingsSection = ConfigTarget | "instructions" | "auth";
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -23,6 +24,7 @@ function SettingsNavigation(props: { target: SettingsSection; effectiveCount: nu
     ["global-settings", t("settings.global")],
     ["project-settings", t("settings.project")],
     ["models", t("settings.models")],
+    ["instructions", t("settings.instructions")],
     ["auth", t("settings.auth")],
     ["pi-fff", t("settings.fff")],
   ];
@@ -54,6 +56,7 @@ interface SettingsContentProps {
   externalChange: boolean;
   settings: SettingsController;
   onDraftChange: (value: JsonObject) => void;
+  onDirtyChange: (dirty: boolean) => void;
   onReset: () => void;
 }
 
@@ -73,6 +76,13 @@ function SettingsContent(props: SettingsContentProps) {
       {props.externalChange && <div className="settings-conflict">{t("settings.externalChanged")}<button onClick={props.onReset}>{t("settings.loadDisk")}</button></div>}
       {props.target === "auth" ? (
         <AuthSettingsPanel providers={settings.snapshot?.providers ?? []} flow={settings.authFlow} disabled={settings.loading} onLogin={(id, type) => void settings.login(id, type)} onLogout={(id) => void settings.logout(id)} onRespond={(response) => void settings.respondAuth(response)} onCancel={() => void settings.cancelAuth()} />
+      ) : props.target === "instructions" && settings.snapshot ? (
+        <InstructionFilesEditor
+          documents={settings.snapshot.instructionFiles}
+          loading={settings.loading}
+          onDirtyChange={props.onDirtyChange}
+          onSave={settings.saveInstructionFile}
+        />
       ) : !props.document ? (
         <div className="settings-loading"><LoaderCircle className="spin" size={18} />{t("settings.loading")}</div>
       ) : settingsTarget ? (
@@ -84,6 +94,15 @@ function SettingsContent(props: SettingsContentProps) {
       )}
     </section>
   );
+}
+
+function settingsHeading(target: SettingsSection, t: Translate): string {
+  if (target === "global-settings") return t("settings.global");
+  if (target === "project-settings") return t("settings.project");
+  if (target === "models") return t("settings.models");
+  if (target === "instructions") return t("settings.instructions");
+  if (target === "auth") return t("settings.auth");
+  return t("settings.fff");
 }
 
 function SettingsActions(props: { dirty: boolean; loading: boolean; canSave: boolean; onReset: () => void; onSave: () => void }) {
@@ -105,7 +124,7 @@ export function SettingsPage(props: SettingsPageProps) {
   const [baseRevision, setBaseRevision] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [externalChange, setExternalChange] = useState(false);
-  const document = target === "auth" ? null : settings.documentFor(target);
+  const document = target === "auth" || target === "instructions" ? null : settings.documentFor(target);
 
   useEffect(() => props.onDirtyChange(dirty), [dirty, props.onDirtyChange]);
 
@@ -123,12 +142,8 @@ export function SettingsPage(props: SettingsPageProps) {
   }, [baseRevision, dirty, document]);
 
   const readOnly = target === "project-settings" && !settings.snapshot?.projectTrusted;
-  const canSave = target !== "auth" && dirty && !readOnly && !settings.loading && !externalChange;
-  const heading = target === "global-settings"
-    ? t("settings.global")
-    : target === "project-settings"
-      ? t("settings.project")
-      : target === "models" ? t("settings.models") : target === "auth" ? t("settings.auth") : t("settings.fff");
+  const canSave = target !== "auth" && target !== "instructions" && dirty && !readOnly && !settings.loading && !externalChange;
+  const heading = settingsHeading(target, t);
   const effectiveCount = useMemo(() => Object.keys(settings.snapshot?.effectiveSettings ?? {}).length, [settings.snapshot]);
 
   const reset = (): void => {
@@ -149,7 +164,7 @@ export function SettingsPage(props: SettingsPageProps) {
   const close = (): void => props.onClose();
 
   const save = async (): Promise<void> => {
-    if (target === "auth") return;
+    if (target === "auth" || target === "instructions") return;
     const next = await settings.save({ target, value: draft, expectedRevision: baseRevision });
     if (!next) return;
     const saved = target === "global-settings"
@@ -181,10 +196,11 @@ export function SettingsPage(props: SettingsPageProps) {
           externalChange={externalChange}
           settings={settings}
           onDraftChange={(value) => { setDraft(value); setDirty(true); }}
+          onDirtyChange={setDirty}
           onReset={reset}
         />
       </div>
-      {target !== "auth" && <SettingsActions dirty={dirty} loading={settings.loading} canSave={canSave} onReset={reset} onSave={() => void save()} />}
+      {target !== "auth" && target !== "instructions" && <SettingsActions dirty={dirty} loading={settings.loading} canSave={canSave} onReset={reset} onSave={() => void save()} />}
     </main>
   );
 }

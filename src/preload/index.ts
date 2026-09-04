@@ -30,6 +30,7 @@ const api: DesktopApi = {
   respondExtensionUi: (response) => ipcRenderer.invoke(IPC_CHANNELS.respondExtensionUi, response),
   getSettings: () => ipcRenderer.invoke(IPC_CHANNELS.getSettings),
   saveConfig: (request) => ipcRenderer.invoke(IPC_CHANNELS.saveConfig, request),
+  saveInstructionFile: (request) => ipcRenderer.invoke(IPC_CHANNELS.saveInstructionFile, request),
   reloadSettings: () => ipcRenderer.invoke(IPC_CHANNELS.reloadSettings),
   loginProvider: (providerId, type) => ipcRenderer.invoke(IPC_CHANNELS.loginProvider, providerId, type),
   logoutProvider: (providerId) => ipcRenderer.invoke(IPC_CHANNELS.logoutProvider, providerId),
