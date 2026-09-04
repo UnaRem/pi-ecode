@@ -5,7 +5,8 @@ import { registerIpc } from "./ipc/register-ipc.js";
 import { SettingsService } from "./settings/settings-service.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
-if (process.platform === "win32") app.setAppUserModelId("com.pi-ecode.desktop");
+const APP_ID = "com.pi-ecode.desktop";
+if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 
 const service = new AgentService((url) => shell.openExternal(url));
 const settings = new SettingsService({
@@ -37,13 +38,14 @@ function focusMainWindow(): void {
 }
 
 function createWindow(): void {
+  const iconPath = join(app.getAppPath(), "resources", process.platform === "win32" ? "ecode-icon.ico" : "ecode-icon.png");
   const window = new BrowserWindow({
     width: 1180,
     height: 780,
     minWidth: 820,
     minHeight: 560,
     title: "PiECode",
-    icon: join(app.getAppPath(), "resources", "ecode-icon.png"),
+    icon: iconPath,
     backgroundColor: "#f7f7f5",
     show: false,
     autoHideMenuBar: true,
@@ -57,6 +59,7 @@ function createWindow(): void {
   });
 
   window.setMenuBarVisibility(false);
+  if (process.platform === "win32") window.setAppDetails({ appId: APP_ID, appIconPath: iconPath, appIconIndex: 0 });
   window.once("ready-to-show", () => window.show());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url);
