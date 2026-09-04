@@ -6,9 +6,10 @@
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "node scripts/run-electron-vite.mjs dev",
     "build": "npm run typecheck && electron-vite build",
-    "preview": "electron-vite preview",
+    "preview": "node scripts/run-electron-vite.mjs preview",
+    "prepare:runtime": "node scripts/run-electron-vite.mjs prepare-runtime",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run"
   },
@@ -28,6 +29,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "electron": "^44.0.0",
     "electron-vite": "^5.0.0",
+    "rcedit": "^5.0.1",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vitest": "^4.1.11"
