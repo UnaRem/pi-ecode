@@ -28,8 +28,12 @@ export function useMessageNicknames(): {
   }));
   const saveNickname = (role: MessageRole, value: string): void => {
     const nickname = normalizeNickname(role, value);
-    localStorage.setItem(NICKNAME_STORAGE_KEYS[role], nickname);
     setNicknames((current) => ({ ...current, [role]: nickname }));
+    try {
+      localStorage.setItem(NICKNAME_STORAGE_KEYS[role], nickname);
+    } catch {
+      // Keep the nickname usable for this window when browser storage is unavailable.
+    }
   };
   return { nicknames, saveNickname };
 }
@@ -50,8 +54,15 @@ export function MessageRoleLabel(props: {
   }, [editing]);
 
   const finish = (): void => {
-    if (!cancelledRef.current) props.onSave(props.role, draft);
+    const shouldSave = !cancelledRef.current;
     setEditing(false);
+    if (shouldSave) props.onSave(props.role, draft);
+  };
+
+  const startEditing = (): void => {
+    cancelledRef.current = false;
+    setDraft(props.nickname);
+    setEditing(true);
   };
 
   if (editing) {
@@ -78,11 +89,8 @@ export function MessageRoleLabel(props: {
   return (
     <button
       className="message-role message-role-button"
-      onClick={() => {
-        cancelledRef.current = false;
-        setDraft(props.nickname);
-        setEditing(true);
-      }}
+      onPointerDown={(event) => { if (event.button === 0) startEditing(); }}
+      onClick={startEditing}
       title={t("conversation.editNickname")}
       aria-label={`${t("conversation.editNickname")}: ${props.nickname}`}
     >
