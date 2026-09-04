@@ -66,6 +66,11 @@ export function useAgent() {
     if (snapshot) dispatch({ type: "snapshot", snapshot });
   }, [run, state.isStreaming, state.sessionFile]);
 
+  const deleteSession = useCallback(async (path: string) => {
+    if (path === state.sessionFile || state.isStreaming) return;
+    await run(() => window.piDesktop.deleteSession(path));
+  }, [run, state.isStreaming, state.sessionFile]);
+
   const renameSession = useCallback(async (title: string) => {
     await run(() => window.piDesktop.renameSession(title));
   }, [run]);
@@ -145,6 +150,7 @@ export function useAgent() {
       chooseProject,
       newSession,
       switchSession,
+      deleteSession,
       renameSession,
       continueAfterError,
       send,

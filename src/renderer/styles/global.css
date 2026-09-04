@@ -65,11 +65,17 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .new-thread-button kbd { margin-left: auto; color: var(--faint); font-size: 11px; font-family: inherit; }
 .sidebar-label { margin: 22px 9px 7px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
 .session-list { flex: 1; min-height: 0; overflow-y: auto; }
-.session-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 8px 9px; border: 0; border-radius: 7px; background: transparent; font-size: 13px; text-align: left; cursor: pointer; }
+.session-row { position: relative; border-radius: 7px; }
 .session-row:hover { background: rgba(0, 0, 0, .04); }
 .session-row.active { background: #deded9; }
-.session-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-row time { color: var(--faint); font-size: 11px; }
+.session-row-main { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 8px 9px; border: 0; border-radius: inherit; color: inherit; background: transparent; font-size: 13px; text-align: left; cursor: pointer; }
+.session-row-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-row-main time { color: var(--faint); font-size: 11px; }
+.session-row:not(.active):hover .session-row-main time, .session-row:not(.active):focus-within .session-row-main time { opacity: 0; }
+.session-delete-button { position: absolute; top: 50%; right: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; transform: translateY(-50%); border: 0; border-radius: 6px; color: var(--muted); background: transparent; cursor: pointer; opacity: 0; }
+.session-row:hover .session-delete-button, .session-delete-button:focus-visible { opacity: 1; }
+.session-delete-button:hover { color: var(--danger); background: #fff; }
+.session-delete-button:disabled, .session-row-main:disabled { cursor: default; }
 .sidebar-empty { margin: 9px; color: var(--faint); font-size: 12px; line-height: 1.5; }
 .sidebar-settings { position: relative; display: flex; flex: 0 0 auto; align-items: center; gap: 8px; min-height: 32px; margin: 10px 4px 0; padding: 0 8px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 12px; cursor: pointer; }
 .sidebar-settings::before { position: absolute; top: -7px; right: -4px; left: -4px; height: 1px; content: ""; background: #d3d3ce; }
@@ -350,10 +356,13 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .welcome-icon { display: grid; place-items: center; width: 42px; height: 42px; margin: 0 auto 18px; border: 1px solid var(--line); border-radius: 12px; color: var(--accent); background: var(--surface); box-shadow: 0 2px 5px rgba(0, 0, 0, .04); }
 .welcome h1 { margin: 0 0 9px; font-size: 24px; font-weight: 620; letter-spacing: -.035em; }
 .welcome p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
-.message { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 13px; margin: 0 0 26px; scroll-margin-top: 24px; }
+.message { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 13px; margin: 0 0 26px; scroll-margin-top: 24px; }
 .message.user.turn-start { margin-top: 8px; }
 .message.user.turn-start::before { grid-column: 1 / -1; height: 1px; margin: 0 14px 7px; content: ""; background: #e3e3de; }
-.message-role { padding-top: 2px; color: var(--muted); font-size: 12px; font-weight: 650; text-transform: lowercase; }
+.message-role { min-width: 0; overflow: hidden; padding-top: 2px; color: var(--muted); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.message-role-button { width: 100%; height: 22px; padding: 2px 3px; border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: text; }
+.message-role-button:hover, .message-role-button:focus-visible { color: var(--text); background: rgba(0, 0, 0, .04); }
+.message-role-input { width: 100%; height: 24px; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 4px; outline: none; background: var(--surface); }
 .message-content { color: var(--text); font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .markdown { white-space: normal; }
 .markdown > :first-child { margin-top: 0; }
@@ -382,8 +391,8 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .working-time { margin-bottom: 5px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .working-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
 .stream-caret { display: inline-block; width: 5px; height: 16px; margin-left: 3px; vertical-align: -3px; border-radius: 1px; background: #777; animation: blink 1s steps(2) infinite; }
-.timeline-tool { margin: -11px 0 20px 55px; }
-.tool-batch-toggle { display: flex; align-items: center; gap: 5px; height: 27px; margin: -11px 0 18px 55px; padding: 0 9px; border: 1px solid #d6d9d6; border-radius: 14px; color: #747b77; background: #f6f7f5; font-size: 10.5px; cursor: pointer; }
+.timeline-tool { margin: -11px 0 20px 103px; }
+.tool-batch-toggle { display: flex; align-items: center; gap: 5px; height: 27px; margin: -11px 0 18px 103px; padding: 0 9px; border: 1px solid #d6d9d6; border-radius: 14px; color: #747b77; background: #f6f7f5; font-size: 10.5px; cursor: pointer; }
 .tool-batch-toggle:hover { border-color: #bfc5c1; color: #4f5c56; background: #fff; }
 .tool-card { --tool-accent: #7d817e; --tool-border: #d9ddd9; --tool-bg: #f0f2ef; overflow: hidden; border: 1px solid var(--tool-border); border-left: 3px solid var(--tool-accent); border-radius: 8px; color: var(--muted); background: var(--tool-bg); }
 .tool-card::before { content: attr(data-tool-label); display: block; padding: 4px 9px 0; color: var(--tool-accent); font-size: 8.5px; font-weight: 700; letter-spacing: .08em; }

@@ -1,5 +1,5 @@
 import { useState, type AnimationEvent } from "react";
-import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings } from "lucide-react";
+import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings, Trash2 } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
 import { TaskPlanPresence } from "./TaskPlanPanel";
 import { useI18n } from "../i18n/i18n";
@@ -15,6 +15,7 @@ interface SidebarProps {
   onChooseProject: () => void;
   onNewSession: () => void;
   onSwitchSession: (path: string) => void;
+  onDeleteSession: (path: string) => void;
   onOpenSettings: () => void;
   onCollapse: () => void;
 }
@@ -61,17 +62,34 @@ export function Sidebar(props: SidebarProps) {
         {props.sessions.length === 0 ? (
           <p className="sidebar-empty">{t("sidebar.empty")}</p>
         ) : (
-          props.sessions.map((session) => (
-            <button
-              key={session.path}
-              className={`session-row ${session.path === props.activeSessionFile ? "active" : ""}`}
-              onClick={() => props.onSwitchSession(session.path)}
-              disabled={props.disabled}
-            >
-              <span>{session.title}</span>
-              <time>{relativeTime(session.modifiedAt, locale)}</time>
-            </button>
-          ))
+          props.sessions.map((session) => {
+            const active = session.path === props.activeSessionFile;
+            return (
+              <div key={session.path} className={`session-row ${active ? "active" : ""}`}>
+                <button
+                  className="session-row-main"
+                  onClick={() => props.onSwitchSession(session.path)}
+                  disabled={props.disabled}
+                >
+                  <span>{session.title}</span>
+                  <time>{relativeTime(session.modifiedAt, locale)}</time>
+                </button>
+                {!active && (
+                  <button
+                    className="session-delete-button"
+                    onClick={() => {
+                      if (window.confirm(t("sidebar.confirmDelete", { title: session.title }))) props.onDeleteSession(session.path);
+                    }}
+                    disabled={props.disabled}
+                    aria-label={t("sidebar.deleteSession")}
+                    title={t("sidebar.deleteSession")}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            );
+          })
         )}
       </nav>
       <TaskPlanPresence plan={props.taskPlan} active={props.disabled} />

@@ -5,6 +5,7 @@ import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
+import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
 import { useI18n } from "../i18n/i18n";
 
 interface ConversationProps {
@@ -43,6 +44,8 @@ function useWorkingDuration(startedAt: number | null): string | null {
 interface ConversationBodyProps extends ConversationProps {
   userElements: { current: Map<string, HTMLElement> };
   workingLabel: string;
+  nicknames: MessageNicknames;
+  onNicknameChange: (role: MessageRole, nickname: string) => void;
 }
 
 function ConversationBody(props: ConversationBodyProps) {
@@ -78,7 +81,11 @@ function ConversationBody(props: ConversationBodyProps) {
                 group.item.message.role === "user" && group.id !== firstUserId ? "turn-start" : null,
               ].filter(Boolean).join(" ")}
             >
-              <div className="message-role">{group.item.message.role === "user" ? t("conversation.you") : "pi"}</div>
+              <MessageRoleLabel
+                role={group.item.message.role}
+                nickname={props.nicknames[group.item.message.role]}
+                onSave={props.onNicknameChange}
+              />
               <div className="message-content">
                 {hasLiveAssistant && group.id === lastItem?.id && <div className="working-time"><span className="working-dot" /> {props.workingLabel}</div>}
                 {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
@@ -89,7 +96,7 @@ function ConversationBody(props: ConversationBodyProps) {
           ) : <ToolBatch key={group.id} tools={group.tools} />)}
           {props.isStreaming && !hasLiveAssistant && (
             <article className="message assistant waiting">
-              <div className="message-role">pi</div>
+              <MessageRoleLabel role="assistant" nickname={props.nicknames.assistant} onSave={props.onNicknameChange} />
               <div className="message-content"><span className="working-dot" /> {props.workingLabel}</div>
             </article>
           )}
@@ -112,6 +119,7 @@ export function Conversation(props: ConversationProps) {
   const userElements = useRef(new Map<string, HTMLElement>());
   const followingRef = useRef(true);
   const [isFollowing, setIsFollowing] = useState(true);
+  const { nicknames, saveNickname } = useMessageNicknames();
   const userMessages = useMemo(() => props.timeline.flatMap((item) => (
     item.kind === "message" && item.message.role === "user" ? [item.message] : []
   )), [props.timeline]);
@@ -199,7 +207,13 @@ export function Conversation(props: ConversationProps) {
         onSelect={selectTurn}
         onLatest={() => scrollToBottom("smooth")}
       />
-      <ConversationBody {...props} userElements={userElements} workingLabel={workingLabel} />
+      <ConversationBody
+        {...props}
+        userElements={userElements}
+        workingLabel={workingLabel}
+        nicknames={nicknames}
+        onNicknameChange={saveNickname}
+      />
     </main>
   );
 }

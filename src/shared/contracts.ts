@@ -6,6 +6,7 @@ export const IPC_CHANNELS = {
   getSnapshot: "agent:get-snapshot",
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
+  deleteSession: "agent:delete-session",
   renameSession: "agent:rename-session",
   continueAfterError: "agent:continue-after-error",
   prompt: "agent:prompt",
@@ -298,6 +299,7 @@ export interface DesktopApi {
   getSnapshot(): Promise<AgentSnapshot>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
+  deleteSession(path: string): Promise<void>;
   renameSession(title: string): Promise<void>;
   continueAfterError(): Promise<void>;
   prompt(message: string, images?: ImageAttachment[]): Promise<void>;

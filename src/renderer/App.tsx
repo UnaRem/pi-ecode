@@ -77,6 +77,7 @@ export default function App() {
           onChooseProject={() => { if (leaveSettings()) void actions.chooseProject(); }}
           onNewSession={() => { if (leaveSettings()) void actions.newSession(); }}
           onSwitchSession={(path) => { if (leaveSettings()) void actions.switchSession(path); }}
+          onDeleteSession={(path) => void actions.deleteSession(path)}
           onOpenSettings={() => setSettingsOpen(true)}
           onCollapse={() => setSidebarOpen(false)}
         />

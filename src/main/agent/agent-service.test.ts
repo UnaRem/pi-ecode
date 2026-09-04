@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { AgentEvent } from "../../shared/contracts.js";
+import type { AgentEvent, SessionSummary } from "../../shared/contracts.js";
+
+const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[] }));
+vi.mock("./session-summaries.js", () => ({
+  listSessionSummaries: async () => sessionSummaryState.sessions,
+}));
+
 import { AgentService } from "./agent-service.js";
 
 interface PromptOptions {
@@ -8,7 +14,37 @@ interface PromptOptions {
 }
 
 describe("AgentService prompt lifecycle", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    sessionSummaryState.sessions = [];
+    vi.restoreAllMocks();
+  });
+
+  it("moves only inactive sessions from the active project to trash", async () => {
+    const activePath = "C:/sessions/active.jsonl";
+    const inactivePath = "C:/sessions/inactive.jsonl";
+    sessionSummaryState.sessions = [
+      { path: activePath, id: "active", title: "Active", modifiedAt: 2, messageCount: 1 },
+      { path: inactivePath, id: "inactive", title: "Inactive", modifiedAt: 1, messageCount: 1 },
+    ];
+    const trashItem = vi.fn(async (path: string) => {
+      sessionSummaryState.sessions = sessionSummaryState.sessions.filter((session) => session.path !== path);
+    });
+    const service = new AgentService(async () => undefined, trashItem);
+    const session = { sessionFile: activePath, isStreaming: false, isCompacting: false } as unknown as AgentSession;
+    Object.assign(service as unknown as { projectPath: string; runtime: { session: AgentSession } }, {
+      projectPath: "C:/project",
+      runtime: { session },
+    });
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+
+    await service.deleteSession(inactivePath);
+
+    expect(trashItem).toHaveBeenCalledWith(inactivePath);
+    expect(events.at(-1)).toEqual({ type: "sessions", sessions: [expect.objectContaining({ path: activePath })] });
+    await expect(service.deleteSession(activePath)).rejects.toThrow("active session");
+    await expect(service.deleteSession("C:/outside.jsonl")).rejects.toThrow("active project");
+  });
 
   it("normalizes and persists a renamed session", () => {
     const session = { setSessionName: vi.fn() } as unknown as AgentSession;

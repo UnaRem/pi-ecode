@@ -8,7 +8,10 @@ import { IPC_CHANNELS } from "../shared/contracts.js";
 const APP_ID = "com.piecode.desktop";
 if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 
-const service = new AgentService((url) => shell.openExternal(url));
+const service = new AgentService(
+  (url) => shell.openExternal(url),
+  (path) => shell.trashItem(path),
+);
 const settings = new SettingsService({
   agentDir: service.agentDirectory,
   getProjectPath: () => service.activeProjectPath,

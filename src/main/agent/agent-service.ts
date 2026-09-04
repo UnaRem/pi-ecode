@@ -93,8 +93,13 @@ export class AgentService {
     join(getAgentDir(), "state", "pi-ecode-self-update"),
     (candidate) => this.emit({ type: "candidate", candidate }),
   );
+  private readonly trashItem: (path: string) => Promise<void>;
 
-  constructor(openExternal: (url: string) => Promise<void> = async () => undefined) {
+  constructor(
+    openExternal: (url: string) => Promise<void> = async () => undefined,
+    trashItem: (path: string) => Promise<void> = async () => { throw new Error("System trash is unavailable."); },
+  ) {
+    this.trashItem = trashItem;
     this.auth = new AuthService(
       () => this.runtime?.session.modelRuntime,
       (event) => {
@@ -306,6 +311,17 @@ export class AgentService {
     const snapshot = await this.getSnapshot();
     this.emit({ type: "snapshot", snapshot });
     return snapshot;
+  }
+
+  async deleteSession(sessionPath: string): Promise<void> {
+    const runtime = this.requireRuntime();
+    if (this.runtimeBusy) throw new Error("Stop the active agent run before deleting a session.");
+    const sessions = await listSessionSummaries(this.projectPath);
+    const target = sessions.find((session) => session.path === sessionPath);
+    if (!target) throw new Error("That session does not belong to the active project.");
+    if (target.path === runtime.session.sessionFile) throw new Error("The active session cannot be deleted.");
+    await this.trashItem(target.path);
+    await this.refreshSessions();
   }
 
   renameSession(title: string): void {

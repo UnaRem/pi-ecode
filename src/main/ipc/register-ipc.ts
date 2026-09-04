@@ -65,6 +65,7 @@ export function registerIpc(service: AgentService, settings: SettingsService): (
   ipcMain.handle(IPC_CHANNELS.getSnapshot, () => service.getSnapshot());
   ipcMain.handle(IPC_CHANNELS.newSession, () => service.newSession());
   ipcMain.handle(IPC_CHANNELS.switchSession, (_event, path: string) => service.switchSession(path));
+  ipcMain.handle(IPC_CHANNELS.deleteSession, (_event, path: string) => service.deleteSession(path));
   ipcMain.handle(IPC_CHANNELS.renameSession, (_event, title: string) => service.renameSession(title));
   ipcMain.handle(IPC_CHANNELS.continueAfterError, () => service.continueAfterError());
   ipcMain.handle(IPC_CHANNELS.prompt, (_event, message: string, images?: ImageAttachment[]) => service.prompt(message, images));
