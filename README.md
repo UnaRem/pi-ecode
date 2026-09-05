@@ -49,7 +49,19 @@ npm test
 npm run build
 ```
 
-未打包的生产构建输出到 `out/`。应用内验证面板只运行已配置的 `typecheck`、`test` 和 `build` package scripts，不接受渲染端传入的任意命令。
+未打包的生产构建输出到 `out/`。在 Windows x64 上运行 `npm run package:win` 会在 `release/` 中生成免安装的 `PiECode-<version>-win-x64.exe`。应用内验证面板只运行已配置的 `typecheck`、`test` 和 `build` package scripts，不接受渲染端传入的任意命令。
+
+## 发布
+
+将 `package.json` 的版本提交到 `main` 后，推送同版本的 `v*` 标签会触发 GitHub Actions。工作流会在 Windows x64 环境安装依赖、校验标签与包版本一致、运行测试、构建免安装程序，并创建带自动发行说明的 GitHub Release：
+
+```bash
+npm version 0.2.0
+git push origin main
+git push origin v0.2.0
+```
+
+发布产物当前不含 Windows 代码签名，首次下载运行时可能出现 Microsoft Defender SmartScreen 提示。
 
 拒绝某个已审查文件时，只会将该路径恢复到任务开始前的状态，然后为结果创建检查点，并使之前的验证结果和候选版本失效。默认行为是保留文件；准备候选版本时会采用其余已审查的变更。
 

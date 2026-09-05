@@ -1,0 +1,16 @@
+appId: io.github.unarem.pi-ecode
+productName: PiECode
+artifactName: PiECode-${version}-win-x64.${ext}
+directories:
+  buildResources: resources
+  output: release
+files:
+  - out/**/*
+  - package.json
+win:
+  executableName: PiECode
+  icon: ecode-icon.ico
+  target:
+    - target: portable
+      arch:
+        - x64
