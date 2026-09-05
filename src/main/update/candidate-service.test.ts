@@ -52,6 +52,17 @@ describe("CandidateService", () => {
     expect(await service.discoverSourceRoot()).toBe(source);
   });
 
+  it("does not stage the ASAR runtime for a packaged app", async () => {
+    const updates = await mkdtemp(join(tmpdir(), "pi-ecode-packaged-updates-"));
+    temporaryPaths.push(updates);
+    electronState.appPath = join(updates, "app.asar");
+    electronState.isPackaged = true;
+    const service = new CandidateService(updates, () => undefined);
+
+    await expect(service.initialize()).resolves.toBeUndefined();
+    await expect(access(join(updates, "stable"))).rejects.toThrow();
+  });
+
   it("preserves the running artifact and stages an isolated candidate", async () => {
     const current = await runtimeRoot("current");
     const source = await runtimeRoot("candidate");

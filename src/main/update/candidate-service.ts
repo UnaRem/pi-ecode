@@ -94,7 +94,7 @@ export class CandidateService {
     await mkdir(this.updateRoot, { recursive: true });
     this.ledger = await this.readLedger();
     await this.reconcileSupervisorResults();
-    if (process.env.PI_ECODE_HEALTH_FILE) {
+    if ((app.isPackaged && !this.isBrandedDevelopmentRuntime) || process.env.PI_ECODE_HEALTH_FILE) {
       this.currentRuntimePath = app.getAppPath();
     } else {
       const stablePath = join(this.updateRoot, "stable");
