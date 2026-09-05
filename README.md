@@ -53,7 +53,15 @@ npm run build
 
 ## 发布
 
-将 `package.json` 的版本提交到 `main` 后，推送同版本的 `v*` 标签会触发 GitHub Actions。工作流会在 Windows x64 环境安装依赖、校验标签与包版本一致、运行测试、构建免安装程序，并创建带自动发行说明的 GitHub Release：
+每次向 `main` 推送提交时，GitHub Actions 都会安装依赖、运行测试并构建 Windows x64 免安装程序。全部成功后，工作流会自动移动 `continuous` 标签，并更新仓库中的 **Continuous build** 预发布版本：
+
+```text
+PiECode-continuous-win-x64.exe
+```
+
+因此日常开发只需提交并推送，无需修改版本号或手动创建标签。测试或构建失败时不会覆盖上一次成功的 Release 产物。
+
+需要保留永久正式版本时，将 `package.json` 的版本提交到 `main`，然后推送同版本的 `v*` 标签：
 
 ```bash
 npm version 0.2.0
@@ -61,7 +69,7 @@ git push origin main
 git push origin v0.2.0
 ```
 
-发布产物当前不含 Windows 代码签名，首次下载运行时可能出现 Microsoft Defender SmartScreen 提示。
+正式 Release 的产物名称包含版本号，例如 `PiECode-0.2.0-win-x64.exe`。所有发布产物当前均不含 Windows 代码签名，首次下载运行时可能出现 Microsoft Defender SmartScreen 提示。
 
 拒绝某个已审查文件时，只会将该路径恢复到任务开始前的状态，然后为结果创建检查点，并使之前的验证结果和候选版本失效。默认行为是保留文件；准备候选版本时会采用其余已审查的变更。
 

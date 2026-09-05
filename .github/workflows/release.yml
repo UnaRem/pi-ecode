@@ -2,11 +2,17 @@ name: Release Windows portable app
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   release:
@@ -25,6 +31,7 @@ jobs:
         run: npm ci --include=dev
 
       - name: Verify release version
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $packageVersion = node -p "require('./package.json').version"
@@ -40,8 +47,40 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run package:win
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Prepare continuous artifact
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $artifacts = @(Get-ChildItem "release/PiECode-*-win-x64.exe")
+          if ($artifacts.Count -ne 1) {
+            throw "Expected exactly one portable executable, found $($artifacts.Count)"
+          }
+          Move-Item $artifacts[0].FullName "release/PiECode-continuous-win-x64.exe"
+
+      - name: Move continuous tag
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          git tag --force continuous $env:GITHUB_SHA
+          git push origin refs/tags/continuous --force
+
+      - name: Publish continuous release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: continuous
+          name: Continuous build
+          prerelease: true
+          body: |
+            Latest successful Windows x64 portable build from `main`.
+            Commit: `${{ github.sha }}`
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          files: release/PiECode-continuous-win-x64.exe
+
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
