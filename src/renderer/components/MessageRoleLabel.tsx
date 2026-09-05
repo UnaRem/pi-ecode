@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n/i18n";
 
 const NICKNAME_STORAGE_KEYS = {
@@ -49,8 +49,10 @@ export function MessageRoleLabel(props: {
   const cancelledRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (editing) inputRef.current?.select();
+  useLayoutEffect(() => {
+    if (!editing) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
   }, [editing]);
 
   const finish = (): void => {
@@ -89,7 +91,6 @@ export function MessageRoleLabel(props: {
   return (
     <button
       className="message-role message-role-button"
-      onPointerDown={(event) => { if (event.button === 0) startEditing(); }}
       onClick={startEditing}
       title={t("conversation.editNickname")}
       aria-label={`${t("conversation.editNickname")}: ${props.nickname}`}
