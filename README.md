@@ -53,13 +53,13 @@ npm run build
 
 ## 发布
 
-每次向 `main` 推送提交时，GitHub Actions 都会安装依赖、运行测试并构建 Windows x64 免安装程序。全部成功后，工作流会自动移动 `continuous` 标签，并更新仓库中的 **Continuous build** 预发布版本：
+每次向 `main` 推送提交时，GitHub Actions 都会安装依赖、运行测试并构建 Windows x64 免安装程序。全部成功后，工作流会自动移动 `continuous` 标签，并更新仓库中的 **Continuous build** 滚动 Latest Release：
 
 ```text
 PiECode-continuous-win-x64.exe
 ```
 
-因此日常开发只需提交并推送，无需修改版本号或手动创建标签。测试或构建失败时不会覆盖上一次成功的 Release 产物。
+因此日常开发只需提交并推送，无需修改版本号或手动创建标签。Release 更新内容会列出上一次成功构建至本次成功构建之间的 Commit；测试或构建失败时不会移动 `continuous` 标签，也不会覆盖上一次成功的 Release 产物。`continuous` 是会移动的滚动标签，不用于永久版本归档。
 
 需要保留永久正式版本时，将 `package.json` 的版本提交到 `main`，然后推送同版本的 `v*` 标签：
 

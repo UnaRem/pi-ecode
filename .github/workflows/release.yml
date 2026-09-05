@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -47,7 +49,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run package:win
 
-      - name: Prepare continuous artifact
+      - name: Prepare continuous release
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
@@ -56,6 +58,37 @@ jobs:
             throw "Expected exactly one portable executable, found $($artifacts.Count)"
           }
           Move-Item $artifacts[0].FullName "release/PiECode-continuous-win-x64.exe"
+
+          $previousCommit = git rev-parse --verify refs/tags/continuous 2>$null
+          $hasPreviousRelease = $LASTEXITCODE -eq 0
+          if ($hasPreviousRelease) {
+            git merge-base --is-ancestor $previousCommit $env:GITHUB_SHA
+            $hasPreviousRelease = $LASTEXITCODE -eq 0
+          }
+          if ($hasPreviousRelease) {
+            $commitRange = "$previousCommit..$env:GITHUB_SHA"
+          } else {
+            $commitRange = "$($env:GITHUB_SHA)^!"
+          }
+
+          $repositoryUrl = "${{ github.server_url }}/${{ github.repository }}"
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          $OutputEncoding = [Console]::OutputEncoding
+          $releaseNotes = @(
+            "Windows x64 最新免安装版本。",
+            "",
+            "## 本次更新",
+            ""
+          )
+          $commits = @(git log $commitRange --reverse --format="%H%x09%s")
+          foreach ($commit in $commits) {
+            $parts = $commit -split "`t", 2
+            $shortHash = $parts[0].Substring(0, 7)
+            $releaseNotes += "- $($parts[1]) [``$shortHash``]($repositoryUrl/commit/$($parts[0]))"
+          }
+          $releaseNotes += ""
+          $releaseNotes += "构建 Commit：[``$($env:GITHUB_SHA.Substring(0, 7))``]($repositoryUrl/commit/$env:GITHUB_SHA)"
+          $releaseNotes | Set-Content "release/continuous-notes.md" -Encoding utf8
 
       - name: Move continuous tag
         if: github.ref == 'refs/heads/main'
@@ -70,10 +103,9 @@ jobs:
         with:
           tag_name: continuous
           name: Continuous build
-          prerelease: true
-          body: |
-            Latest successful Windows x64 portable build from `main`.
-            Commit: `${{ github.sha }}`
+          prerelease: false
+          make_latest: true
+          body_path: release/continuous-notes.md
           fail_on_unmatched_files: true
           overwrite_files: true
           files: release/PiECode-continuous-win-x64.exe
