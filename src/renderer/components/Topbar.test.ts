@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSessionTitle, thinkingSelectOptions } from "./Topbar";
+import { normalizeSessionTitle, showProjectReleaseControls, thinkingSelectOptions } from "./Topbar";
 
 describe("normalizeSessionTitle", () => {
   it("trims whitespace, removes line breaks, and limits the title", () => {
@@ -9,6 +9,11 @@ describe("normalizeSessionTitle", () => {
 
   it("allows an empty title to restore the generated session title", () => {
     expect(normalizeSessionTitle("  \n ")).toBe("");
+  });
+
+  it("shows validation and push controls only for the pi-ecode source project", () => {
+    expect(showProjectReleaseControls({ isSelfProject: true })).toBe(true);
+    expect(showProjectReleaseControls({ isSelfProject: false })).toBe(false);
   });
 
   it("keeps thinking levels as untranslated SDK values", () => {

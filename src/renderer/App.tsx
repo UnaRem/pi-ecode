@@ -30,6 +30,10 @@ export default function App() {
   }, [settingsDirty, t]);
 
   useEffect(() => {
+    if (!state.validation.isSelfProject) setValidationOpen(false);
+  }, [state.validation.isSelfProject]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n" && state.projectPath && !settingsOpen) {
         event.preventDefault();
@@ -106,7 +110,7 @@ export default function App() {
           onToggleValidation={() => setValidationOpen((open) => !open)}
         />
         <ValidationPanelPresence
-          open={validationOpen}
+          open={validationOpen && state.validation.isSelfProject}
           validation={state.validation}
           review={state.review}
           candidate={state.candidate}

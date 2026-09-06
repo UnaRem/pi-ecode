@@ -32,6 +32,10 @@ export function thinkingSelectOptions(levels: ThinkingLevel[]): TopbarSelectOpti
   return levels.map((level) => ({ value: level, label: level }));
 }
 
+export function showProjectReleaseControls(validation: Pick<ValidationState, "isSelfProject">): boolean {
+  return validation.isSelfProject;
+}
+
 function SessionTitleEditor(props: { title: string; onRename: (title: string) => void }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -104,18 +108,20 @@ export function Topbar(props: TopbarProps) {
         </span>
       </div>
       <div className="topbar-controls">
-        <button
-          className={`validation-toggle ${props.validation.status}`}
-          onClick={props.onToggleValidation}
-          aria-label={t("topbar.openVerification")}
-          title={t("topbar.projectVerification")}
-        >
-          {props.validation.status === "running"
-            ? <LoaderCircle className="spin" size={15} />
-            : <ShieldCheck size={15} />}
-          <span>{props.validation.status === "passed" ? t("topbar.verified") : props.validation.status === "stale" ? t("topbar.stale") : t("topbar.verify")}</span>
-        </button>
-        <GitPushButton projectKey={props.projectPath} disabled={props.disabled} validationStatus={props.validation.status} />
+        {showProjectReleaseControls(props.validation) && <>
+          <button
+            className={`validation-toggle ${props.validation.status}`}
+            onClick={props.onToggleValidation}
+            aria-label={t("topbar.openVerification")}
+            title={t("topbar.projectVerification")}
+          >
+            {props.validation.status === "running"
+              ? <LoaderCircle className="spin" size={15} />
+              : <ShieldCheck size={15} />}
+            <span>{props.validation.status === "passed" ? t("topbar.verified") : props.validation.status === "stale" ? t("topbar.stale") : t("topbar.verify")}</span>
+          </button>
+          <GitPushButton projectKey={props.projectPath} disabled={props.disabled} validationStatus={props.validation.status} />
+        </>}
         <TopbarSelect
           className="provider-select"
           label={t("topbar.provider")}
