@@ -7,6 +7,9 @@ directories:
 files:
   - out/**/*
   - package.json
+extraResources:
+  - from: resources/ecode-icon.ico
+    to: ecode-icon.ico
 win:
   executableName: PiECode
   icon: ecode-icon.ico

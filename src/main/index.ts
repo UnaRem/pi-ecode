@@ -41,7 +41,10 @@ function focusMainWindow(): void {
 }
 
 function createWindow(): void {
-  const iconPath = join(app.getAppPath(), "resources", process.platform === "win32" ? "ecode-icon.ico" : "ecode-icon.png");
+  const iconFileName = process.platform === "win32" ? "ecode-icon.ico" : "ecode-icon.png";
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, iconFileName)
+    : join(app.getAppPath(), "resources", iconFileName);
   const window = new BrowserWindow({
     width: 1180,
     height: 780,
