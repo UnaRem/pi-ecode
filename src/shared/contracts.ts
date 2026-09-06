@@ -58,6 +58,13 @@ export interface SessionSummary {
   messageCount: number;
 }
 
+export interface PastedTextAttachment {
+  id: string;
+  content: string;
+  lineCount: number;
+  byteSize: number;
+}
+
 export interface ImageAttachment {
   id: string;
   fileName: string;
@@ -71,6 +78,7 @@ export interface ConversationMessage {
   text: string;
   timestamp: number;
   images?: ImageAttachment[];
+  pastedTexts?: PastedTextAttachment[];
   isError?: boolean;
 }
 

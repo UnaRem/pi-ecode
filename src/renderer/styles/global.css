@@ -482,6 +482,20 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .image-lightbox { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 48px; background: rgba(20, 20, 18, .82); cursor: zoom-out; }
 .image-lightbox > img { max-width: min(1200px, 92vw); max-height: 88vh; border-radius: 8px; box-shadow: 0 18px 70px rgba(0, 0, 0, .45); cursor: default; }
 .image-lightbox-close { position: fixed; top: 18px; right: 22px; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.3); border-radius: 50%; color: white; background: rgba(0,0,0,.25); cursor: pointer; }
+.pasted-text-list { display: flex; flex-wrap: wrap; gap: 7px; }
+.pasted-text-list.composer { padding: 2px 2px 8px; }
+.pasted-text-list.message { margin-top: 8px; }
+.pasted-text-chip { position: relative; min-width: 175px; max-width: 240px; border: 1px solid var(--line); border-radius: 8px; background: #f6f6f3; }
+.pasted-text-chip > button:first-child { display: flex; width: 100%; align-items: center; gap: 8px; padding: 7px 9px; border: 0; color: var(--muted); background: transparent; text-align: left; cursor: pointer; }
+.pasted-text-chip > button:first-child > span { min-width: 0; }
+.pasted-text-chip strong, .pasted-text-chip small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pasted-text-chip strong { color: var(--text); font-size: 10.5px; }
+.pasted-text-chip small { margin-top: 2px; font-size: 9px; }
+.pasted-text-remove { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: #fff; cursor: pointer; }
+.pasted-text-dialog { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 48px; background: rgba(20, 20, 18, .72); }
+.pasted-text-dialog > div { position: relative; width: min(850px, 92vw); max-height: 84vh; overflow: auto; border-radius: 10px; background: #fff; box-shadow: 0 18px 70px rgba(0, 0, 0, .4); }
+.pasted-text-dialog pre { margin: 0; padding: 22px; color: var(--text); font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pasted-text-dialog > div > button { position: sticky; z-index: 1; top: 8px; float: right; display: grid; place-items: center; width: 30px; height: 30px; margin: 8px 8px -38px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: #fff; cursor: pointer; }
 .attachment-error { padding: 3px 3px 7px; color: var(--danger); font-size: 10.5px; }
 .pdf-panel { overflow: hidden; margin: 1px 2px 9px; border: 1px solid var(--line-soft); border-radius: 9px; background: #f6f6f3; }
 .pdf-panel-header { display: flex; align-items: center; gap: 7px; min-height: 31px; padding: 0 8px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 10.5px; }
