@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
-import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment, WorkspaceHistoryState } from "@shared/contracts";
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
+import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment, PastedTextAttachment, WorkspaceHistoryState } from "@shared/contracts";
+import { createPastedTextAttachment, parsePastedTexts, serializePastedTexts, shouldAttachPastedText } from "@shared/pasted-text";
 import { ComposerView, MAX_ATTACHMENTS } from "./ComposerView";
 import { useI18n, type Translate } from "../i18n/i18n";
 
@@ -65,28 +66,33 @@ export function Composer(props: ComposerProps) {
   const { t } = useI18n();
   const [text, setText] = useState("");
   const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [pastedTexts, setPastedTexts] = useState<PastedTextAttachment[]>([]);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (props.restoredText !== null) setText(props.restoredText);
+    if (props.restoredText !== null) {
+      const restored = parsePastedTexts(props.restoredText);
+      setText(restored.message);
+      setPastedTexts(restored.attachments);
+    }
     setImages(props.restoredImages);
     if (props.restoredText !== null || props.restoredImages.length > 0) {
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
   }, [props.restoreVersion]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    textarea.style.height = "0px";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+    textarea.style.height = text ? "0px" : "35px";
+    if (text) textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
   }, [text]);
 
   const submit = (): void => {
-    const message = text.trim();
+    const message = serializePastedTexts(text, pastedTexts);
     if ((!message && images.length === 0) || !props.modelReady || props.extensionUi) return;
     if (images.length > 0 && !props.supportsImages) {
       setAttachmentError(t("composer.attachUnsupported"));
@@ -94,6 +100,7 @@ export function Composer(props: ComposerProps) {
     }
     setText("");
     setImages([]);
+    setPastedTexts([]);
     setPdfFile(null);
     props.onSend(message, images);
   };
@@ -106,7 +113,7 @@ export function Composer(props: ComposerProps) {
     }
     try {
       const added = await Promise.all(files.map((file) => readImage(file, t)));
-      if (images.length + added.length > MAX_ATTACHMENTS) throw new Error(t("composer.attachmentLimit"));
+      if (images.length + pastedTexts.length + added.length > MAX_ATTACHMENTS) throw new Error(t("composer.attachmentLimit"));
       setImages((current) => [...current, ...added]);
       setAttachmentError(null);
     } catch (error) {
@@ -128,9 +135,20 @@ export function Composer(props: ComposerProps) {
 
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
     const files = clipboardImages(event);
-    if (files.length === 0) return;
+    if (files.length > 0) {
+      event.preventDefault();
+      void processImages(files);
+      return;
+    }
+    const content = event.clipboardData.getData("text/plain");
+    if (!shouldAttachPastedText(content)) return;
     event.preventDefault();
-    void processImages(files);
+    if (images.length + pastedTexts.length >= MAX_ATTACHMENTS) {
+      setAttachmentError(t("composer.attachmentLimit"));
+      return;
+    }
+    setPastedTexts((current) => [...current, createPastedTextAttachment(crypto.randomUUID(), content)]);
+    setAttachmentError(null);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -140,11 +158,12 @@ export function Composer(props: ComposerProps) {
   };
 
   return <ComposerView
-    agent={props} text={text} images={images} pdfFile={pdfFile} attachmentError={attachmentError}
+    agent={props} text={text} images={images} pastedTexts={pastedTexts} pdfFile={pdfFile} attachmentError={attachmentError}
     contextLabel={contextLabel(props.context, t)} textareaRef={textareaRef} inputRef={inputRef}
     onTextChange={setText} onKeyDown={onKeyDown} onPaste={onPaste}
     onAddAttachments={(event) => void addAttachments(event)}
     onRemoveImage={(id) => setImages((current) => current.filter((item) => item.id !== id))}
+    onRemovePastedText={(id) => setPastedTexts((current) => current.filter((item) => item.id !== id))}
     onAddPdfPage={(attachment) => { setImages((current) => [...current, attachment]); setAttachmentError(null); }}
     onClosePdf={() => setPdfFile(null)} onSubmit={submit}
   />;

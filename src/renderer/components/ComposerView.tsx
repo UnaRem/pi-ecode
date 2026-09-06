@@ -1,10 +1,11 @@
 import type { ChangeEventHandler, ClipboardEventHandler, KeyboardEventHandler, RefObject } from "react";
 import { ArrowUp, Paperclip, Redo2, Square, Undo2 } from "lucide-react";
-import type { ImageAttachment } from "@shared/contracts";
+import type { ImageAttachment, PastedTextAttachment } from "@shared/contracts";
 import type { ComposerProps } from "./Composer";
 import { CompactionStatusPanel } from "./CompactionStatusPanel";
 import { ExtensionQuestionPanel } from "./ExtensionQuestionPanel";
 import { ImageGallery } from "./ImageGallery";
+import { PastedTextAttachments } from "./PastedTextAttachments";
 import { PdfAttachmentPanel } from "./PdfAttachmentPanel";
 import { useI18n } from "../i18n/i18n";
 
@@ -12,6 +13,7 @@ interface ComposerViewProps {
   agent: ComposerProps;
   text: string;
   images: ImageAttachment[];
+  pastedTexts: PastedTextAttachment[];
   pdfFile: File | null;
   attachmentError: string | null;
   contextLabel: string;
@@ -22,6 +24,7 @@ interface ComposerViewProps {
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
   onAddAttachments: ChangeEventHandler<HTMLInputElement>;
   onRemoveImage: (id: string) => void;
+  onRemovePastedText: (id: string) => void;
   onAddPdfPage: (attachment: ImageAttachment) => void;
   onClosePdf: () => void;
   onSubmit: () => void;
@@ -37,12 +40,13 @@ export function ComposerView(view: ComposerViewProps) {
       <CompactionStatusPanel status={props.context.compaction} onCancel={props.onCancelCompact} />
       {props.extensionUi && <ExtensionQuestionPanel request={props.extensionUi} onRespond={props.onRespondExtensionUi} />}
       <div className={`composer ${props.isStreaming ? "working" : ""} ${props.extensionUi ? "blocked" : ""}`}>
+        {view.pastedTexts.length > 0 && <PastedTextAttachments attachments={view.pastedTexts} variant="composer" onRemove={view.onRemovePastedText} />}
         {view.images.length > 0 && <ImageGallery images={view.images} variant="composer" onRemove={view.onRemoveImage} />}
         {view.pdfFile && (
           <PdfAttachmentPanel
             file={view.pdfFile}
             attachments={view.images}
-            maximumAttachments={MAX_ATTACHMENTS}
+            maximumAttachments={MAX_ATTACHMENTS - view.pastedTexts.length}
             disabled={!props.supportsImages}
             onAdd={view.onAddPdfPage}
             onClose={view.onClosePdf}
@@ -72,7 +76,7 @@ export function ComposerView(view: ComposerViewProps) {
           </div>
           <span>{props.extensionUi ? t("composer.waitingAnswer") : props.isStreaming ? (props.pendingCount ? t("composer.steeringCount", { count: props.pendingCount }) : t("composer.steerHint")) : t("composer.sendHint")}</span>
           <div className="composer-actions">
-            <button className={`send-button ${props.isStreaming ? "steer" : ""}`} onClick={view.onSubmit} disabled={Boolean(props.extensionUi) || (!view.text.trim() && view.images.length === 0) || !props.modelReady} aria-label={props.isStreaming ? t("composer.steer") : t("composer.send")} title={props.isStreaming ? t("composer.steer") : t("composer.send")}><ArrowUp size={17} /></button>
+            <button className={`send-button ${props.isStreaming ? "steer" : ""}`} onClick={view.onSubmit} disabled={Boolean(props.extensionUi) || (!view.text.trim() && view.images.length === 0 && view.pastedTexts.length === 0) || !props.modelReady} aria-label={props.isStreaming ? t("composer.steer") : t("composer.send")} title={props.isStreaming ? t("composer.steer") : t("composer.send")}><ArrowUp size={17} /></button>
             {props.isStreaming && <button className="send-button stop" onClick={props.onStop} aria-label={t("composer.stop")} title={t("composer.stop")}><Square size={12} fill="currentColor" /></button>}
           </div>
         </div>
