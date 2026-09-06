@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { formatToolInput, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { createPastedTextAttachment, serializePastedTexts } from "../../shared/pasted-text.js";
+import { formatToolInput, mapMessages, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
 
 describe("message mapper helpers", () => {
   it("keeps only visible text blocks", () => {
@@ -9,6 +11,18 @@ describe("message mapper helpers", () => {
       { type: "toolCall", id: "1", name: "read" },
       { type: "text", text: "second" },
     ])).toBe("first\nsecond");
+  });
+
+  it("maps pasted text attachments into the message snapshot", () => {
+    const text = serializePastedTexts("Review", [
+      createPastedTextAttachment("11111111-1111-4111-8111-111111111111", "attached content"),
+    ]);
+    const messages = [{ role: "user", content: [{ type: "text", text }], timestamp: 1 }] as unknown as AgentMessage[];
+
+    expect(mapMessages(messages).messages[0]).toMatchObject({
+      text: "Review",
+      pastedTexts: [{ content: "attached content" }],
+    });
   });
 
   it("formats shell commands directly and other inputs as JSON", () => {

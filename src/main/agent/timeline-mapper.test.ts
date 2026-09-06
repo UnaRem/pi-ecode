@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { createPastedTextAttachment, serializePastedTexts } from "../../shared/pasted-text.js";
 import { mapTimeline } from "./timeline-mapper.js";
 
 describe("mapTimeline", () => {
@@ -36,6 +37,25 @@ describe("mapTimeline", () => {
     expect(timeline[2]).toMatchObject({
       kind: "tool",
       tool: { id: "call-1", input: expect.stringContaining("app.ts"), output: "const value = 1;" },
+    });
+  });
+
+  it("restores pasted text attachments without exposing their protocol markers", () => {
+    const serialized = serializePastedTexts("Review this", [
+      createPastedTextAttachment("11111111-1111-4111-8111-111111111111", "first\nsecond"),
+    ]);
+    const messages = [{
+      role: "user",
+      content: [{ type: "text", text: serialized }],
+      timestamp: 1,
+    }] as unknown as AgentMessage[];
+
+    expect(mapTimeline(messages)[0]).toMatchObject({
+      kind: "message",
+      message: {
+        text: "Review this",
+        pastedTexts: [{ content: "first\nsecond", lineCount: 2 }],
+      },
     });
   });
 

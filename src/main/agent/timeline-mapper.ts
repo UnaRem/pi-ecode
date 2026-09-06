@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ConversationItem, ConversationMessage, ImageAttachment, ToolActivity } from "../../shared/contracts.js";
+import { parsePastedTexts } from "../../shared/pasted-text.js";
 import { formatToolInput, textFromContent, toolTitle } from "./message-mapper.js";
 
 interface ContentBlock {
@@ -48,14 +49,15 @@ export function mapTimeline(messages: AgentMessage[]): ConversationItem[] {
       ? message.timestamp
       : Date.now() + messageIndex;
     if (message.role === "user") {
-      const text = textFromContent(message.content);
+      const parsedText = parsePastedTexts(textFromContent(message.content));
       const images = imagesFromContent(message.content);
-      if (text || images.length > 0) timeline.push(messageItem({
+      if (parsedText.message || images.length > 0 || parsedText.attachments.length > 0) timeline.push(messageItem({
         id: `user-${timestamp}-${messageIndex}`,
         role: "user",
-        text,
+        text: parsedText.message,
         timestamp,
         ...(images.length > 0 ? { images } : {}),
+        ...(parsedText.attachments.length > 0 ? { pastedTexts: parsedText.attachments } : {}),
       }));
       return;
     }

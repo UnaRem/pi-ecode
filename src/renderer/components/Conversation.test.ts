@@ -50,6 +50,39 @@ describe("Conversation", () => {
     expect(markup).toContain(">Builder</button>");
   });
 
+  it("renders pasted text attachments separately from the user message", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(createElement(
+      I18nProvider,
+      null,
+      createElement(Conversation, {
+        timeline: [{
+          kind: "message",
+          id: "user-1",
+          message: {
+            id: "user-1",
+            role: "user",
+            text: "Review this",
+            timestamp: 1,
+            pastedTexts: [{ id: "text-1", content: "first\nsecond", lineCount: 2, byteSize: 12 }],
+          },
+        }],
+        isStreaming: false,
+        workingStartedAt: null,
+        projectName: "demo",
+        error: null,
+        canContinue: false,
+        notice: null,
+        onContinue: vi.fn(),
+      }),
+    ));
+
+    expect(markup).toContain("Review this");
+    expect(markup).toContain("Pasted text #1");
+    expect(markup).toContain("2 lines · 12 B");
+    expect(markup).not.toContain("first\nsecond");
+  });
+
   it("marks every user message after the first as a new turn", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(createElement(

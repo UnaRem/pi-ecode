@@ -6,6 +6,7 @@ import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
 import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
+import { PastedTextAttachments } from "./PastedTextAttachments";
 import { useI18n } from "../i18n/i18n";
 
 interface ConversationProps {
@@ -89,6 +90,7 @@ function ConversationBody(props: ConversationBodyProps) {
               <div className="message-content">
                 {hasLiveAssistant && group.id === lastItem?.id && <div className="working-time"><span className="working-dot" /> {props.workingLabel}</div>}
                 {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
+                {group.item.message.pastedTexts && group.item.message.pastedTexts.length > 0 && <PastedTextAttachments attachments={group.item.message.pastedTexts} variant="message" />}
                 {group.item.message.images && group.item.message.images.length > 0 && <ImageGallery images={group.item.message.images} variant="message" />}
                 {hasLiveAssistant && group.id === lastItem?.id && <span className="stream-caret" aria-label={t("conversation.generating")} />}
               </div>

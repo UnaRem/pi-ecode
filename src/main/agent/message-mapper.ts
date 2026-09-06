@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ConversationMessage, ToolActivity } from "../../shared/contracts.js";
+import { parsePastedTexts } from "../../shared/pasted-text.js";
 
 interface TextBlock {
   type?: string;
@@ -58,13 +59,15 @@ export function mapMessages(messages: AgentMessage[]): { messages: ConversationM
   messages.forEach((message, index) => {
     const timestamp = "timestamp" in message && typeof message.timestamp === "number" ? message.timestamp : Date.now() + index;
     if (message.role === "user" || message.role === "assistant") {
-      const text = textFromContent(message.content);
-      if (text) {
+      const rawText = textFromContent(message.content);
+      const parsedText = message.role === "user" ? parsePastedTexts(rawText) : { message: rawText, attachments: [] };
+      if (parsedText.message || parsedText.attachments.length > 0) {
         mappedMessages.push({
           id: `${message.role}-${timestamp}-${index}`,
           role: message.role,
-          text,
+          text: parsedText.message,
           timestamp,
+          ...(parsedText.attachments.length > 0 ? { pastedTexts: parsedText.attachments } : {}),
           ...(message.role === "assistant" && message.stopReason === "error" ? { isError: true } : {}),
         });
       }
