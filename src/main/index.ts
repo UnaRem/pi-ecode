@@ -54,6 +54,7 @@ function createWindow(): void {
     icon: iconPath,
     backgroundColor: "#f7f7f5",
     show: false,
+    paintWhenInitiallyHidden: false,
     autoHideMenuBar: true,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
@@ -66,7 +67,7 @@ function createWindow(): void {
 
   window.setMenuBarVisibility(false);
   if (process.platform === "win32") window.setAppDetails({ appId: APP_ID, appIconPath: iconPath, appIconIndex: 0 });
-  window.once("ready-to-show", () => window.show());
+  window.webContents.once("did-finish-load", () => window.show());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url);
     return { action: "deny" };
