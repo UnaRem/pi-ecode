@@ -49,10 +49,14 @@ function planFromEntry(entry: SessionEntry): TaskPlan | null | undefined {
   return planFromDetails(entry.message.details) ?? undefined;
 }
 
+function normalizeTaskText(text: string): string {
+  return text.trim().replace(/^(?:[-*+]\s+)?\[[ xX]\]\s+/u, "");
+}
+
 function validatePlan(title: string, items: TaskPlanItem[]): TaskPlan {
   const normalizedTitle = title.trim();
   if (!normalizedTitle) throw new Error("Task plan title cannot be empty.");
-  const normalizedItems = items.map((item) => ({ ...item, id: item.id.trim(), text: item.text.trim() }));
+  const normalizedItems = items.map((item) => ({ ...item, id: item.id.trim(), text: normalizeTaskText(item.text) }));
   if (normalizedItems.some((item) => !item.id || !item.text)) throw new Error("Task plan item IDs and text cannot be empty.");
   if (new Set(normalizedItems.map((item) => item.id)).size !== normalizedItems.length) {
     throw new Error("Task plan item IDs must be unique.");
@@ -77,7 +81,11 @@ export class TaskPlanService {
   }
 
   private setPlan(plan: TaskPlan | null): void {
-    this.plan = clonePlan(plan);
+    const copiedPlan = clonePlan(plan);
+    this.plan = copiedPlan ? {
+      ...copiedPlan,
+      items: copiedPlan.items.map((item) => ({ ...item, text: normalizeTaskText(item.text) })),
+    } : null;
     this.onChange(this.current);
   }
 

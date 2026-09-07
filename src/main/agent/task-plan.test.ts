@@ -65,8 +65,32 @@ describe("TaskPlanService", () => {
     expect(service.current?.items).toEqual([{ id: "inspect", text: "Inspect current code", status: "completed" }]);
   });
 
+  it("removes leading Markdown checkbox markers from task text", async () => {
+    const service = new TaskPlanService(vi.fn());
+    const tool = harness(service).getTool();
+
+    await tool.execute("call-checkboxes", {
+      title: "Normalize labels",
+      items: [
+        { id: "dash", text: "- [x] Finished", status: "completed" },
+        { id: "asterisk", text: "* [X] Also finished", status: "completed" },
+        { id: "plus", text: "+ [ ] Waiting", status: "pending" },
+        { id: "bare", text: "[ ] Bare marker", status: "pending" },
+        { id: "middle", text: "Explain [x] syntax", status: "pending" },
+      ],
+    }, new AbortController().signal);
+
+    expect(service.current?.items.map((item) => item.text)).toEqual([
+      "Finished",
+      "Also finished",
+      "Waiting",
+      "Bare marker",
+      "Explain [x] syntax",
+    ]);
+  });
+
   it("restores the latest plan from the active session branch", async () => {
-    const plan = { title: "Restored", items: [{ id: "verify", text: "Run tests", status: "in_progress" as const }], updatedAt: 5 };
+    const plan = { title: "Restored", items: [{ id: "verify", text: "- [x] Run tests", status: "in_progress" as const }], updatedAt: 5 };
     const branch = [{
       type: "message",
       id: "result",
@@ -87,6 +111,9 @@ describe("TaskPlanService", () => {
 
     await test.handlers.get("session_start")?.({}, test.context);
 
-    expect(service.current).toEqual(plan);
+    expect(service.current).toEqual({
+      ...plan,
+      items: [{ id: "verify", text: "Run tests", status: "in_progress" }],
+    });
   });
 });
