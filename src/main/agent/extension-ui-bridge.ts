@@ -66,7 +66,7 @@ export class ExtensionUiBridge {
   }
 
   createContext(fallback: ExtensionUIContext): ExtensionUIContext {
-    const context = Object.create(fallback) as ExtensionUIContext;
+    const context = { ...fallback } as ExtensionUIContext;
     context.select = (title, options, dialogOptions) => this.select(title, options, dialogOptions);
     context.confirm = (title, message, dialogOptions) => this.confirm(title, message, dialogOptions);
     context.input = (title, placeholder, dialogOptions) => this.input(title, placeholder, dialogOptions);

@@ -69,6 +69,17 @@ describe("ExtensionUiBridge", () => {
     await expect(result).resolves.toBe("1,2");
   });
 
+  it("preserves fallback UI methods when the SDK rebinds the context", () => {
+    const setStatus = vi.fn();
+    const bridge = new ExtensionUiBridge(() => undefined, () => undefined);
+    const context = bridge.createContext({ setStatus } as unknown as ExtensionUIContext);
+
+    const reboundContext = { ...context } as ExtensionUIContext;
+    reboundContext.setStatus("mcp", "1 server enabled");
+
+    expect(setStatus).toHaveBeenCalledWith("mcp", "1 server enabled");
+  });
+
   it("maps extension notifications to the host notice channel", () => {
     const test = createHarness();
     test.context.notify("Ready", "info");
