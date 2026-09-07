@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type AnimationEvent, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type AnimationEvent } from "react";
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 
@@ -31,43 +31,55 @@ export function TaskPlanPresence({ plan, active }: { plan: TaskPlan | null; acti
   );
 }
 
+export function centeredTaskScrollTop(
+  itemTop: number,
+  itemHeight: number,
+  viewportHeight: number,
+  scrollHeight: number,
+): number {
+  const centered = itemTop + itemHeight / 2 - viewportHeight / 2;
+  return Math.max(0, Math.min(centered, scrollHeight - viewportHeight));
+}
+
 export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolean }) {
   const { t } = useI18n();
+  const taskListRef = useRef<HTMLOListElement>(null);
   const currentItemRef = useRef<HTMLLIElement>(null);
   const completedCount = plan.items.filter((item) => item.status === "completed").length;
   const activeIndex = plan.items.findIndex((item) => item.status === "in_progress");
   const nextIndex = plan.items.findIndex((item) => item.status === "pending");
   const currentIndex = activeIndex >= 0 ? activeIndex : nextIndex;
-  const flowTargetIndex = currentIndex >= 0 ? currentIndex : plan.items.length - 1;
-  const flowSegmentCount = flowTargetIndex + 1;
-  const flowCycleMs = Math.max(1_900, flowSegmentCount * 360 + 700);
-  const flowStepMs = flowSegmentCount > 0 ? (flowCycleMs * 0.72) / flowSegmentCount : 0;
-  const flowStyle = {
-    "--task-flow-cycle": `${flowCycleMs}ms`,
-  } as CSSProperties;
+  const previousIndex = currentIndex - 1;
+  const dropSourceIndex = active && previousIndex >= 0 && plan.items[previousIndex]?.status === "completed"
+    ? previousIndex
+    : -1;
 
-  useEffect(() => {
-    currentItemRef.current?.scrollIntoView({ block: "nearest" });
+  useLayoutEffect(() => {
+    const taskList = taskListRef.current;
+    const currentItem = currentItemRef.current;
+    if (!taskList || !currentItem) return;
+    taskList.scrollTop = centeredTaskScrollTop(
+      currentItem.offsetTop,
+      currentItem.offsetHeight,
+      taskList.clientHeight,
+      taskList.scrollHeight,
+    );
   }, [plan.updatedAt, currentIndex]);
 
   return (
     <section className="sidebar-task-plan" aria-label={t("task.plan", { title: plan.title })}>
       <div
         className={`sidebar-task-timeline ${active ? "active" : "idle"}`}
-        style={flowStyle}
         role="progressbar"
         aria-label={t("task.complete", { done: completedCount, total: plan.items.length })}
         aria-valuemin={0}
         aria-valuemax={plan.items.length}
         aria-valuenow={completedCount}
       >
-        <ol className="sidebar-task-items">
+        <ol ref={taskListRef} className="sidebar-task-items">
           {plan.items.map((item, index) => {
             const isCurrent = index === currentIndex;
-            const isFlowPath = active && index <= flowTargetIndex;
-            const markerStyle = isFlowPath
-              ? { "--task-flow-delay": `${Math.round(index * flowStepMs)}ms` } as CSSProperties
-              : undefined;
+            const isDropSource = index === dropSourceIndex;
             return (
               <li
                 key={item.id}
@@ -79,9 +91,8 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
                     "sidebar-task-marker",
                     item.status,
                     isCurrent ? "current" : null,
-                    isFlowPath ? "flow-path" : null,
+                    isDropSource ? "drop-source" : null,
                   ].filter(Boolean).join(" ")}
-                  style={markerStyle}
                   aria-hidden="true"
                 >
                   <span className="sidebar-task-node" />

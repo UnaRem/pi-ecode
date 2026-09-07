@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskPlan } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
-import { TaskPlanPanel, TaskPlanPresence } from "./TaskPlanPanel";
+import { centeredTaskScrollTop, TaskPlanPanel, TaskPlanPresence } from "./TaskPlanPanel";
 
 const plan: TaskPlan = {
   title: "Ship feature",
@@ -17,7 +17,7 @@ const plan: TaskPlan = {
 describe("TaskPlanPanel", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("renders a vertical timeline through the task states", () => {
+  it("renders one water drop path from the previous completed task to the current task", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(
       <I18nProvider><TaskPlanPanel plan={plan} active /></I18nProvider>,
@@ -26,14 +26,12 @@ describe("TaskPlanPanel", () => {
     expect(markup.match(/sidebar-task-marker/g)).toHaveLength(3);
     expect(markup.match(/sidebar-task-node/g)).toHaveLength(3);
     expect(markup.match(/sidebar-task-rail/g)).toHaveLength(2);
-    expect(markup).toContain("sidebar-task-marker completed flow-path");
-    expect(markup).toContain("sidebar-task-marker in_progress current flow-path");
+    expect(markup).toContain("sidebar-task-marker completed drop-source");
+    expect(markup).toContain("sidebar-task-marker in_progress current");
     expect(markup).toContain("sidebar-task-marker pending");
-    expect(markup.match(/flow-path/g)).toHaveLength(2);
-    expect(markup).toContain("sidebar-task-timeline active");
-    expect(markup).toContain("--task-flow-cycle:1900ms");
-    expect(markup).toContain("--task-flow-delay:0ms");
-    expect(markup).toContain("--task-flow-delay:684ms");
+    expect(markup.match(/drop-source/g)).toHaveLength(1);
+    expect(markup).not.toContain("flow-path");
+    expect(markup).not.toContain("--task-flow");
     expect(markup).toContain('aria-label="Completed 1/3 steps"');
     expect(markup).not.toContain("sidebar-task-progress");
     expect(markup).not.toContain("<svg");
@@ -46,13 +44,35 @@ describe("TaskPlanPanel", () => {
     expect(presenceMarkup).not.toContain("<button");
   });
 
-  it("stops progress motion when the answer is complete", () => {
+  it("keeps the current task centered within scroll boundaries", () => {
+    expect(centeredTaskScrollTop(0, 23, 116, 230)).toBe(0);
+    expect(centeredTaskScrollTop(115, 23, 116, 230)).toBe(68.5);
+    expect(centeredTaskScrollTop(207, 23, 116, 230)).toBe(114);
+    expect(centeredTaskScrollTop(0, 23, 116, 100)).toBe(0);
+  });
+
+  it("stops the water drop when the plan is inactive", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(
       <I18nProvider><TaskPlanPanel plan={plan} active={false} /></I18nProvider>,
     );
     expect(markup).toContain("sidebar-task-timeline idle");
-    expect(markup).not.toContain("flow-path");
+    expect(markup).not.toContain("drop-source");
+  });
+
+  it("does not add a water drop without a completed predecessor", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const noPredecessorPlan: TaskPlan = {
+      ...plan,
+      items: [
+        { id: "pending", text: "Pending", status: "pending" },
+        { id: "active", text: "Active", status: "in_progress" },
+      ],
+    };
+    const markup = renderToStaticMarkup(
+      <I18nProvider><TaskPlanPanel plan={noPredecessorPlan} active /></I18nProvider>,
+    );
+    expect(markup).not.toContain("drop-source");
   });
 
   it("renders nothing before a task plan appears", () => {
