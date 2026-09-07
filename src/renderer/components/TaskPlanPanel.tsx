@@ -1,4 +1,3 @@
-import { Check, Circle, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState, type AnimationEvent, type CSSProperties } from "react";
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
@@ -41,12 +40,10 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
   const currentIndex = activeIndex >= 0 ? activeIndex : nextIndex;
   const flowTargetIndex = currentIndex >= 0 ? currentIndex : plan.items.length - 1;
   const flowSegmentCount = flowTargetIndex + 1;
-  const flowWidth = plan.items.length > 0 ? `${((flowSegmentCount / plan.items.length) * 100).toFixed(2)}%` : "0%";
   const flowCycleMs = Math.max(1_900, flowSegmentCount * 360 + 700);
   const flowStepMs = flowSegmentCount > 0 ? (flowCycleMs * 0.72) / flowSegmentCount : 0;
   const flowStyle = {
     "--task-flow-cycle": `${flowCycleMs}ms`,
-    "--task-flow-beam-width": `${(80 / Math.max(1, flowSegmentCount)).toFixed(2)}%`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -55,29 +52,8 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
 
   return (
     <section className="sidebar-task-plan" aria-label={t("task.plan", { title: plan.title })}>
-      <ol className="sidebar-task-items">
-        {plan.items.map((item, index) => {
-          const isCurrent = index === currentIndex;
-          return (
-            <li
-              key={item.id}
-              ref={isCurrent ? currentItemRef : undefined}
-              className={`${item.status} ${isCurrent ? "current" : ""}`}
-            >
-              <span className="sidebar-task-icon" aria-hidden="true">
-                {item.status === "completed"
-                  ? <Check size={13} />
-                  : item.status === "in_progress"
-                    ? <LoaderCircle className="spin" size={14} />
-                    : <Circle size={13} />}
-              </span>
-              <span>{item.text}</span>
-            </li>
-          );
-        })}
-      </ol>
       <div
-        className={`sidebar-task-progress ${active ? "active" : "idle"}`}
+        className={`sidebar-task-timeline ${active ? "active" : "idle"}`}
         style={flowStyle}
         role="progressbar"
         aria-label={t("task.complete", { done: completedCount, total: plan.items.length })}
@@ -85,26 +61,37 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
         aria-valuemax={plan.items.length}
         aria-valuenow={completedCount}
       >
-        {plan.items.map((item, index) => {
-          const isFlowPath = active && index <= flowTargetIndex;
-          const segmentStyle = isFlowPath
-            ? { "--task-flow-delay": `${Math.round(index * flowStepMs)}ms` } as CSSProperties
-            : undefined;
-          return (
-            <span
-              key={item.id}
-              className={[
-                "sidebar-task-segment",
-                item.status,
-                index === flowTargetIndex ? "current" : null,
-                isFlowPath ? "flow-path" : null,
-              ].filter(Boolean).join(" ")}
-              style={segmentStyle}
-              aria-hidden="true"
-            />
-          );
-        })}
-        {active && flowTargetIndex >= 0 && <span className="sidebar-task-flow" style={{ width: flowWidth }} aria-hidden="true" />}
+        <ol className="sidebar-task-items">
+          {plan.items.map((item, index) => {
+            const isCurrent = index === currentIndex;
+            const isFlowPath = active && index <= flowTargetIndex;
+            const markerStyle = isFlowPath
+              ? { "--task-flow-delay": `${Math.round(index * flowStepMs)}ms` } as CSSProperties
+              : undefined;
+            return (
+              <li
+                key={item.id}
+                ref={isCurrent ? currentItemRef : undefined}
+                className={`${item.status} ${isCurrent ? "current" : ""}`}
+              >
+                <span
+                  className={[
+                    "sidebar-task-marker",
+                    item.status,
+                    isCurrent ? "current" : null,
+                    isFlowPath ? "flow-path" : null,
+                  ].filter(Boolean).join(" ")}
+                  style={markerStyle}
+                  aria-hidden="true"
+                >
+                  <span className="sidebar-task-node" />
+                  {index < plan.items.length - 1 && <span className="sidebar-task-rail" />}
+                </span>
+                <span>{item.text}</span>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </section>
   );
