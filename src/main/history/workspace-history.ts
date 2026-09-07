@@ -300,24 +300,24 @@ export class WorkspaceHistory {
       await session.waitForIdle();
       const record = this.findUndoRecord(session);
       if (!record) throw new Error("Nothing to undo in this conversation.");
-      await this.assertClean(session.sessionManager.getCwd(), session.sessionId);
+      const cwd = session.sessionManager.getCwd();
+      const restoresWorkspace = record.beforeCommit !== record.afterCommit;
+      if (restoresWorkspace) await this.assertClean(cwd, session.sessionId);
       const currentEntryId = latestEntryId(session);
       if (!currentEntryId) throw new Error("The current conversation has no restorable entry.");
-      const currentCommit = (await this.execGit(
-        session.sessionManager.getCwd(),
-        session.sessionId,
-        ["rev-parse", "HEAD"],
-      )).trim();
+      const currentCommit = restoresWorkspace
+        ? (await this.execGit(cwd, session.sessionId, ["rev-parse", "HEAD"])).trim()
+        : await this.snapshot(cwd, session.sessionId, "before conversation undo");
 
-      await this.restore(session.sessionManager.getCwd(), session.sessionId, record.beforeCommit);
+      if (restoresWorkspace) await this.restore(cwd, session.sessionId, record.beforeCommit);
       try {
         const result = await session.navigateTree(record.userEntryId, { summarize: false });
         if (result.cancelled) throw new Error("Undo was cancelled by a session extension.");
       } catch (error) {
-        await this.restore(session.sessionManager.getCwd(), session.sessionId, currentCommit);
+        if (restoresWorkspace) await this.restore(cwd, session.sessionId, currentCommit);
         throw error;
       }
-      await this.writeRedo(session.sessionManager.getCwd(), session.sessionId, {
+      await this.writeRedo(cwd, session.sessionId, {
         targetEntryId: currentEntryId,
         commit: currentCommit,
         createdAt: new Date().toISOString(),
@@ -326,7 +326,7 @@ export class WorkspaceHistory {
       return {
         editorText: record.prompt || messageText(userEntry),
         editorImages: messageImages(userEntry),
-        message: "Workspace and conversation restored.",
+        message: restoresWorkspace ? "Workspace and conversation restored." : "Conversation restored; workspace preserved.",
       };
     });
   }

@@ -261,9 +261,9 @@ describe("WorkspaceHistory", () => {
     await expect(history.rejectFile(session, "../outside.txt")).rejects.toThrow("not part");
   });
 
-  it("blocks undo when files changed after the latest snapshot", async () => {
-    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-dirty-workspace-"));
-    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-dirty-history-"));
+  it("preserves external file changes when undoing a conversation-only task", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-conversation-undo-workspace-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-conversation-undo-history-"));
     temporaryPaths.push(workspace, storage);
     const history = new WorkspaceHistory(storage);
     const captured: CapturedCheckpoint[] = [];
@@ -284,14 +284,54 @@ describe("WorkspaceHistory", () => {
         afterCommit: commit,
         userEntryId: "user-entry",
         assistantEntryId: "assistant-entry",
-        prompt: "test",
+        prompt: "hi",
         createdAt: new Date().toISOString(),
       },
     } satisfies SessionEntry;
-    await writeFile(join(workspace, "app.txt"), "unsaved\n", "utf8");
+    await writeFile(join(workspace, "app.txt"), "external change\n", "utf8");
+    const session = fakeSession(workspace, [turnEntry], captured);
+
+    await expect(history.undo(session)).resolves.toMatchObject({
+      editorText: "hi",
+      message: "Conversation restored; workspace preserved.",
+    });
+    expect(await readFile(join(workspace, "app.txt"), "utf8")).toBe("external change\n");
+  });
+
+  it("blocks undo of a file-changing task when files changed after its snapshot", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-dirty-workspace-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-dirty-history-"));
+    temporaryPaths.push(workspace, storage);
+    const history = new WorkspaceHistory(storage);
+    const captured: CapturedCheckpoint[] = [];
+    await writeFile(join(workspace, "app.txt"), "before task\n", "utf8");
+    const initialSession = fakeSession(workspace, [], captured);
+    await history.checkpoint(initialSession, "before task");
+    const beforeCommit = captured.at(-1)?.commit;
+    await writeFile(join(workspace, "app.txt"), "after task\n", "utf8");
+    await history.checkpoint(initialSession, "after task");
+    const afterCommit = captured.at(-1)?.commit;
+
+    const turnEntry = {
+      type: "custom",
+      id: "turn-entry",
+      parentId: null,
+      timestamp: new Date().toISOString(),
+      customType: "pi-ecode.workspace-turn",
+      data: {
+        version: 1,
+        beforeCommit,
+        afterCommit,
+        userEntryId: "user-entry",
+        assistantEntryId: "assistant-entry",
+        prompt: "change the file",
+        createdAt: new Date().toISOString(),
+      },
+    } satisfies SessionEntry;
+    await writeFile(join(workspace, "app.txt"), "external change\n", "utf8");
     const session = fakeSession(workspace, [turnEntry], captured);
 
     await expect(history.undo(session)).rejects.toThrow("Create a checkpoint");
-    expect(await readFile(join(workspace, "app.txt"), "utf8")).toBe("unsaved\n");
+    expect(await readFile(join(workspace, "app.txt"), "utf8")).toBe("external change\n");
   });
 });
