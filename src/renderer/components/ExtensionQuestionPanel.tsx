@@ -88,8 +88,8 @@ export function ExtensionQuestionPanel({ request, onRespond }: ExtensionQuestion
 
       {request.method === "confirm" ? (
         <div className="extension-question-actions">
-          <button onClick={() => respond(false)}>{t("common.no")}</button>
-          <button className="primary" onClick={() => respond(true)}>{t("common.yes")}</button>
+          <button onClick={() => respond(false)}>{t("common.cancel")}</button>
+          <button className="primary" onClick={() => respond(true)}>{t("common.confirm")}</button>
         </div>
       ) : request.method !== "select" && (
         <form onSubmit={submitText}>
