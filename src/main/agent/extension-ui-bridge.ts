@@ -66,7 +66,8 @@ export class ExtensionUiBridge {
   }
 
   createContext(fallback: ExtensionUIContext): ExtensionUIContext {
-    const context = { ...fallback } as ExtensionUIContext;
+    // RPC hosts do not initialize Pi's terminal theme; exposing its proxy makes UI-aware extensions throw on access.
+    const context = { ...fallback, theme: undefined } as unknown as ExtensionUIContext;
     context.select = (title, options, dialogOptions) => this.select(title, options, dialogOptions);
     context.confirm = (title, message, dialogOptions) => this.confirm(title, message, dialogOptions);
     context.input = (title, placeholder, dialogOptions) => this.input(title, placeholder, dialogOptions);

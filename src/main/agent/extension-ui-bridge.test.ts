@@ -69,13 +69,19 @@ describe("ExtensionUiBridge", () => {
     await expect(result).resolves.toBe("1,2");
   });
 
-  it("preserves fallback UI methods when the SDK rebinds the context", () => {
+  it("preserves fallback UI methods without exposing the uninitialized TUI theme", () => {
     const setStatus = vi.fn();
+    const theme = new Proxy({} as ExtensionUIContext["theme"], {
+      get: () => { throw new Error("Theme not initialized"); },
+    });
     const bridge = new ExtensionUiBridge(() => undefined, () => undefined);
-    const context = bridge.createContext({ setStatus } as unknown as ExtensionUIContext);
+    const context = bridge.createContext({ setStatus, theme } as unknown as ExtensionUIContext);
 
     const reboundContext = { ...context } as ExtensionUIContext;
-    reboundContext.setStatus("mcp", "1 server enabled");
+    const status = typeof reboundContext.theme?.fg === "function"
+      ? reboundContext.theme.fg("accent", "1 server enabled")
+      : "1 server enabled";
+    reboundContext.setStatus("mcp", status);
 
     expect(setStatus).toHaveBeenCalledWith("mcp", "1 server enabled");
   });
