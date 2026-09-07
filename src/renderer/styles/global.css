@@ -483,8 +483,8 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .image-lightbox > img { max-width: min(1200px, 92vw); max-height: 88vh; border-radius: 8px; box-shadow: 0 18px 70px rgba(0, 0, 0, .45); cursor: default; }
 .image-lightbox-close { position: fixed; top: 18px; right: 22px; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.3); border-radius: 50%; color: white; background: rgba(0,0,0,.25); cursor: pointer; }
 .pasted-text-list { display: flex; flex-wrap: wrap; gap: 7px; }
-.pasted-text-list.composer { padding: 2px 2px 8px; }
-.pasted-text-list.message { margin-top: 8px; }
+.pasted-text-list.pasted-text-list-composer { padding: 2px 2px 8px; }
+.pasted-text-list.pasted-text-list-message { margin-top: 8px; }
 .pasted-text-chip { position: relative; min-width: 175px; max-width: 240px; border: 1px solid var(--line); border-radius: 8px; background: #f6f6f3; }
 .pasted-text-chip > button:first-child { display: flex; width: 100%; align-items: center; gap: 8px; padding: 7px 9px; border: 0; color: var(--muted); background: transparent; text-align: left; cursor: pointer; }
 .pasted-text-chip > button:first-child > span { min-width: 0; }

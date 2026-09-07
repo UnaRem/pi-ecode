@@ -29,7 +29,7 @@ export function PastedTextAttachments({ attachments, variant, onRemove }: Pasted
 
   return (
     <>
-      <div className={`pasted-text-list ${variant}`}>
+      <div className={`pasted-text-list pasted-text-list-${variant}`}>
         {attachments.map((attachment, index) => {
           const name = t("pastedText.name", { index: index + 1 });
           return (
