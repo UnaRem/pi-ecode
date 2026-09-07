@@ -31,6 +31,7 @@ import type {
 import { WorkspaceHistory } from "../history/workspace-history.js";
 import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
+import { ConfirmationService } from "./confirmation.js";
 import { formatToolInput, mapMessages, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
 import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
@@ -74,6 +75,7 @@ export class AgentService {
     (message) => this.emit({ type: "error", message }),
   );
   private readonly streamContinuity = new StreamContinuity();
+  private readonly confirmation = new ConfirmationService();
   private readonly taskPlan = new TaskPlanService((taskPlan) => this.emit({ type: "task-plan", taskPlan }));
   private readonly extensionUi = new ExtensionUiBridge(
     (request) => this.emit({ type: "extension-ui", request }),
@@ -498,7 +500,7 @@ export class AgentService {
       const services = await createAgentSessionServices({
         cwd: targetCwd,
         resourceLoaderOptions: {
-          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.taskPlan.asExtension()],
+          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.confirmation.asExtension(), this.taskPlan.asExtension()],
           eventBus: this.extensionEventBus,
           appendSystemPromptOverride: (base) => [...base, EDIT_TOOL_COMPATIBILITY_GUIDANCE],
           extensionsOverride: (base) => ({
