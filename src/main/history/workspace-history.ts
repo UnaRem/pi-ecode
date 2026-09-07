@@ -57,7 +57,6 @@ interface RedoRecord {
 
 interface PendingTurn {
   beforeCommit: string;
-  userEntryId?: string;
   prompt: string;
 }
 
@@ -137,16 +136,6 @@ export class WorkspaceHistory {
         beforeCommit,
         prompt: event.prompt,
       });
-    });
-
-    pi.on("message_end", (event, ctx) => {
-      if (event.message.role !== "user") return;
-      const pending = this.pendingBySession.get(ctx.sessionManager.getSessionId());
-      if (!pending || pending.userEntryId) return;
-      const userEntry = [...ctx.sessionManager.getBranch()].reverse().find(
-        (entry) => entry.type === "message" && entry.message.role === "user",
-      );
-      if (userEntry) pending.userEntryId = userEntry.id;
     });
 
     pi.on("agent_settled", async (_event, ctx) => {
@@ -389,7 +378,7 @@ export class WorkspaceHistory {
     input: { cwd: string; sessionId: string; branch: SessionEntry[]; append: (record: TurnRecord) => unknown },
     pending: PendingTurn,
   ): Promise<void> {
-    const userEntryId = pending.userEntryId ?? [...input.branch].reverse().find(
+    const userEntryId = [...input.branch].reverse().find(
       (entry) => entry.type === "message" && entry.message.role === "user",
     )?.id;
     if (!userEntryId) return;

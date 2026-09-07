@@ -90,7 +90,7 @@ describe("WorkspaceHistory", () => {
     expect((await history.getState(session)).isBusy).toBe(false);
   });
 
-  it("binds history to the current user message and records one settled task", async () => {
+  it("binds history after the current user message reaches the session branch", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-turn-boundary-"));
     const storage = await mkdtemp(join(tmpdir(), "pi-ecode-history-boundary-"));
     temporaryPaths.push(workspace, storage);
@@ -106,6 +106,8 @@ describe("WorkspaceHistory", () => {
     const harness = historyExtensionHarness(history, entries, workspace);
 
     await harness.handlers.get("before_agent_start")?.({ prompt: "current prompt" }, harness.context);
+    // Pi invokes extension message_end handlers before persisting that message to the session branch.
+    await harness.handlers.get("message_end")?.({ message: { role: "user" } }, harness.context);
     entries.push({
       type: "message",
       id: "current-user",
@@ -113,7 +115,6 @@ describe("WorkspaceHistory", () => {
       timestamp: new Date().toISOString(),
       message: { role: "user", content: "current prompt", timestamp: 2 },
     } as SessionEntry);
-    await harness.handlers.get("message_end")?.({ message: { role: "user" } }, harness.context);
     entries.push({
       type: "message",
       id: "assistant-result",
