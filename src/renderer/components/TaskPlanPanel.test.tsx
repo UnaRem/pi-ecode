@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskPlan } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
-import { centeredTaskScrollTop, TaskPlanPanel, TaskPlanPresence } from "./TaskPlanPanel";
+import { centeredTaskScrollTop, taskItemTopWithinList, TaskPlanPanel, TaskPlanPresence } from "./TaskPlanPanel";
 
 const plan: TaskPlan = {
   title: "Ship feature",
@@ -44,11 +44,28 @@ describe("TaskPlanPanel", () => {
     expect(presenceMarkup).not.toContain("<button");
   });
 
-  it("keeps the current task centered within scroll boundaries", () => {
-    expect(centeredTaskScrollTop(0, 23, 116, 230)).toBe(0);
+  it("keeps the current task centered using coordinates relative to the scroll list", () => {
+    expect(taskItemTopWithinList(546.5, 500, 0)).toBe(46.5);
+    expect(taskItemTopWithinList(546.5, 500, 69)).toBe(115.5);
+    expect(centeredTaskScrollTop(46.5, 23, 116, 230)).toBe(0);
     expect(centeredTaskScrollTop(115, 23, 116, 230)).toBe(68.5);
     expect(centeredTaskScrollTop(207, 23, 116, 230)).toBe(114);
     expect(centeredTaskScrollTop(0, 23, 116, 100)).toBe(0);
+  });
+
+  it("marks a completed plan for compact bottom alignment", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const completedPlan: TaskPlan = {
+      ...plan,
+      items: plan.items.map((item) => ({ ...item, status: "completed" })),
+    };
+    const markup = renderToStaticMarkup(
+      <I18nProvider><TaskPlanPanel plan={completedPlan} active /></I18nProvider>,
+    );
+
+    expect(markup).toContain("sidebar-task-items all-completed");
+    expect(markup).not.toContain(" current");
+    expect(markup).not.toContain("drop-source");
   });
 
   it("stops the water drop when the plan is inactive", () => {

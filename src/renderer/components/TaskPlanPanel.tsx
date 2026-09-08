@@ -31,6 +31,10 @@ export function TaskPlanPresence({ plan, active }: { plan: TaskPlan | null; acti
   );
 }
 
+export function taskItemTopWithinList(itemTop: number, listTop: number, scrollTop: number): number {
+  return itemTop - listTop + scrollTop;
+}
+
 export function centeredTaskScrollTop(
   itemTop: number,
   itemHeight: number,
@@ -46,6 +50,7 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
   const taskListRef = useRef<HTMLOListElement>(null);
   const currentItemRef = useRef<HTMLLIElement>(null);
   const completedCount = plan.items.filter((item) => item.status === "completed").length;
+  const allCompleted = completedCount === plan.items.length;
   const activeIndex = plan.items.findIndex((item) => item.status === "in_progress");
   const nextIndex = plan.items.findIndex((item) => item.status === "pending");
   const currentIndex = activeIndex >= 0 ? activeIndex : nextIndex;
@@ -56,15 +61,23 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
 
   useLayoutEffect(() => {
     const taskList = taskListRef.current;
+    if (!taskList) return;
+    if (allCompleted) {
+      taskList.scrollTop = taskList.scrollHeight;
+      return;
+    }
+
     const currentItem = currentItemRef.current;
-    if (!taskList || !currentItem) return;
+    if (!currentItem) return;
+    const listBounds = taskList.getBoundingClientRect();
+    const itemBounds = currentItem.getBoundingClientRect();
     taskList.scrollTop = centeredTaskScrollTop(
-      currentItem.offsetTop,
-      currentItem.offsetHeight,
+      taskItemTopWithinList(itemBounds.top, listBounds.top, taskList.scrollTop),
+      itemBounds.height,
       taskList.clientHeight,
       taskList.scrollHeight,
     );
-  }, [plan.updatedAt, currentIndex]);
+  }, [allCompleted, plan.updatedAt, currentIndex]);
 
   return (
     <section className="sidebar-task-plan" aria-label={t("task.plan", { title: plan.title })}>
@@ -76,7 +89,7 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
         aria-valuemax={plan.items.length}
         aria-valuenow={completedCount}
       >
-        <ol ref={taskListRef} className="sidebar-task-items">
+        <ol ref={taskListRef} className={`sidebar-task-items ${allCompleted ? "all-completed" : "has-current"}`}>
           {plan.items.map((item, index) => {
             const isCurrent = index === currentIndex;
             const isDropSource = index === dropSourceIndex;
