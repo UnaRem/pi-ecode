@@ -12,3 +12,7 @@ Thumbs.db
 release/
 *.tsbuildinfo
 .codegraph/
+
+# Local Blender experiments
+*.blend
+*.blend1
