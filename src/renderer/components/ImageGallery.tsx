@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { ImageAttachment } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
@@ -43,11 +44,12 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
           </div>
         ))}
       </div>
-      {active && (
+      {active && createPortal(
         <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={t("image.preview", { name: active.fileName })} onClick={() => setActive(null)}>
           <button className="image-lightbox-close" onClick={() => setActive(null)} aria-label={t("image.close")}><X size={18} /></button>
           <img src={source(active)} alt={active.fileName} onClick={(event) => event.stopPropagation()} />
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
