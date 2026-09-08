@@ -13,6 +13,7 @@ function failedAssistant(errorMessage: string): AgentMessage {
 
 describe("providerFailure", () => {
   it.each([
+    "OpenAI API error (400): upstream route interrupted",
     "502 Bad Gateway",
     "HTTP 429 Too Many Requests",
     "upstream_error: service unavailable",

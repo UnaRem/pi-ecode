@@ -15,7 +15,7 @@ const NON_RECOVERABLE_PATTERNS = [
 ];
 
 const RECOVERABLE_PATTERNS = [
-  /\b(?:408|429|5\d{2})\b/u,
+  /\b(?:400|408|429|5\d{2})\b/u,
   /\b(?:upstream_error|stream_read_error|overloaded)\b/iu,
   /\b(?:timed? out|timeout|econnreset|etimedout|socket hang up)\b/iu,
   /\b(?:connection|network|stream)[^\n]*(?:closed|failed|interrupted|lost|reset|unavailable)/iu,
