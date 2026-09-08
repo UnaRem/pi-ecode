@@ -53,6 +53,18 @@ describe("TaskPlanPanel", () => {
     expect(centeredTaskScrollTop(0, 23, 116, 100)).toBe(0);
   });
 
+  it("marks boundary current tasks for top and bottom alignment", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const firstCurrent = { ...plan, items: plan.items.map((item, index) => ({ ...item, status: index === 0 ? "in_progress" as const : "pending" as const })) };
+    const lastCurrent = { ...plan, items: plan.items.map((item, index) => ({ ...item, status: index < 2 ? "completed" as const : "in_progress" as const })) };
+
+    const firstMarkup = renderToStaticMarkup(<I18nProvider><TaskPlanPanel plan={firstCurrent} active /></I18nProvider>);
+    const lastMarkup = renderToStaticMarkup(<I18nProvider><TaskPlanPanel plan={lastCurrent} active /></I18nProvider>);
+
+    expect(firstMarkup).toContain("sidebar-task-items has-current current-first");
+    expect(lastMarkup).toContain("sidebar-task-items has-current current-last");
+  });
+
   it("marks a completed plan for compact bottom alignment", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const completedPlan: TaskPlan = {

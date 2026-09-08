@@ -337,10 +337,12 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .sidebar-task-section .sidebar-label { margin-top: 12px; }
 .sidebar-task-plan { margin: 0 6px 10px; }
 .sidebar-task-items { height: 116px; margin: 0; padding: 46.5px 3px; overflow-y: auto; list-style: none; scrollbar-width: none; }
+.sidebar-task-items.current-first { padding-top: 1px; }
+.sidebar-task-items.current-last { padding-bottom: 1px; }
 .sidebar-task-items.all-completed { padding-block: 1px; }
 .sidebar-task-items::-webkit-scrollbar { display: none; }
 .sidebar-task-items li { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: stretch; gap: 7px; min-height: 23px; color: #555550; font-size: 11.5px; line-height: 1.45; }
-.sidebar-task-items li > span:last-child { align-self: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-task-items li > span:last-child { align-self: start; overflow-wrap: anywhere; }
 .sidebar-task-marker { position: relative; width: 16px; min-height: 23px; }
 .sidebar-task-node { position: absolute; z-index: 2; top: 3px; left: 3px; width: 10px; height: 10px; border: 2px solid #aaa9a4; border-radius: 50%; background: #f4f4f1; transform-origin: center; }
 .sidebar-task-rail { position: absolute; z-index: 1; top: 13px; bottom: -3px; left: 7px; width: 2px; overflow: visible; border-radius: 1px; background: #d7d8d4; }

@@ -89,7 +89,15 @@ export function TaskPlanPanel({ plan, active }: { plan: TaskPlan; active: boolea
         aria-valuemax={plan.items.length}
         aria-valuenow={completedCount}
       >
-        <ol ref={taskListRef} className={`sidebar-task-items ${allCompleted ? "all-completed" : "has-current"}`}>
+        <ol
+          ref={taskListRef}
+          className={[
+            "sidebar-task-items",
+            allCompleted ? "all-completed" : "has-current",
+            currentIndex === 0 ? "current-first" : null,
+            currentIndex === plan.items.length - 1 ? "current-last" : null,
+          ].filter(Boolean).join(" ")}
+        >
           {plan.items.map((item, index) => {
             const isCurrent = index === currentIndex;
             const isDropSource = index === dropSourceIndex;
