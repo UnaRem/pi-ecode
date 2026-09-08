@@ -62,8 +62,14 @@ function latestNative(entries: SessionEntry[]): { entry: SessionEntry; details: 
   return { entry, details, index: entries.indexOf(entry) };
 }
 
+interface RemoteCompactionCompatibility {
+  supportsRemoteCompaction?: boolean;
+}
+
 function supportsNative(model: Model<Api>): boolean {
-  return model.api === "openai-responses" || model.api === "openai-codex-responses";
+  const compatibility = model.compat as RemoteCompactionCompatibility | undefined;
+  return compatibility?.supportsRemoteCompaction !== false
+    && (model.api === "openai-responses" || model.api === "openai-codex-responses");
 }
 
 function normalizedBaseUrl(value: string): string {

@@ -92,6 +92,20 @@ function sse(opaque = "opaque"): Response {
 }
 
 describe("NativeCompaction", () => {
+  it("uses the summary fallback when a model route disables remote compaction", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const session = fakeSession();
+    const handlers = register(new NativeCompaction(() => session, fetcher));
+    const summaryOnlyModel = {
+      ...model,
+      compat: { supportsRemoteCompaction: false },
+    } as unknown as Model<Api>;
+
+    expect(new NativeCompaction(() => session).supports(summaryOnlyModel)).toBe(false);
+    await expect(handlers.compact?.(compactEvent(), context([], summaryOnlyModel))).resolves.toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("uses remote_compaction_v2 on the normal Responses endpoint", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(sse());
     const session = fakeSession();
