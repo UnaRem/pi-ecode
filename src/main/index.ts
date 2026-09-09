@@ -67,7 +67,12 @@ function createWindow(): void {
 
   window.setMenuBarVisibility(false);
   if (process.platform === "win32") window.setAppDetails({ appId: APP_ID, appIconPath: iconPath, appIconIndex: 0 });
-  window.webContents.once("did-finish-load", () => window.show());
+  window.webContents.once("did-finish-load", () => {
+    window.show();
+    // Hand keyboard focus to the renderer after showing the initially hidden window.
+    window.focus();
+    window.webContents.focus();
+  });
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url);
     return { action: "deny" };
