@@ -336,10 +336,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 @keyframes task-plan-flash { 0%, 45% { opacity: 0; transform: scaleX(.2); } 72% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(.35); } }
 .sidebar-task-section .sidebar-label { margin-top: 12px; }
 .sidebar-task-plan { margin: 0 6px 10px; }
-.sidebar-task-items { height: 116px; margin: 0; padding: 46.5px 3px; overflow-y: auto; list-style: none; scrollbar-width: none; }
-.sidebar-task-items.current-first { padding-top: 1px; }
-.sidebar-task-items.current-last { padding-bottom: 1px; }
-.sidebar-task-items.all-completed { padding-block: 1px; }
+.sidebar-task-items { max-height: 116px; margin: 0; padding: 1px 3px; overflow-y: auto; list-style: none; scrollbar-width: none; }
 .sidebar-task-items::-webkit-scrollbar { display: none; }
 .sidebar-task-items li { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: stretch; gap: 7px; min-height: 23px; color: #555550; font-size: 11.5px; line-height: 1.45; }
 .sidebar-task-items li > span:last-child { align-self: start; overflow-wrap: anywhere; }

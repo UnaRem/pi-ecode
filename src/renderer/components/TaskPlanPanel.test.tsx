@@ -1,3 +1,5 @@
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskPlan } from "@shared/contracts";
@@ -51,6 +53,26 @@ describe("TaskPlanPanel", () => {
     expect(centeredTaskScrollTop(115, 23, 116, 230)).toBe(68.5);
     expect(centeredTaskScrollTop(207, 23, 116, 230)).toBe(114);
     expect(centeredTaskScrollTop(0, 23, 116, 100)).toBe(0);
+  });
+
+  it("uses content height without artificial edge spacing in every list state", () => {
+    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    // Check the stylesheet too: boundary classes alone cannot prevent blank padding.
+    const listRule = stylesheet.match(/\.sidebar-task-items\s*\{([^}]+)\}/u)?.[1];
+    expect(listRule).toBeDefined();
+    expect(listRule).toContain("max-height: 116px;");
+    expect(listRule).toContain("padding: 1px 3px;");
+    expect(listRule).toContain("overflow-y: auto;");
+    expect(listRule).not.toMatch(/(?:^|;)\s*height\s*:/u);
+    expect(stylesheet).not.toMatch(/\.sidebar-task-items\.(?:current-first|current-last|all-completed)\s*\{/u);
+  });
+
+  it("clamps scrolling to real content at both edges without spacer padding", () => {
+    expect(centeredTaskScrollTop(1, 34, 70, 70)).toBe(0);
+    expect(centeredTaskScrollTop(35, 34, 70, 70)).toBe(0);
+    expect(centeredTaskScrollTop(1, 34, 116, 240)).toBe(0);
+    expect(centeredTaskScrollTop(103, 34, 116, 240)).toBe(62);
+    expect(centeredTaskScrollTop(205, 34, 116, 240)).toBe(124);
   });
 
   it("marks boundary current tasks for top and bottom alignment", () => {
