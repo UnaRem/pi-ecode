@@ -1,5 +1,4 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { ToolCard } from "./ToolCard";
 import { useI18n } from "../i18n/i18n";
@@ -25,30 +24,51 @@ export function groupConsecutiveTools(timeline: ConversationItem[]): Conversatio
   return groups;
 }
 
-export function visibleToolsInBatch(tools: ToolActivity[], expanded: boolean): ToolActivity[] {
-  return tools.length > 3 && !expanded ? tools.slice(-3) : tools;
+const BOTTOM_THRESHOLD = 8;
+const SCROLLABLE_TOOL_COUNT = 3;
+
+export function isToolBatchAtBottom(scrollTop: number, clientHeight: number, scrollHeight: number): boolean {
+  return scrollHeight - scrollTop - clientHeight <= BOTTOM_THRESHOLD;
 }
 
 export function ToolBatch({ tools }: { tools: ToolActivity[] }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  const collapsible = tools.length > 3;
-  const visibleTools = visibleToolsInBatch(tools, expanded);
-  const hiddenCount = tools.length - visibleTools.length;
+  const listRef = useRef<HTMLDivElement>(null);
+  const followingRef = useRef(true);
+  const scrollable = tools.length > SCROLLABLE_TOOL_COUNT;
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    if (!scrollable) {
+      followingRef.current = true;
+      return;
+    }
+    if (followingRef.current) list.scrollTop = list.scrollHeight;
+  }, [scrollable, tools]);
+
+  const updateFollowing = (): void => {
+    const list = listRef.current;
+    if (!list) return;
+    followingRef.current = isToolBatchAtBottom(list.scrollTop, list.clientHeight, list.scrollHeight);
+  };
 
   return (
     <section className="tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
-      {collapsible && (
-        <button className="tool-batch-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
-          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          {expanded ? t("tool.collapse") : t("tool.folded", { count: hiddenCount })}
-        </button>
-      )}
-      {visibleTools.map((tool) => (
-        <div className="timeline-tool" key={tool.id}>
-          <ToolCard tool={tool} />
-        </div>
-      ))}
+      <div
+        ref={listRef}
+        className={scrollable ? "tool-batch-list scrollable" : "tool-batch-list"}
+        onScroll={updateFollowing}
+        role={scrollable ? "region" : undefined}
+        aria-label={scrollable ? t("tool.batch", { count: tools.length }) : undefined}
+        tabIndex={scrollable ? 0 : undefined}
+      >
+        {tools.map((tool) => (
+          <div className="timeline-tool" key={tool.id}>
+            <ToolCard tool={tool} />
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

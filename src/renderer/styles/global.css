@@ -393,9 +393,12 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .working-time { margin-bottom: 5px; color: var(--muted); font-size: 11px; line-height: 1.4; }
 .working-dot { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
 .stream-caret { display: inline-block; width: 5px; height: 16px; margin-left: 3px; vertical-align: -3px; border-radius: 1px; background: #777; animation: blink 1s steps(2) infinite; }
-.timeline-tool { margin: -11px 0 20px 103px; }
-.tool-batch-toggle { display: flex; align-items: center; gap: 5px; height: 27px; margin: -11px 0 18px 103px; padding: 0 9px; border: 1px solid #d6d9d6; border-radius: 14px; color: #747b77; background: #f6f7f5; font-size: 10.5px; cursor: pointer; }
-.tool-batch-toggle:hover { border-color: #bfc5c1; color: #4f5c56; background: #fff; }
+.tool-batch-list { margin: -11px 0 20px 103px; }
+.tool-batch-list.scrollable { max-height: min(320px, 45vh); padding-right: 4px; overflow-y: auto; scrollbar-color: #c7cbc8 transparent; scrollbar-width: thin; }
+.tool-batch-list.scrollable:focus-visible { border-radius: 8px; outline: 2px solid #86a9a0; outline-offset: 2px; }
+.tool-batch-list.scrollable::-webkit-scrollbar { width: 6px; }
+.tool-batch-list.scrollable::-webkit-scrollbar-thumb { border-radius: 3px; background: #c7cbc8; }
+.timeline-tool + .timeline-tool { margin-top: 9px; }
 .tool-card { --tool-accent: #7d817e; --tool-border: #d9ddd9; --tool-bg: #f0f2ef; overflow: hidden; border: 1px solid var(--tool-border); border-left: 3px solid var(--tool-accent); border-radius: 8px; color: var(--muted); background: var(--tool-bg); }
 .tool-card::before { content: attr(data-tool-label); display: block; padding: 4px 9px 0; color: var(--tool-accent); font-size: 8.5px; font-weight: 700; letter-spacing: .08em; }
 .tool-card.category-inspect { --tool-accent: #557d9b; --tool-border: #d3e0e9; --tool-bg: #f0f5f8; }

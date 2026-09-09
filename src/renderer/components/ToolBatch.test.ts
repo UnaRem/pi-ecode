@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
-import { groupConsecutiveTools, visibleToolsInBatch } from "./ToolBatch";
+import { I18nProvider } from "../i18n/i18n";
+import { groupConsecutiveTools, isToolBatchAtBottom, ToolBatch } from "./ToolBatch";
 
-function tool(id: string): ConversationItem {
-  const activity: ToolActivity = {
+function activity(id: string): ToolActivity {
+  return {
     id,
     name: "read",
     title: `read · ${id}`,
@@ -11,12 +14,49 @@ function tool(id: string): ConversationItem {
     output: id,
     status: "success",
   };
-  return { kind: "tool", id, tool: activity };
+}
+
+function tool(id: string): ConversationItem {
+  return { kind: "tool", id, tool: activity(id) };
 }
 
 function message(id: string, role: "user" | "assistant" = "assistant"): ConversationItem {
   return { kind: "message", id, message: { id, role, text: id, timestamp: 1 } };
 }
+
+describe("ToolBatch", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("renders every tool in a scrollable list when a batch exceeds three calls", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const activities = ["one", "two", "three", "four"].map(activity);
+    const markup = renderToStaticMarkup(
+      createElement(I18nProvider, null, createElement(ToolBatch, { tools: activities })),
+    );
+
+    expect(markup.match(/class="tool-card/g)).toHaveLength(4);
+    expect(markup).toContain('class="tool-batch-list scrollable"');
+    expect(markup).toContain('role="region"');
+    expect(markup).toContain('tabindex="0"');
+    expect(markup).not.toContain("tool-batch-toggle");
+  });
+
+  it("keeps short batches at their natural height", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(
+      createElement(I18nProvider, null, createElement(ToolBatch, { tools: ["one", "two", "three"].map(activity) })),
+    );
+
+    expect(markup).toContain('class="tool-batch-list"');
+    expect(markup).not.toContain('tabindex="0"');
+  });
+
+  it("detects whether the scroll position is close enough to follow the latest tool", () => {
+    expect(isToolBatchAtBottom(92, 100, 200)).toBe(true);
+    expect(isToolBatchAtBottom(91, 100, 200)).toBe(false);
+    expect(isToolBatchAtBottom(0, 100, 80)).toBe(true);
+  });
+});
 
 describe("groupConsecutiveTools", () => {
   it("groups only consecutive tool calls", () => {
@@ -32,18 +72,6 @@ describe("groupConsecutiveTools", () => {
     expect(groups.map((group) => group.kind)).toEqual(["message", "tools", "message", "tools"]);
     expect(groups[1]).toMatchObject({ kind: "tools", tools: [{ id: "one" }, { id: "two" }] });
     expect(groups[3]).toMatchObject({ kind: "tools", tools: [{ id: "three" }, { id: "four" }] });
-  });
-
-  it("keeps at most three calls open and otherwise shows the latest three calls", () => {
-    const activities = ["one", "two", "three", "four"].map((id) => {
-      const item = tool(id);
-      if (item.kind !== "tool") throw new Error("Expected tool item");
-      return item.tool;
-    });
-
-    expect(visibleToolsInBatch(activities.slice(0, 3), false).map((item) => item.id)).toEqual(["one", "two", "three"]);
-    expect(visibleToolsInBatch(activities, false).map((item) => item.id)).toEqual(["two", "three", "four"]);
-    expect(visibleToolsInBatch(activities, true).map((item) => item.id)).toEqual(["one", "two", "three", "four"]);
   });
 
   it("does not merge tools across a user message boundary", () => {
