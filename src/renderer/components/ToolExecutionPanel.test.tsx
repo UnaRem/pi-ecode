@@ -48,6 +48,7 @@ describe("ToolExecutionPanel", () => {
     expect(stylesheet).toContain("@keyframes tool-panel-leave");
     expect(stylesheet).toContain("@keyframes tool-drawer-enter");
     expect(stylesheet).toContain("@keyframes tool-drawer-leave");
+    expect(stylesheet).toMatch(/@media \(min-width: 1001px\)[\s\S]*?\.workspace:has\(\.tool-execution-panel:not\(\.leaving\)\) \.composer-area\s*\{[^}]*padding-right:\s*calc\(28px \+ var\(--tool-panel-width\)\)/u);
     expect(stylesheet).toMatch(/@media \(max-width: 1000px\)[\s\S]*?\.tool-execution-panel\s*\{[^}]*position:\s*absolute/u);
   });
 
