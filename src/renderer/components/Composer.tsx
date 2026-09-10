@@ -15,6 +15,8 @@ export interface ComposerProps {
   restoredText: string | null;
   restoredImages: ImageAttachment[];
   restoreVersion: number;
+  restoreMode?: "replace" | "merge";
+  onEditorRestored?: (version: number) => void;
   context: ContextState;
   history: WorkspaceHistoryState;
   extensionUi: ExtensionUiRequest | null;
@@ -75,13 +77,15 @@ export function Composer(props: ComposerProps) {
   useEffect(() => {
     if (props.restoredText !== null) {
       const restored = parsePastedTexts(props.restoredText);
-      setText(restored.message);
-      setPastedTexts(restored.attachments);
+      setText((current) => props.restoreMode === "merge"
+        ? [restored.message, current].filter(Boolean).join("\n\n") : restored.message);
+      setPastedTexts((current) => props.restoreMode === "merge" ? [...restored.attachments, ...current] : restored.attachments);
     }
-    setImages(props.restoredImages);
+    setImages((current) => props.restoreMode === "merge" ? [...props.restoredImages, ...current] : props.restoredImages);
     if (props.restoredText !== null || props.restoredImages.length > 0) {
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
+    props.onEditorRestored?.(props.restoreVersion);
   }, [props.restoreVersion]);
 
   useLayoutEffect(() => {

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "@shared/contracts";
-import { INITIAL_AGENT_STATE, reduceAgentEvent } from "@renderer/lib/agent-state";
+import { INITIAL_AGENT_STATE, optimisticTimeline, reduceAgentEvent } from "@renderer/lib/agent-state";
 
 const LAST_PROJECT_KEY = "pi-ecode:last-project";
 
@@ -11,6 +11,7 @@ function messageFromError(error: unknown): string {
 export function useAgent() {
   const [state, dispatch] = useReducer(reduceAgentEvent, INITIAL_AGENT_STATE);
   const [isLoading, setIsLoading] = useState(true);
+  const timeline = useMemo(() => optimisticTimeline(state), [state.timeline, state.pendingPrompts]);
 
   const run = useCallback(async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
     try {
@@ -81,9 +82,20 @@ export function useAgent() {
   }, [run]);
 
   const send = useCallback(async (message: string, images: ImageAttachment[] = []) => {
-    dispatch({ type: "state", patch: { error: null } });
-    await run(() => window.piDesktop.prompt(message, images));
-  }, [run]);
+    const id = `pending-user-${crypto.randomUUID()}`;
+    // Show the local echo before IPC; its completion can mean queueing, not acceptance.
+    dispatch({ type: "prompt-started", prompt: { id, text: message, images, timestamp: Date.now() } });
+    try {
+      await window.piDesktop.prompt(message, images);
+      dispatch({ type: "prompt-finished", id });
+    } catch (error) {
+      dispatch({ type: "prompt-failed", id, error: messageFromError(error) });
+    }
+  }, []);
+
+  const editorRestored = useCallback((version: number) => {
+    dispatch({ type: "editor-restored", version });
+  }, []);
 
   const compact = useCallback(async () => {
     await run(() => window.piDesktop.compact());
@@ -144,7 +156,7 @@ export function useAgent() {
   }, [run]);
 
   return {
-    state,
+    state: { ...state, timeline },
     isLoading,
     actions: {
       chooseProject,
@@ -154,6 +166,7 @@ export function useAgent() {
       renameSession,
       continueAfterError,
       send,
+      editorRestored,
       compact,
       cancelCompact,
       stop,

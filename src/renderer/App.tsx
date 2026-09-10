@@ -139,6 +139,8 @@ export default function App() {
           restoredText={state.restoredEditorText}
           restoredImages={state.restoredEditorImages}
           restoreVersion={state.editorRestoreVersion}
+          restoreMode={state.editorRestoreMode}
+          onEditorRestored={actions.editorRestored}
           context={state.context}
           history={state.history}
           extensionUi={state.extensionUi}
