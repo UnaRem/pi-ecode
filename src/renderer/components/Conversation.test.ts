@@ -2,11 +2,17 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/i18n";
-import { Conversation, formatWorkingDuration } from "./Conversation";
+import { Conversation, conversationContentGrew, formatWorkingDuration } from "./Conversation";
 import { normalizeNickname } from "./MessageRoleLabel";
 
 describe("Conversation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("does not force the outer viewport down when only an inner tool list changes", () => {
+    expect(conversationContentGrew(720, 720)).toBe(false);
+    expect(conversationContentGrew(720, 680)).toBe(false);
+    expect(conversationContentGrew(720, 721)).toBe(true);
+  });
 
   it("formats elapsed time as cumulative hours, minutes, and seconds", () => {
     expect(formatWorkingDuration(0)).toBe("00:00:00");

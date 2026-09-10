@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Sparkles } from "lucide-react";
 import type { ConversationItem } from "@shared/contracts";
 import { ConversationOutline } from "./ConversationOutline";
@@ -21,6 +21,29 @@ interface ConversationProps {
 }
 
 const BOTTOM_THRESHOLD = 48;
+
+export function conversationContentGrew(previousScrollHeight: number, scrollHeight: number): boolean {
+  return scrollHeight > previousScrollHeight;
+}
+
+function useGrowingContentFollow(
+  containerRef: RefObject<HTMLElement | null>,
+  followingRef: RefObject<boolean>,
+  timeline: ConversationItem[],
+  isStreaming: boolean,
+): void {
+  const previousScrollHeightRef = useRef(0);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const previousScrollHeight = previousScrollHeightRef.current;
+    const nextScrollHeight = container.scrollHeight;
+    previousScrollHeightRef.current = nextScrollHeight;
+    if (followingRef.current && conversationContentGrew(previousScrollHeight, nextScrollHeight)) {
+      container.scrollTop = nextScrollHeight;
+    }
+  }, [timeline, isStreaming]);
+}
 
 export function formatWorkingDuration(elapsedMs: number): string {
   const totalSeconds = Math.floor(Math.max(0, elapsedMs) / 1000);
@@ -137,7 +160,6 @@ export function Conversation(props: ConversationProps) {
     followingRef.current = following;
     setIsFollowing(following);
   };
-
   const scrollToBottom = (behavior: ScrollBehavior): void => {
     const container = containerRef.current;
     if (!container) return;
@@ -157,10 +179,7 @@ export function Conversation(props: ConversationProps) {
     requestAnimationFrame(() => scrollToBottom("auto"));
   }, [latestUserId]);
 
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (container && followingRef.current) container.scrollTop = container.scrollHeight;
-  }, [props.timeline, props.isStreaming]);
+  useGrowingContentFollow(containerRef, followingRef, props.timeline, props.isStreaming);
 
   useEffect(() => {
     const root = containerRef.current;

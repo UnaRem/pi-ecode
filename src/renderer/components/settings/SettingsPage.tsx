@@ -181,7 +181,7 @@ export function SettingsPage(props: SettingsPageProps) {
       <header className="settings-header">
         <button className="icon-button" onClick={close} aria-label={t("settings.back")}><ArrowLeft size={18} /></button>
         <div><strong>{t("settings.title")}</strong><span>{t("settings.subtitle")}</span></div>
-        <button className="settings-reload" onClick={() => void settings.load()} disabled={settings.loading}>
+        <button className="settings-reload" onClick={() => void settings.reload()} disabled={settings.loading}>
           <RefreshCw className={settings.loading ? "spin" : ""} size={14} />{t("settings.reload")}
         </button>
       </header>
