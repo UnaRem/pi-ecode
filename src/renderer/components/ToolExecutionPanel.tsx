@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react";
 import { Check, CircleAlert, LoaderCircle, X } from "lucide-react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
@@ -57,11 +57,15 @@ export function useToolExecution(timeline: ConversationItem[], conversationKey: 
     setSelectedToolId(toolId);
     setPanelOpen(true);
   };
-  const closePanel = (): void => {
-    setSelectedToolId(null);
-    setPanelOpen(false);
+  const closePanel = (): void => setPanelOpen(false);
+  return {
+    selectedToolId: panelOpen ? selectedToolId : null,
+    selectedTool,
+    turnTools,
+    panelOpen,
+    selectTool,
+    closePanel,
   };
-  return { selectedToolId, selectedTool, turnTools, panelOpen, selectTool, closePanel };
 }
 
 function ToolStatus({ status }: { status: ToolActivity["status"] }) {
@@ -75,20 +79,67 @@ function ToolStatus({ status }: { status: ToolActivity["status"] }) {
   return <span className={`tool-execution-status ${status}`}>{icon}{label}</span>;
 }
 
+interface ToolExecutionPanelProps {
+  tool: ToolActivity;
+  turnTools: ToolActivity[];
+  onSelect: (toolId: string) => void;
+  onClose: () => void;
+  leaving?: boolean;
+  onAnimationEnd?: (event: AnimationEvent<HTMLElement>) => void;
+}
+
+export function ToolExecutionPanelPresence({
+  open,
+  tool,
+  turnTools,
+  onSelect,
+  onClose,
+}: Omit<ToolExecutionPanelProps, "tool" | "leaving" | "onAnimationEnd"> & { open: boolean; tool: ToolActivity | null }) {
+  const [mounted, setMounted] = useState(open && tool !== null);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (open && tool) {
+      setMounted(true);
+      setLeaving(false);
+    } else if (mounted) {
+      setLeaving(true);
+    }
+  }, [mounted, open, tool?.id]);
+
+  const finishLeaving = (event: AnimationEvent<HTMLElement>): void => {
+    if (!leaving || event.currentTarget !== event.target || !["tool-panel-leave", "tool-drawer-leave"].includes(event.animationName)) return;
+    setMounted(false);
+    setLeaving(false);
+  };
+  if (!mounted || !tool) return null;
+  return (
+    <ToolExecutionPanel
+      tool={tool}
+      turnTools={turnTools}
+      onSelect={onSelect}
+      onClose={onClose}
+      leaving={leaving}
+      onAnimationEnd={finishLeaving}
+    />
+  );
+}
+
 export function ToolExecutionPanel({
   tool,
   turnTools,
   onSelect,
   onClose,
-}: {
-  tool: ToolActivity;
-  turnTools: ToolActivity[];
-  onSelect: (toolId: string) => void;
-  onClose: () => void;
-}) {
+  leaving = false,
+  onAnimationEnd,
+}: ToolExecutionPanelProps) {
   const { t } = useI18n();
   return (
-    <aside className="tool-execution-panel" aria-label={t("tool.panelTitle")}>
+    <aside
+      className={leaving ? "tool-execution-panel leaving" : "tool-execution-panel"}
+      aria-label={t("tool.panelTitle")}
+      onAnimationEnd={onAnimationEnd}
+    >
       <header className="tool-execution-header">
         <div><strong>{t("tool.panelTitle")}</strong><ToolStatus status={tool.status} /></div>
         <button className="icon-button" onClick={onClose} aria-label={t("tool.closePanel")}><X size={17} /></button>

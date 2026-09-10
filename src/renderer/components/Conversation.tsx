@@ -5,7 +5,7 @@ import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
-import { ToolExecutionPanel, useToolExecution } from "./ToolExecutionPanel";
+import { ToolExecutionPanelPresence, useToolExecution } from "./ToolExecutionPanel";
 import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
 import { PastedTextAttachments } from "./PastedTextAttachments";
 import { useI18n } from "../i18n/i18n";
@@ -234,37 +234,36 @@ export function Conversation(props: ConversationProps) {
   return (
     <div className="conversation-stage">
       <main
-      ref={containerRef}
-      className="conversation"
-      aria-live="polite"
-      onScroll={onScroll}
-      onWheel={(event) => { if (event.deltaY < 0) setFollowing(false); }}
-    >
-      <ConversationOutline
-        messages={userMessages}
-        activeId={activeUserId}
-        showLatest={!isFollowing}
-        onSelect={selectTurn}
-        onLatest={() => scrollToBottom("smooth")}
-      />
-      <ConversationBody
-        {...props}
-        userElements={userElements}
-        workingLabel={workingLabel}
-        nicknames={nicknames}
-        onNicknameChange={saveNickname}
-        onSelectTool={toolExecution.selectTool}
-        selectedToolId={toolExecution.selectedToolId}
-      />
-      </main>
-      {toolExecution.panelOpen && toolExecution.selectedTool && (
-        <ToolExecutionPanel
-          tool={toolExecution.selectedTool}
-          turnTools={toolExecution.turnTools}
-          onSelect={toolExecution.selectTool}
-          onClose={toolExecution.closePanel}
+        ref={containerRef}
+        className="conversation"
+        aria-live="polite"
+        onScroll={onScroll}
+        onWheel={(event) => { if (event.deltaY < 0) setFollowing(false); }}
+      >
+        <ConversationOutline
+          messages={userMessages}
+          activeId={activeUserId}
+          showLatest={!isFollowing}
+          onSelect={selectTurn}
+          onLatest={() => scrollToBottom("smooth")}
         />
-      )}
+        <ConversationBody
+          {...props}
+          userElements={userElements}
+          workingLabel={workingLabel}
+          nicknames={nicknames}
+          onNicknameChange={saveNickname}
+          onSelectTool={toolExecution.selectTool}
+          selectedToolId={toolExecution.selectedToolId}
+        />
+      </main>
+      <ToolExecutionPanelPresence
+        open={toolExecution.panelOpen}
+        tool={toolExecution.selectedTool}
+        turnTools={toolExecution.turnTools}
+        onSelect={toolExecution.selectTool}
+        onClose={toolExecution.closePanel}
+      />
     </div>
   );
 }

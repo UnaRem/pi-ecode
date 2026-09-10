@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, screen, shell } from "electron";
 import { AgentService } from "./agent/agent-service.js";
 import { registerIpc } from "./ipc/register-ipc.js";
 import { SettingsService } from "./settings/settings-service.js";
@@ -45,8 +45,9 @@ function createWindow(): void {
   const iconPath = app.isPackaged
     ? join(process.resourcesPath, iconFileName)
     : join(app.getAppPath(), "resources", iconFileName);
+  const initialWidth = Math.min(1440, screen.getPrimaryDisplay().workAreaSize.width);
   const window = new BrowserWindow({
-    width: 1180,
+    width: initialWidth,
     height: 780,
     minWidth: 820,
     minHeight: 560,

@@ -21,6 +21,9 @@ describe("ToolCard", () => {
       </I18nProvider>,
     );
 
+    expect(markup).toMatch(/^<button type="button" class="tool-card/);
+    expect(markup.match(/<button/g)).toHaveLength(1);
+    expect(markup).toContain("Updated file");
     expect(markup).toContain('class="tool-status"');
     expect(markup).toContain('class="sr-only">Done</span>');
     expect(markup).toContain('aria-pressed="true"');

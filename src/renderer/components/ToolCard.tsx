@@ -30,17 +30,20 @@ export function ToolCard({ tool, selected, onSelect }: { tool: ToolActivity; sel
       : <Check size={14} aria-hidden="true" />;
 
   return (
-    <section
+    <button
+      type="button"
       className={`tool-card category-${category} ${tool.status} ${selected ? "selected" : ""}`}
       data-tool-label={t(CATEGORY_KEYS[category])}
+      onClick={onSelect}
+      aria-pressed={selected}
     >
-      <button className="tool-summary" onClick={onSelect} aria-pressed={selected}>
+      <span className="tool-summary">
         <PanelRightOpen className="tool-panel-icon" size={14} aria-hidden="true" />
         <span className="tool-status">{statusIcon}</span>
         <span className="tool-title">{tool.title}</span>
         <span className="sr-only">{tool.status === "running" ? t("tool.running") : tool.status === "error" ? t("tool.failed") : t("tool.done")}</span>
-      </button>
-      {tool.output && <pre className="tool-preview">{previewLines(tool.output)}</pre>}
-    </section>
+      </span>
+      {tool.output && <span className="tool-preview">{previewLines(tool.output)}</span>}
+    </button>
   );
 }
