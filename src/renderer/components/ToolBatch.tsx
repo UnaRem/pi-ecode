@@ -31,7 +31,15 @@ export function isToolBatchAtBottom(scrollTop: number, clientHeight: number, scr
   return scrollHeight - scrollTop - clientHeight <= BOTTOM_THRESHOLD;
 }
 
-export function ToolBatch({ tools }: { tools: ToolActivity[] }) {
+export function ToolBatch({
+  tools,
+  selectedToolId,
+  onSelectTool,
+}: {
+  tools: ToolActivity[];
+  selectedToolId: string | null;
+  onSelectTool: (toolId: string) => void;
+}) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
   const followingRef = useRef(true);
@@ -65,7 +73,11 @@ export function ToolBatch({ tools }: { tools: ToolActivity[] }) {
       >
         {tools.map((tool) => (
           <div className="timeline-tool" key={tool.id}>
-            <ToolCard tool={tool} />
+            <ToolCard
+              tool={tool}
+              selected={tool.id === selectedToolId}
+              onSelect={() => onSelectTool(tool.id)}
+            />
           </div>
         ))}
       </div>

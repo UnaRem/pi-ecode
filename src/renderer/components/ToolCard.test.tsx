@@ -17,12 +17,16 @@ describe("ToolCard", () => {
           input: "",
           output: "Updated file",
           status: "success",
-        }} />
+        }} selected onSelect={vi.fn()} />
       </I18nProvider>,
     );
 
     expect(markup).toContain('class="tool-status"');
     expect(markup).toContain('class="sr-only">Done</span>');
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain("tool-panel-icon");
+    expect(markup).not.toContain('aria-expanded=');
+    expect(markup).not.toContain("tool-detail");
     expect(markup).not.toContain("<small>");
   });
 });

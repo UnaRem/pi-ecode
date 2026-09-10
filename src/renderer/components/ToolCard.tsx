@@ -1,5 +1,4 @@
-import { Check, ChevronRight, CircleAlert, LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { Check, CircleAlert, LoaderCircle, PanelRightOpen } from "lucide-react";
 import type { ToolActivity } from "@shared/contracts";
 import { toolCategory, type ToolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
@@ -21,9 +20,8 @@ function previewLines(output: string): string {
   return lines.length > 3 ? `${preview}\n…` : preview;
 }
 
-export function ToolCard({ tool }: { tool: ToolActivity }) {
+export function ToolCard({ tool, selected, onSelect }: { tool: ToolActivity; selected: boolean; onSelect: () => void }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
   const category = toolCategory(tool.name, tool.input);
   const statusIcon = tool.status === "running"
     ? <LoaderCircle className="spin" size={14} aria-hidden="true" />
@@ -33,22 +31,16 @@ export function ToolCard({ tool }: { tool: ToolActivity }) {
 
   return (
     <section
-      className={`tool-card category-${category} ${tool.status} ${expanded ? "expanded" : ""}`}
+      className={`tool-card category-${category} ${tool.status} ${selected ? "selected" : ""}`}
       data-tool-label={t(CATEGORY_KEYS[category])}
     >
-      <button className="tool-summary" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
-        <ChevronRight className="tool-chevron" size={14} />
+      <button className="tool-summary" onClick={onSelect} aria-pressed={selected}>
+        <PanelRightOpen className="tool-panel-icon" size={14} aria-hidden="true" />
         <span className="tool-status">{statusIcon}</span>
         <span className="tool-title">{tool.title}</span>
         <span className="sr-only">{tool.status === "running" ? t("tool.running") : tool.status === "error" ? t("tool.failed") : t("tool.done")}</span>
       </button>
-      {!expanded && tool.output && <pre className="tool-preview">{previewLines(tool.output)}</pre>}
-      {expanded && (
-        <div className="tool-detail">
-          {tool.input && <pre>{tool.input}</pre>}
-          {tool.output && <pre className="tool-output">{tool.output}</pre>}
-        </div>
-      )}
+      {tool.output && <pre className="tool-preview">{previewLines(tool.output)}</pre>}
     </section>
   );
 }

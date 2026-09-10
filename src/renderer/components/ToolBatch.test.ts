@@ -31,20 +31,31 @@ describe("ToolBatch", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const activities = ["one", "two", "three", "four"].map(activity);
     const markup = renderToStaticMarkup(
-      createElement(I18nProvider, null, createElement(ToolBatch, { tools: activities })),
+      createElement(I18nProvider, null, createElement(ToolBatch, {
+        tools: activities,
+        selectedToolId: "four",
+        onSelectTool: vi.fn(),
+      })),
     );
 
     expect(markup.match(/class="tool-card/g)).toHaveLength(4);
     expect(markup).toContain('class="tool-batch-list scrollable"');
     expect(markup).toContain('role="region"');
     expect(markup).toContain('tabindex="0"');
+    expect(markup).toContain('class="tool-card category-inspect success selected"');
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).not.toContain('aria-expanded=');
     expect(markup).not.toContain("tool-batch-toggle");
   });
 
   it("keeps short batches at their natural height", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(
-      createElement(I18nProvider, null, createElement(ToolBatch, { tools: ["one", "two", "three"].map(activity) })),
+      createElement(I18nProvider, null, createElement(ToolBatch, {
+        tools: ["one", "two", "three"].map(activity),
+        selectedToolId: null,
+        onSelectTool: vi.fn(),
+      })),
     );
 
     expect(markup).toContain('class="tool-batch-list"');

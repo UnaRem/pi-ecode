@@ -5,6 +5,7 @@ import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
+import { ToolExecutionPanel, useToolExecution } from "./ToolExecutionPanel";
 import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
 import { PastedTextAttachments } from "./PastedTextAttachments";
 import { useI18n } from "../i18n/i18n";
@@ -70,6 +71,8 @@ interface ConversationBodyProps extends ConversationProps {
   workingLabel: string;
   nicknames: MessageNicknames;
   onNicknameChange: (role: MessageRole, nickname: string) => void;
+  selectedToolId: string | null;
+  onSelectTool: (toolId: string) => void;
 }
 
 function ConversationBody(props: ConversationBodyProps) {
@@ -118,7 +121,12 @@ function ConversationBody(props: ConversationBodyProps) {
                 {hasLiveAssistant && group.id === lastItem?.id && <span className="stream-caret" aria-label={t("conversation.generating")} />}
               </div>
             </article>
-          ) : <ToolBatch key={group.id} tools={group.tools} />)}
+          ) : <ToolBatch
+            key={group.id}
+            tools={group.tools}
+            selectedToolId={props.selectedToolId}
+            onSelectTool={props.onSelectTool}
+          />)}
           {props.isStreaming && !hasLiveAssistant && (
             <article className="message assistant waiting">
               <MessageRoleLabel role="assistant" nickname={props.nicknames.assistant} onSave={props.onNicknameChange} />
@@ -138,6 +146,32 @@ function ConversationBody(props: ConversationBodyProps) {
   );
 }
 
+function useActiveUserTracking(
+  containerRef: RefObject<HTMLElement | null>,
+  userElements: RefObject<Map<string, HTMLElement>>,
+  userMessages: Array<{ id: string }>,
+  latestUserId: string | null,
+): [string | null, (id: string) => void] {
+  const [activeUserId, setActiveUserId] = useState<string | null>(latestUserId);
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || userMessages.length === 0) return;
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top);
+      const current = visible.at(-1)?.target.getAttribute("data-message-id");
+      if (current) setActiveUserId(current);
+    }, { root, rootMargin: "-12% 0px -68% 0px", threshold: 0 });
+    for (const message of userMessages) {
+      const element = userElements.current.get(message.id);
+      if (element) observer.observe(element);
+    }
+    return () => observer.disconnect();
+  }, [containerRef, userElements, userMessages]);
+  return [activeUserId, setActiveUserId];
+}
+
 export function Conversation(props: ConversationProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLElement>(null);
@@ -149,8 +183,9 @@ export function Conversation(props: ConversationProps) {
     item.kind === "message" && item.message.role === "user" ? [item.message] : []
   )), [props.timeline]);
   const latestUserId = userMessages.at(-1)?.id ?? null;
-  const [activeUserId, setActiveUserId] = useState<string | null>(latestUserId);
+  const [activeUserId, setActiveUserId] = useActiveUserTracking(containerRef, userElements, userMessages, latestUserId);
   const conversationKey = userMessages.at(0)?.id ?? "empty";
+  const toolExecution = useToolExecution(props.timeline, conversationKey);
   const workingDuration = useWorkingDuration(props.isStreaming ? props.workingStartedAt : null);
   const workingLabel = workingDuration
     ? t("conversation.workingTime", { time: workingDuration })
@@ -181,23 +216,6 @@ export function Conversation(props: ConversationProps) {
 
   useGrowingContentFollow(containerRef, followingRef, props.timeline, props.isStreaming);
 
-  useEffect(() => {
-    const root = containerRef.current;
-    if (!root || userMessages.length === 0) return;
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top);
-      const current = visible.at(-1)?.target.getAttribute("data-message-id");
-      if (current) setActiveUserId(current);
-    }, { root, rootMargin: "-12% 0px -68% 0px", threshold: 0 });
-    for (const message of userMessages) {
-      const element = userElements.current.get(message.id);
-      if (element) observer.observe(element);
-    }
-    return () => observer.disconnect();
-  }, [userMessages]);
-
   const onScroll = (): void => {
     const container = containerRef.current;
     if (!container) return;
@@ -214,7 +232,8 @@ export function Conversation(props: ConversationProps) {
   };
 
   return (
-    <main
+    <div className="conversation-stage">
+      <main
       ref={containerRef}
       className="conversation"
       aria-live="polite"
@@ -234,7 +253,18 @@ export function Conversation(props: ConversationProps) {
         workingLabel={workingLabel}
         nicknames={nicknames}
         onNicknameChange={saveNickname}
+        onSelectTool={toolExecution.selectTool}
+        selectedToolId={toolExecution.selectedToolId}
       />
-    </main>
+      </main>
+      {toolExecution.panelOpen && toolExecution.selectedTool && (
+        <ToolExecutionPanel
+          tool={toolExecution.selectedTool}
+          turnTools={toolExecution.turnTools}
+          onSelect={toolExecution.selectTool}
+          onClose={toolExecution.closePanel}
+        />
+      )}
+    </div>
   );
 }
