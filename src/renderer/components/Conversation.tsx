@@ -27,23 +27,37 @@ export function conversationContentGrew(previousScrollHeight: number, scrollHeig
   return scrollHeight > previousScrollHeight;
 }
 
+export function followConversationGrowth(
+  container: { scrollHeight: number; scrollTop: number },
+  previousScrollHeight: number,
+  following: boolean,
+): number {
+  const nextScrollHeight = container.scrollHeight;
+  if (following && conversationContentGrew(previousScrollHeight, nextScrollHeight)) {
+    container.scrollTop = nextScrollHeight;
+  }
+  return nextScrollHeight;
+}
+
 function useGrowingContentFollow(
   containerRef: RefObject<HTMLElement | null>,
+  contentRef: RefObject<HTMLDivElement | null>,
   followingRef: RefObject<boolean>,
-  timeline: ConversationItem[],
-  isStreaming: boolean,
 ): void {
-  const previousScrollHeightRef = useRef(0);
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
-    const previousScrollHeight = previousScrollHeightRef.current;
-    const nextScrollHeight = container.scrollHeight;
-    previousScrollHeightRef.current = nextScrollHeight;
-    if (followingRef.current && conversationContentGrew(previousScrollHeight, nextScrollHeight)) {
-      container.scrollTop = nextScrollHeight;
-    }
-  }, [timeline, isStreaming]);
+    const content = contentRef.current;
+    if (!container || !content) return;
+    let previousScrollHeight = 0;
+    const followGrowth = (): void => {
+      previousScrollHeight = followConversationGrowth(container, previousScrollHeight, followingRef.current);
+    };
+    followGrowth();
+    // Panel and card animations reflow text after React commits, so follow the rendered size itself.
+    const observer = new ResizeObserver(followGrowth);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [containerRef, contentRef, followingRef]);
 }
 
 export function formatWorkingDuration(elapsedMs: number): string {
@@ -67,6 +81,7 @@ function useWorkingDuration(startedAt: number | null): string | null {
 }
 
 interface ConversationBodyProps extends ConversationProps {
+  contentRef: RefObject<HTMLDivElement | null>;
   userElements: { current: Map<string, HTMLElement> };
   workingLabel: string;
   nicknames: MessageNicknames;
@@ -83,7 +98,7 @@ function ConversationBody(props: ConversationBodyProps) {
   const lastItem = props.timeline.at(-1);
   const hasLiveAssistant = props.isStreaming && lastItem?.kind === "message" && lastItem.message.role === "assistant";
   return (
-    <div className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
+    <div ref={props.contentRef} className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
       {isEmpty ? (
         <section className="welcome">
           <div className="welcome-icon"><Sparkles size={21} /></div>
@@ -92,7 +107,7 @@ function ConversationBody(props: ConversationBodyProps) {
         </section>
       ) : (
         <>
-          {renderGroups.map((group) => group.kind === "message" ? (
+          {renderGroups.map((group, groupIndex) => group.kind === "message" ? (
             <article
               key={group.id}
               ref={(element) => {
@@ -124,6 +139,7 @@ function ConversationBody(props: ConversationBodyProps) {
           ) : <ToolBatch
             key={group.id}
             tools={group.tools}
+            animateNewTools={props.isStreaming && groupIndex === renderGroups.length - 1}
             selectedToolId={props.selectedToolId}
             onSelectTool={props.onSelectTool}
           />)}
@@ -175,6 +191,7 @@ function useActiveUserTracking(
 export function Conversation(props: ConversationProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const userElements = useRef(new Map<string, HTMLElement>());
   const followingRef = useRef(true);
   const [isFollowing, setIsFollowing] = useState(true);
@@ -214,7 +231,7 @@ export function Conversation(props: ConversationProps) {
     requestAnimationFrame(() => scrollToBottom("auto"));
   }, [latestUserId]);
 
-  useGrowingContentFollow(containerRef, followingRef, props.timeline, props.isStreaming);
+  useGrowingContentFollow(containerRef, contentRef, followingRef);
 
   const onScroll = (): void => {
     const container = containerRef.current;
@@ -249,6 +266,7 @@ export function Conversation(props: ConversationProps) {
         />
         <ConversationBody
           {...props}
+          contentRef={contentRef}
           userElements={userElements}
           workingLabel={workingLabel}
           nicknames={nicknames}

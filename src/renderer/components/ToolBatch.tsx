@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { ToolCard } from "./ToolCard";
 import { useI18n } from "../i18n/i18n";
@@ -33,19 +33,33 @@ export function isScrollAreaAtBottom(scrollTop: number, clientHeight: number, sc
 
 export function ToolBatch({
   tools,
+  animateNewTools = false,
   selectedToolId,
   onSelectTool,
 }: {
   tools: ToolActivity[];
+  animateNewTools?: boolean;
   selectedToolId: string | null;
   onSelectTool: (toolId: string) => void;
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
   const followingRef = useRef(true);
+  const knownToolIdsRef = useRef(new Set(tools.map((tool) => tool.id)));
+  const [animatedToolIds, setAnimatedToolIds] = useState(() => {
+    const latestTool = animateNewTools ? tools.at(-1) : undefined;
+    return new Set(latestTool ? [latestTool.id] : []);
+  });
   const scrollable = tools.length > SCROLLABLE_TOOL_COUNT;
 
   useLayoutEffect(() => {
+    const newToolIds = animateNewTools
+      ? tools.filter((tool) => !knownToolIdsRef.current.has(tool.id)).map((tool) => tool.id)
+      : [];
+    knownToolIdsRef.current = new Set(tools.map((tool) => tool.id));
+    if (newToolIds.length > 0) {
+      setAnimatedToolIds((current) => new Set([...current, ...newToolIds]));
+    }
     const list = listRef.current;
     if (!list) return;
     if (!scrollable) {
@@ -72,12 +86,14 @@ export function ToolBatch({
         tabIndex={scrollable ? 0 : undefined}
       >
         {tools.map((tool) => (
-          <div className="timeline-tool" key={tool.id}>
-            <ToolCard
-              tool={tool}
-              selected={tool.id === selectedToolId}
-              onSelect={() => onSelectTool(tool.id)}
-            />
+          <div className={animatedToolIds.has(tool.id) ? "timeline-tool entering" : "timeline-tool"} key={tool.id}>
+            <div className="tool-card-reveal">
+              <ToolCard
+                tool={tool}
+                selected={tool.id === selectedToolId}
+                onSelect={() => onSelectTool(tool.id)}
+              />
+            </div>
           </div>
         ))}
       </div>

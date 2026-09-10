@@ -42,7 +42,6 @@ describe("ToolExecutionPanel", () => {
 
   it("uses a full-height side panel and shrinks the whole workspace only on wide screens", () => {
     const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
-    expect(stylesheet).toMatch(/\.tool-card\.running\s*\{[^}]*box-shadow:/u);
     expect(stylesheet).toMatch(/\.tool-execution-panel\s*\{[^}]*position:\s*fixed;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;/u);
     expect(stylesheet).toContain("@keyframes tool-panel-enter");
     expect(stylesheet).toContain("@keyframes tool-panel-leave");
@@ -50,6 +49,15 @@ describe("ToolExecutionPanel", () => {
     expect(stylesheet).not.toContain(".workspace:has(.tool-execution-panel:not(.leaving)) .composer-area");
     expect(stylesheet).toMatch(/\.tool-batch-list\.scrollable,[\s\S]*?\.tool-execution-list,[\s\S]*?\.tool-execution-detail\s*\{[^}]*scrollbar-gutter:\s*stable;[^}]*scrollbar-width:\s*thin;/u);
     expect(stylesheet).toMatch(/\.tool-execution-detail::-webkit-scrollbar-thumb:hover\s*\{[^}]*background-color:\s*#8f9994;/u);
+  });
+
+  it("reveals new tool cards before showing a category-colored running slider", () => {
+    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    expect(stylesheet).toContain("@keyframes tool-card-enter");
+    expect(stylesheet).toMatch(/\.timeline-tool\.entering\s*\{[^}]*animation:\s*tool-card-enter 220ms/u);
+    expect(stylesheet).toMatch(/\.tool-card\.running::after\s*\{[^}]*background:\s*var\(--tool-accent\);[^}]*tool-runner-bounce/u);
+    expect(stylesheet).toMatch(/\.tool-card\.selected:not\(\.running\)\s*\{/u);
+    expect(stylesheet).not.toMatch(/\.tool-card\.running\s*\{[^}]*box-shadow:/u);
   });
 
   it("mounts the presence wrapper only when initially open", () => {

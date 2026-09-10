@@ -38,7 +38,7 @@ describe("ToolBatch", () => {
       })),
     );
 
-    expect(markup.match(/class="tool-card/g)).toHaveLength(4);
+    expect(markup.match(/class="tool-card category-/g)).toHaveLength(4);
     expect(markup).toContain('class="tool-batch-list scrollable"');
     expect(markup).toContain('role="region"');
     expect(markup).toContain('tabindex="0"');
@@ -60,6 +60,23 @@ describe("ToolBatch", () => {
 
     expect(markup).toContain('class="tool-batch-list"');
     expect(markup).not.toContain('tabindex="0"');
+  });
+
+  it("marks only a live new call for the zero-height reveal", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const running = { ...activity("latest"), status: "running" as const };
+    const markup = renderToStaticMarkup(
+      createElement(I18nProvider, null, createElement(ToolBatch, {
+        tools: [activity("complete"), running],
+        animateNewTools: true,
+        selectedToolId: "latest",
+        onSelectTool: vi.fn(),
+      })),
+    );
+
+    expect(markup.match(/class="timeline-tool"/g)).toHaveLength(1);
+    expect(markup).toContain('class="timeline-tool entering"');
+    expect(markup.match(/class="tool-card-reveal"/g)).toHaveLength(2);
   });
 
   it("detects whether the scroll position is close enough to follow the latest tool", () => {
