@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
-import { groupConsecutiveTools, isToolBatchAtBottom, ToolBatch } from "./ToolBatch";
+import { groupConsecutiveTools, isScrollAreaAtBottom, ToolBatch } from "./ToolBatch";
 
 function activity(id: string): ToolActivity {
   return {
@@ -63,9 +63,9 @@ describe("ToolBatch", () => {
   });
 
   it("detects whether the scroll position is close enough to follow the latest tool", () => {
-    expect(isToolBatchAtBottom(92, 100, 200)).toBe(true);
-    expect(isToolBatchAtBottom(91, 100, 200)).toBe(false);
-    expect(isToolBatchAtBottom(0, 100, 80)).toBe(true);
+    expect(isScrollAreaAtBottom(92, 100, 200)).toBe(true);
+    expect(isScrollAreaAtBottom(91, 100, 200)).toBe(false);
+    expect(isScrollAreaAtBottom(0, 100, 80)).toBe(true);
   });
 });
 

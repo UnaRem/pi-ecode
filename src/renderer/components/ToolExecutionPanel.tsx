@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type AnimationEvent } from "react";
 import { Check, CircleAlert, LoaderCircle, X } from "lucide-react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
+import { isScrollAreaAtBottom } from "./ToolBatch";
 
 export function latestUnseenRunningTool(tools: ToolActivity[], seenToolIds: ReadonlySet<string>): ToolActivity | null {
   return tools.filter((tool) => tool.status === "running" && !seenToolIds.has(tool.id)).at(-1) ?? null;
@@ -134,6 +135,31 @@ export function ToolExecutionPanel({
   onAnimationEnd,
 }: ToolExecutionPanelProps) {
   const { t } = useI18n();
+  const selectedToolButtonRef = useRef<HTMLButtonElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const followingDetailRef = useRef(true);
+  const previousToolIdRef = useRef(tool.id);
+
+  useLayoutEffect(() => {
+    selectedToolButtonRef.current?.scrollIntoView({ block: "nearest" });
+  }, [tool.id, turnTools.length]);
+
+  useLayoutEffect(() => {
+    const detail = detailRef.current;
+    if (!detail) return;
+    if (previousToolIdRef.current !== tool.id) {
+      previousToolIdRef.current = tool.id;
+      followingDetailRef.current = true;
+    }
+    if (followingDetailRef.current) detail.scrollTop = detail.scrollHeight;
+  }, [tool.id, tool.output, tool.status]);
+
+  const updateDetailFollowing = (): void => {
+    const detail = detailRef.current;
+    if (!detail) return;
+    followingDetailRef.current = isScrollAreaAtBottom(detail.scrollTop, detail.clientHeight, detail.scrollHeight);
+  };
+
   return (
     <aside
       className={leaving ? "tool-execution-panel leaving" : "tool-execution-panel"}
@@ -148,6 +174,7 @@ export function ToolExecutionPanel({
         {turnTools.map((item, index) => (
           <button
             key={item.id}
+            ref={item.id === tool.id ? selectedToolButtonRef : undefined}
             className={`${item.status} ${item.id === tool.id ? "selected" : ""}`}
             onClick={() => onSelect(item.id)}
             aria-current={item.id === tool.id ? "true" : undefined}
@@ -158,7 +185,7 @@ export function ToolExecutionPanel({
           </button>
         ))}
       </nav>
-      <div className="tool-execution-detail">
+      <div ref={detailRef} className="tool-execution-detail" onScroll={updateDetailFollowing}>
         <h2>{tool.title}</h2>
         <section>
           <h3>{t("tool.input")}</h3>

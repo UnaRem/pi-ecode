@@ -27,7 +27,7 @@ export function groupConsecutiveTools(timeline: ConversationItem[]): Conversatio
 const BOTTOM_THRESHOLD = 8;
 const SCROLLABLE_TOOL_COUNT = 3;
 
-export function isToolBatchAtBottom(scrollTop: number, clientHeight: number, scrollHeight: number): boolean {
+export function isScrollAreaAtBottom(scrollTop: number, clientHeight: number, scrollHeight: number): boolean {
   return scrollHeight - scrollTop - clientHeight <= BOTTOM_THRESHOLD;
 }
 
@@ -58,7 +58,7 @@ export function ToolBatch({
   const updateFollowing = (): void => {
     const list = listRef.current;
     if (!list) return;
-    followingRef.current = isToolBatchAtBottom(list.scrollTop, list.clientHeight, list.scrollHeight);
+    followingRef.current = isScrollAreaAtBottom(list.scrollTop, list.clientHeight, list.scrollHeight);
   };
 
   return (
