@@ -40,16 +40,14 @@ describe("ToolExecutionPanel", () => {
     expect(toolsInSelectedTurn(timeline, "missing")).toEqual([]);
   });
 
-  it("animates both panel directions and switches to drawer motion on narrow screens", () => {
+  it("uses a full-height side panel and shrinks the whole workspace only on wide screens", () => {
     const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
     expect(stylesheet).toMatch(/\.tool-card\.running\s*\{[^}]*box-shadow:/u);
-    expect(stylesheet).toMatch(/\.tool-execution-panel\s*\{[^}]*flex:\s*0 0 var\(--tool-panel-width\)/u);
+    expect(stylesheet).toMatch(/\.tool-execution-panel\s*\{[^}]*position:\s*fixed;[^}]*top:\s*0;[^}]*right:\s*0;[^}]*bottom:\s*0;/u);
     expect(stylesheet).toContain("@keyframes tool-panel-enter");
     expect(stylesheet).toContain("@keyframes tool-panel-leave");
-    expect(stylesheet).toContain("@keyframes tool-drawer-enter");
-    expect(stylesheet).toContain("@keyframes tool-drawer-leave");
-    expect(stylesheet).toMatch(/@media \(min-width: 1001px\)[\s\S]*?\.workspace:has\(\.tool-execution-panel:not\(\.leaving\)\) \.composer-area\s*\{[^}]*padding-right:\s*calc\(28px \+ var\(--tool-panel-width\)\)/u);
-    expect(stylesheet).toMatch(/@media \(max-width: 1000px\)[\s\S]*?\.tool-execution-panel\s*\{[^}]*position:\s*absolute/u);
+    expect(stylesheet).toMatch(/@media \(min-width: 1001px\)[\s\S]*?\.app-shell:has\(\.tool-execution-panel:not\(\.leaving\)\) \.workspace\s*\{[^}]*margin-right:\s*var\(--tool-panel-width\)/u);
+    expect(stylesheet).not.toContain(".workspace:has(.tool-execution-panel:not(.leaving)) .composer-area");
   });
 
   it("mounts the presence wrapper only when initially open", () => {
