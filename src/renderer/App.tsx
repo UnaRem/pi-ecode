@@ -15,6 +15,7 @@ export default function App() {
   const { state, isLoading, actions } = useAgent();
   const { snapshot: appConfig } = useAppConfig();
   const brandIconSrc = appConfig?.iconUrl ?? "./ecode-icon.png";
+  const customBackdropActive = Boolean(appConfig?.backgroundImageUrl || appConfig?.theme?.background);
   const { t } = useI18n();
   const [startupVisible, setStartupVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -71,7 +72,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-shell ${sidebarOpen ? "sidebar-visible" : ""}`}>
+    <div className={`app-shell ${sidebarOpen ? "sidebar-visible" : ""} ${customBackdropActive ? "has-custom-backdrop" : ""}`}>
       {sidebarOpen && (
         <Sidebar
           projectName={state.projectName}

@@ -1,4 +1,4 @@
-import { Image, LoaderCircle, Upload, X } from "lucide-react";
+import { Image, LoaderCircle, RotateCcw, Upload, X } from "lucide-react";
 import type { AppThemeColors } from "@shared/app-config-contracts";
 import { DEFAULT_THEME_COLORS } from "@shared/app-config-contracts";
 import { useAppConfig } from "../../hooks/use-app-config";
@@ -22,6 +22,11 @@ export function AppearanceSettings() {
   const iconUrl = snapshot?.iconUrl ?? null;
   const backgroundImageUrl = snapshot?.backgroundImageUrl ?? null;
   const theme = snapshot?.theme ?? null;
+  const hasCustomTheme = Boolean(theme?.accent || theme?.accentSoft || theme?.danger || theme?.background);
+
+  const resetTheme = (): void => {
+    void saveTheme({ accent: null, accentSoft: null, danger: null, background: null });
+  };
 
   const updateColor = (key: keyof Required<AppThemeColors>, value: string): void => {
     const next: AppThemeColors = {
@@ -63,7 +68,12 @@ export function AppearanceSettings() {
         </section>
 
         <section className="appearance-card">
-          <h3>{t("settings.app.theme.title")}</h3>
+          <div className="appearance-card-header">
+            <h3>{t("settings.app.theme.title")}</h3>
+            <button className="theme-reset" onClick={resetTheme} disabled={!hasCustomTheme}>
+              <RotateCcw size={12} />{t("settings.app.theme.reset")}
+            </button>
+          </div>
           <p className="appearance-hint">{t("settings.app.theme.hint")}</p>
           <div className="theme-color-grid">
             {THEME_FIELDS.map((field) => (
