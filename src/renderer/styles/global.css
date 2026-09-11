@@ -345,7 +345,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .version-status.activating { background: #b18848; }
 .version-status.discarded { background: #c6c6c0; }
 
-.conversation-stage { position: relative; min-width: 0; min-height: 0; flex: 1; display: flex; overflow: hidden; background-size: cover; background-position: center; background-repeat: no-repeat; }
+.conversation-stage { position: relative; min-width: 0; min-height: 0; flex: 1; display: flex; overflow: hidden; background-image: var(--conversation-bg-image, none); background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed; }
 .conversation { position: relative; min-width: 0; min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: none; }
 .conversation::-webkit-scrollbar { display: none; }
 .conversation-inner { width: min(760px, calc(100% - 56px)); min-height: 100%; margin: 0 auto; padding: 34px 0 42px; }
@@ -392,6 +392,9 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .message.user.turn-start { margin-top: 8px; }
 .message.user.turn-start::before { grid-column: 1 / -1; height: 1px; margin: 0 14px 7px; content: ""; background: #e3e3de; }
 .message-role { min-width: 0; overflow: hidden; padding-top: 2px; color: var(--muted); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell.has-custom-backdrop .message-role { color: var(--text); }
+.app-shell.has-custom-backdrop .message-role-button { width: auto; padding: 2px 8px; border-radius: 6px; background: rgba(255, 255, 255, .5); backdrop-filter: blur(6px); }
+.app-shell.has-custom-backdrop .message-role-button:hover, .app-shell.has-custom-backdrop .message-role-button:focus-visible { background: rgba(255, 255, 255, .78); }
 .message-role-button { width: 100%; height: 22px; padding: 2px 3px; border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: text; }
 .message-role-button:hover, .message-role-button:focus-visible { color: var(--text); background: rgba(0, 0, 0, .04); }
 .message-role-input { width: 100%; height: 24px; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 4px; outline: none; background: var(--surface); }
@@ -503,7 +506,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .error-banner.recoverable > button:hover { border-color: #bd7067; background: #fff; }
 .notice-banner { border: 1px solid #cbded6; color: #41685d; background: #eaf3ef; }
 
-.composer-area { flex: 0 0 auto; padding: 0 28px 12px; background: var(--bg); }
+.composer-area { flex: 0 0 auto; padding: 0 28px 12px; background-color: var(--bg); background-image: var(--conversation-bg-image, none); background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed; }
 .compaction-status-panel { width: min(760px, 100%); display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 8px; margin: 0 auto 8px; padding: 10px 11px; border: 1px solid #cbded6; border-radius: 11px; color: #41685d; background: #edf5f2; box-shadow: 0 4px 15px rgba(40, 70, 60, .07); }
 .compaction-status-panel.completed { border-color: #c8dbd3; background: #eff6f3; }
 .compaction-status-panel.failed { border-color: #e5c6c2; color: #8f3f36; background: #f9ebe8; }

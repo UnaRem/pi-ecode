@@ -18,7 +18,6 @@ interface ConversationProps {
   error: string | null;
   canContinue: boolean;
   notice: string | null;
-  backgroundImageUrl?: string | null;
   onContinue: () => void;
 }
 
@@ -250,10 +249,7 @@ export function Conversation(props: ConversationProps) {
   };
 
   return (
-    <div
-      className="conversation-stage"
-      style={props.backgroundImageUrl ? { backgroundImage: `url("${props.backgroundImageUrl}")` } : undefined}
-    >
+    <div className="conversation-stage">
       <main
         ref={containerRef}
         className="conversation"

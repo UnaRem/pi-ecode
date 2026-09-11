@@ -1,5 +1,5 @@
 import { FolderOpen, LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Composer } from "./components/Composer";
 import { Conversation } from "./components/Conversation";
 import { Sidebar } from "./components/Sidebar";
@@ -16,6 +16,10 @@ export default function App() {
   const { snapshot: appConfig } = useAppConfig();
   const brandIconSrc = appConfig?.iconUrl ?? "./ecode-icon.png";
   const customBackdropActive = Boolean(appConfig?.backgroundImageUrl || appConfig?.theme?.background);
+  const conversationBackgroundUrl = appConfig?.backgroundImageUrl ?? null;
+  const workspaceStyle: CSSProperties | undefined = conversationBackgroundUrl
+    ? { "--conversation-bg-image": `url("${conversationBackgroundUrl}")` } as CSSProperties
+    : undefined;
   const { t } = useI18n();
   const [startupVisible, setStartupVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -91,7 +95,7 @@ export default function App() {
           onCollapse={() => setSidebarOpen(false)}
         />
       )}
-      <section className="workspace">
+      <section className="workspace" style={workspaceStyle}>
         {settingsOpen ? (
           <SettingsPage onClose={() => void leaveSettings()} onDirtyChange={setSettingsDirty} />
         ) : (
@@ -134,7 +138,6 @@ export default function App() {
           error={state.error}
           canContinue={state.canContinue}
           notice={state.notice}
-          backgroundImageUrl={appConfig?.backgroundImageUrl ?? null}
           onContinue={() => void actions.continueAfterError()}
         />
         <Composer
