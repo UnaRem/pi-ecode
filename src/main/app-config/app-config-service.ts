@@ -18,8 +18,9 @@ function revision(content: string): string {
 }
 
 /**
- * pi-ecode 自身应用级配置服务。
- * 与 pi agent 的 settings.json 解耦：管理窗口/UI 图标路径等应用外观偏好。
+ * pi-ecode 应用级配置服务：仅管理 UI 内 logo（选择项目按钮图标、启动屏图标）的自定义路径。
+ * 不触碰 Electron 窗口/任务栏图标——后者由打包资源固定为 PiECode 品牌图标
+ * （Windows 任务栏图标在打包态无法通过运行时 setIcon 可靠变更，属平台固有限制）。
  * 持久化到 userData/app-config.json，图标文件复制到 userData/icons/ 下。
  */
 export class AppConfigService {
@@ -33,19 +34,6 @@ export class AppConfigService {
 
   get iconsDir(): string {
     return join(app.getPath("userData"), "icons");
-  }
-
-  /**
-   * 解析图标为可用于窗口 setIcon 的本地文件绝对路径；未配置时返回默认打包图标路径。
-   * 在 app ready 之后调用；打包态从 resourcesPath 取，开发态从 appPath/resources 取。
-   */
-  resolveIconFilePath(): string | null {
-    const configured = this.cached?.iconPath ?? null;
-    if (configured) return resolve(app.getPath("userData"), configured);
-    const fileName = process.platform === "win32" ? "ecode-icon.ico" : "ecode-icon.png";
-    return app.isPackaged
-      ? join(process.resourcesPath, fileName)
-      : join(app.getAppPath(), "resources", fileName);
   }
 
   /** 渲染层可消费的图标 URL（带缓存破坏）；null 表示用默认 ./ecode-icon.png。 */
@@ -110,19 +98,19 @@ export class AppConfigService {
 
   /**
    * 弹出文件选择器，让用户选一个 .ico/.png，复制到 userData/icons/ 下，写入配置，
-   * 然后对所有窗口热更新 setIcon 并广播事件。
+   * 然后广播事件让渲染层刷新 UI logo。不影响窗口/任务栏图标。
    */
   async chooseIcon(): Promise<AppConfigSnapshot> {
     const owner = BrowserWindow.getFocusedWindow() ?? undefined;
-    const extensions = process.platform === "win32" ? ["ico", "png"] : ["png", "ico"];
+    const extensions = ["png", "ico"];
     const result = owner
       ? await dialog.showOpenDialog(owner, {
-          title: "选择应用图标",
+          title: "选择图标",
           filters: [{ name: "图标", extensions }],
           properties: ["openFile"],
         })
       : await dialog.showOpenDialog({
-          title: "选择应用图标",
+          title: "选择图标",
           filters: [{ name: "图标", extensions }],
           properties: ["openFile"],
         });
@@ -148,7 +136,6 @@ export class AppConfigService {
 
     const snapshot = this.toSnapshot(config);
     this.emit(snapshot);
-    this.applyToAllWindows();
     return snapshot;
   }
 
@@ -165,24 +152,6 @@ export class AppConfigService {
 
     const snapshot = this.toSnapshot(config);
     this.emit(snapshot);
-    this.applyToAllWindows();
     return snapshot;
-  }
-
-  /** 启动时对已存在的窗口应用当前图标（供 index.ts 在 createWindow 后调用）。 */
-  applyToAllWindows(): void {
-    const iconPath = this.resolveIconFilePath();
-    if (!iconPath) return;
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (window.isDestroyed()) continue;
-      try {
-        window.setIcon(iconPath);
-        if (process.platform === "win32") {
-          window.setAppDetails({ appId: "com.piecode.desktop", appIconPath: iconPath, appIconIndex: 0 });
-        }
-      } catch {
-        // 某些平台窗口销毁竞态下会抛错，忽略不影响主流程。
-      }
-    }
   }
 }

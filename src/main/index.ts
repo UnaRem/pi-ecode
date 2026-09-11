@@ -52,11 +52,11 @@ function focusMainWindow(): void {
 
 function createWindow(): void {
   const iconFileName = process.platform === "win32" ? "ecode-icon.ico" : "ecode-icon.png";
-  const fallbackIconPath = app.isPackaged
+  // 窗口/任务栏图标固定为 PiECode 品牌图标（打包资源），不可配置。
+  // Windows 任务栏图标在打包态无法通过运行时 setIcon 可靠变更，属平台固有限制。
+  const iconPath = app.isPackaged
     ? join(process.resourcesPath, iconFileName)
     : join(app.getAppPath(), "resources", iconFileName);
-  // 优先使用用户自定义图标，未配置时回退默认打包图标。
-  const iconPath = appConfig.resolveIconFilePath() ?? fallbackIconPath;
   const initialWidth = Math.min(1440, screen.getPrimaryDisplay().workAreaSize.width);
   const window = new BrowserWindow({
     width: initialWidth,
