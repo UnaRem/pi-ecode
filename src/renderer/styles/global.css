@@ -186,6 +186,18 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .app-icon-buttons button:disabled { opacity: .5; cursor: not-allowed; }
 .app-icon-custom { color: var(--accent); font-size: 10.5px; }
 .app-icon-default { display: inline-flex; align-items: center; gap: 4px; color: var(--faint); font-size: 10.5px; }
+.appearance-settings { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.appearance-card { padding: 16px 18px; border: 1px solid var(--line-soft); border-radius: 10px; background: rgba(255,255,255,.66); }
+.appearance-card h3 { margin: 0 0 4px; font-size: 12px; font-weight: 680; }
+.appearance-hint { margin: 0 0 14px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.theme-color-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+.theme-color-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.theme-color-field > span:first-child { color: var(--muted); font-size: 11.5px; }
+.theme-color-input-wrap { display: inline-flex; align-items: center; gap: 8px; }
+.theme-color-input-wrap input[type="color"] { width: 34px; height: 26px; padding: 1px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
+.theme-color-input-wrap code { color: var(--text); font: 10.5px "Cascadia Code", Consolas, monospace; }
+.app-background-preview { flex: 0 0 auto; display: grid; place-items: center; width: 88px; height: 88px; padding: 8px; overflow: hidden; border: 1px dashed var(--line); border-radius: 12px; background: #f4f4f1; color: var(--faint); }
+.app-background-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
 .settings-conflict button { margin-left: 9px; border: 0; color: var(--accent); background: transparent; font-size: 10px; text-decoration: underline; cursor: pointer; }
 .settings-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 220px; color: var(--muted); font-size: 11px; }
 .instruction-files-editor { max-width: 880px; margin: 0 auto; }
@@ -327,7 +339,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .version-status.activating { background: #b18848; }
 .version-status.discarded { background: #c6c6c0; }
 
-.conversation-stage { position: relative; min-width: 0; min-height: 0; flex: 1; display: flex; overflow: hidden; }
+.conversation-stage { position: relative; min-width: 0; min-height: 0; flex: 1; display: flex; overflow: hidden; background-size: cover; background-position: center; background-repeat: no-repeat; }
 .conversation { position: relative; min-width: 0; min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: none; }
 .conversation::-webkit-scrollbar { display: none; }
 .conversation-inner { width: min(760px, calc(100% - 56px)); min-height: 100%; margin: 0 auto; padding: 34px 0 42px; }

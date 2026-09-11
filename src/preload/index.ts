@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEvent, DesktopApi, ThinkingLevel } from "../shared/contracts.js";
-import type { AppConfigChangedEvent } from "../shared/app-config-contracts.js";
+import type { AppConfigChangedEvent, AppThemeColors } from "../shared/app-config-contracts.js";
 import type { AuthFlowEvent, SettingsChangedEvent } from "../shared/settings-contracts.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
@@ -43,6 +43,9 @@ const api: DesktopApi = {
   getAppConfig: () => ipcRenderer.invoke(IPC_CHANNELS.getAppConfig),
   chooseAppIcon: () => ipcRenderer.invoke(IPC_CHANNELS.chooseAppIcon),
   clearAppIcon: () => ipcRenderer.invoke(IPC_CHANNELS.clearAppIcon),
+  saveTheme: (colors: AppThemeColors) => ipcRenderer.invoke(IPC_CHANNELS.saveTheme, colors),
+  chooseBackgroundImage: () => ipcRenderer.invoke(IPC_CHANNELS.chooseBackgroundImage),
+  clearBackgroundImage: () => ipcRenderer.invoke(IPC_CHANNELS.clearBackgroundImage),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => listener(agentEvent);
     ipcRenderer.on(IPC_CHANNELS.event, handler);

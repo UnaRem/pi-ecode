@@ -42,6 +42,9 @@ export const IPC_CHANNELS = {
   chooseAppIcon: "app-config:choose-icon",
   clearAppIcon: "app-config:clear-icon",
   appConfigEvent: "app-config:event",
+  saveTheme: "app-config:save-theme",
+  chooseBackgroundImage: "app-config:choose-background",
+  clearBackgroundImage: "app-config:clear-background",
 } as const;
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -305,7 +308,7 @@ export interface ProjectGitStatus {
   message: string | null;
 }
 
-import type { AppConfigSnapshot, AppConfigChangedEvent } from "./app-config-contracts.js";
+import type { AppConfigSnapshot, AppConfigChangedEvent, AppThemeColors } from "./app-config-contracts.js";
 
 export interface DesktopApi {
   chooseProject(): Promise<string | null>;
@@ -346,6 +349,9 @@ export interface DesktopApi {
   getAppConfig(): Promise<AppConfigSnapshot>;
   chooseAppIcon(): Promise<AppConfigSnapshot>;
   clearAppIcon(): Promise<AppConfigSnapshot>;
+  saveTheme(colors: AppThemeColors): Promise<AppConfigSnapshot>;
+  chooseBackgroundImage(): Promise<AppConfigSnapshot>;
+  clearBackgroundImage(): Promise<AppConfigSnapshot>;
   subscribe(listener: (event: AgentEvent) => void): () => void;
   subscribeSettings(listener: (event: SettingsChangedEvent | AuthFlowEvent) => void): () => void;
   subscribeAppConfig(listener: (event: AppConfigChangedEvent) => void): () => void;

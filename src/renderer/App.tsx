@@ -133,6 +133,7 @@ export default function App() {
           error={state.error}
           canContinue={state.canContinue}
           notice={state.notice}
+          backgroundImageUrl={appConfig?.backgroundImageUrl ?? null}
           onContinue={() => void actions.continueAfterError()}
         />
         <Composer

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { app, BrowserWindow, dialog } from "electron";
 import { dirname, extname, join, resolve } from "node:path";
-import type { AppConfigChangedEvent, AppConfigSnapshot } from "../../shared/app-config-contracts.js";
+import type { AppConfigChangedEvent, AppConfigSnapshot, AppThemeColors } from "../../shared/app-config-contracts.js";
 
 interface AppConfigServiceOptions {
   onChanged: (event: AppConfigChangedEvent) => void;
@@ -11,17 +11,44 @@ interface AppConfigServiceOptions {
 
 interface AppConfigFile {
   iconPath: string | null;
+  theme: AppThemeColors | null;
+  backgroundImagePath: string | null;
 }
+
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
+const ICON_EXTENSIONS = ["png", "ico"];
 
 function revision(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
+function normalizeColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed.toLowerCase() : null;
+}
+
+function normalizeTheme(value: unknown): AppThemeColors | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  const colors: AppThemeColors = {
+    accent: normalizeColor(candidate.accent),
+    accentSoft: normalizeColor(candidate.accentSoft),
+    danger: normalizeColor(candidate.danger),
+    background: normalizeColor(candidate.background),
+  };
+  return Object.values(colors).some(Boolean) ? colors : null;
+}
+
+function toFileUrl(absolutePath: string, seed: string): string {
+  return `file:///${absolutePath.replace(/\\/g, "/")}?v=${revision(seed).slice(0, 8)}`;
+}
+
 /**
- * pi-ecode 应用级配置服务：仅管理 UI 内 logo（选择项目按钮图标、启动屏图标）的自定义路径。
+ * pi-ecode 应用级配置服务：管理 UI 内 logo、主题色与会话区背景图。
  * 不触碰 Electron 窗口/任务栏图标——后者由打包资源固定为 PiECode 品牌图标
  * （Windows 任务栏图标在打包态无法通过运行时 setIcon 可靠变更，属平台固有限制）。
- * 持久化到 userData/app-config.json，图标文件复制到 userData/icons/ 下。
+ * 持久化到 userData/app-config.json，图片文件复制到 userData/ 下。
  */
 export class AppConfigService {
   private cached: AppConfigSnapshot | null = null;
@@ -32,20 +59,25 @@ export class AppConfigService {
     return join(app.getPath("userData"), "app-config.json");
   }
 
-  get iconsDir(): string {
-    return join(app.getPath("userData"), "icons");
+  get assetsDir(): string {
+    return join(app.getPath("userData"), "assets");
   }
 
-  /** 渲染层可消费的图标 URL（带缓存破坏）；null 表示用默认 ./ecode-icon.png。 */
   private toSnapshot(value: AppConfigFile): AppConfigSnapshot {
     const snapshot: AppConfigSnapshot = {
       iconPath: value.iconPath ?? null,
       iconUrl: null,
+      theme: value.theme ?? { accent: null, accentSoft: null, danger: null, background: null },
+      backgroundImagePath: value.backgroundImagePath ?? null,
+      backgroundImageUrl: null,
     };
     if (value.iconPath) {
-      // 加版本哈希作为查询参数，避免渲染层缓存旧图标。
       const absolute = resolve(app.getPath("userData"), value.iconPath);
-      snapshot.iconUrl = `file:///${absolute.replace(/\\/g, "/")}?v=${revision(value.iconPath).slice(0, 8)}`;
+      snapshot.iconUrl = toFileUrl(absolute, value.iconPath);
+    }
+    if (value.backgroundImagePath) {
+      const absolute = resolve(app.getPath("userData"), value.backgroundImagePath);
+      snapshot.backgroundImageUrl = toFileUrl(absolute, value.backgroundImagePath);
     }
     return snapshot;
   }
@@ -65,12 +97,18 @@ export class AppConfigService {
     try {
       const content = await readFile(this.configFilePath, "utf8");
       const parsed: unknown = JSON.parse(content);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { iconPath: null };
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { iconPath: null, theme: null, backgroundImagePath: null };
+      }
       const candidate = parsed as Partial<AppConfigFile>;
-      return { iconPath: typeof candidate.iconPath === "string" ? candidate.iconPath : null };
+      return {
+        iconPath: typeof candidate.iconPath === "string" ? candidate.iconPath : null,
+        theme: normalizeTheme(candidate.theme),
+        backgroundImagePath: typeof candidate.backgroundImagePath === "string" ? candidate.backgroundImagePath : null,
+      };
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? (error as NodeJS.ErrnoException).code : undefined;
-      if (code === "ENOENT") return { iconPath: null };
+      if (code === "ENOENT") return { iconPath: null, theme: null, backgroundImagePath: null };
       throw error;
     }
   }
@@ -96,43 +134,49 @@ export class AppConfigService {
     return this.load();
   }
 
-  /**
-   * 弹出文件选择器，让用户选一个 .ico/.png，复制到 userData/icons/ 下，写入配置，
-   * 然后广播事件让渲染层刷新 UI logo。不影响窗口/任务栏图标。
-   */
-  async chooseIcon(): Promise<AppConfigSnapshot> {
+  private async pickImage(extensions: string[], title: string): Promise<string | null> {
     const owner = BrowserWindow.getFocusedWindow() ?? undefined;
-    const extensions = ["png", "ico"];
     const result = owner
       ? await dialog.showOpenDialog(owner, {
-          title: "选择图标",
-          filters: [{ name: "图标", extensions }],
+          title,
+          filters: [{ name: "图片", extensions }],
           properties: ["openFile"],
         })
       : await dialog.showOpenDialog({
-          title: "选择图标",
-          filters: [{ name: "图标", extensions }],
+          title,
+          filters: [{ name: "图片", extensions }],
           properties: ["openFile"],
         });
-    if (result.canceled || !result.filePaths[0]) return this.getSnapshot();
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  }
 
-    const source = result.filePaths[0];
+  private async copyToAssets(source: string, prefix: string): Promise<string> {
     const ext = extname(source).toLowerCase() || ".png";
-    const destName = `app-icon-${revision(source).slice(0, 12)}${ext}`;
-    await mkdir(this.iconsDir, { recursive: true });
-    const dest = join(this.iconsDir, destName);
+    const destName = `${prefix}-${revision(source).slice(0, 12)}${ext}`;
+    await mkdir(this.assetsDir, { recursive: true });
+    const dest = join(this.assetsDir, destName);
     await copyFile(source, dest);
+    return `assets/${destName}`;
+  }
 
+  private async removeAsset(relativePath: string | null | undefined): Promise<void> {
+    if (!relativePath) return;
+    const absolute = resolve(app.getPath("userData"), relativePath);
+    if (absolute.startsWith(this.assetsDir)) await rm(absolute, { force: true });
+  }
+
+  /** 选择本地图标文件并复制到应用数据目录，广播事件让渲染层刷新 UI logo。 */
+  async chooseIcon(): Promise<AppConfigSnapshot> {
+    const source = await this.pickImage(ICON_EXTENSIONS, "选择图标");
+    if (!source) return this.getSnapshot();
+
+    const relative = await this.copyToAssets(source, "app-icon");
     const config = await this.readConfig();
     const oldValue = config.iconPath;
-    config.iconPath = `icons/${destName}`;
+    config.iconPath = relative;
     await this.writeConfig(config);
-
-    // 清理上一个自定义图标文件（默认图标不删）。
-    if (oldValue && oldValue !== config.iconPath) {
-      const oldAbs = resolve(app.getPath("userData"), oldValue);
-      if (oldAbs.startsWith(this.iconsDir)) await rm(oldAbs, { force: true });
-    }
+    await this.removeAsset(oldValue && oldValue !== relative ? oldValue : null);
 
     const snapshot = this.toSnapshot(config);
     this.emit(snapshot);
@@ -144,11 +188,47 @@ export class AppConfigService {
     const oldValue = config.iconPath;
     config.iconPath = null;
     await this.writeConfig(config);
+    await this.removeAsset(oldValue);
 
-    if (oldValue) {
-      const oldAbs = resolve(app.getPath("userData"), oldValue);
-      if (oldAbs.startsWith(this.iconsDir)) await rm(oldAbs, { force: true });
-    }
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  /** 保存主题色（null 项恢复默认）。 */
+  async saveTheme(colors: AppThemeColors): Promise<AppConfigSnapshot> {
+    const config = await this.readConfig();
+    config.theme = normalizeTheme(colors);
+    await this.writeConfig(config);
+
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  /** 选择本地图片作为会话区背景，复制到应用数据目录。 */
+  async chooseBackgroundImage(): Promise<AppConfigSnapshot> {
+    const source = await this.pickImage(IMAGE_EXTENSIONS, "选择会话区背景图");
+    if (!source) return this.getSnapshot();
+
+    const relative = await this.copyToAssets(source, "background");
+    const config = await this.readConfig();
+    const oldValue = config.backgroundImagePath;
+    config.backgroundImagePath = relative;
+    await this.writeConfig(config);
+    await this.removeAsset(oldValue && oldValue !== relative ? oldValue : null);
+
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  async clearBackgroundImage(): Promise<AppConfigSnapshot> {
+    const config = await this.readConfig();
+    const oldValue = config.backgroundImagePath;
+    config.backgroundImagePath = null;
+    await this.writeConfig(config);
+    await this.removeAsset(oldValue);
 
     const snapshot = this.toSnapshot(config);
     this.emit(snapshot);

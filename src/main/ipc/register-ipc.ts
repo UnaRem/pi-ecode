@@ -1,4 +1,5 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
+import type { AppThemeColors } from "../../shared/app-config-contracts.js";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
@@ -6,6 +7,16 @@ import type { AgentService } from "../agent/agent-service.js";
 import type { AppConfigService } from "../app-config/app-config-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
 import { ProjectGitService } from "../project-git-service.js";
+
+function isThemeColors(value: unknown): value is AppThemeColors {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  const isColorOrNull = (entry: unknown): boolean => entry === null || (typeof entry === "string" && /^#[0-9a-fA-F]{6}$/.test(entry));
+  return isColorOrNull(candidate.accent)
+    && isColorOrNull(candidate.accentSoft)
+    && isColorOrNull(candidate.danger)
+    && isColorOrNull(candidate.background);
+}
 
 function isExtensionUiResponse(value: unknown): value is ExtensionUiResponse {
   if (!value || typeof value !== "object") return false;
@@ -124,6 +135,12 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.getAppConfig, () => appConfig.getSnapshot());
   ipcMain.handle(IPC_CHANNELS.chooseAppIcon, () => appConfig.chooseIcon());
   ipcMain.handle(IPC_CHANNELS.clearAppIcon, () => appConfig.clearIcon());
+  ipcMain.handle(IPC_CHANNELS.saveTheme, (_event, colors: unknown) => {
+    if (!isThemeColors(colors)) throw new Error("Invalid theme colors.");
+    return appConfig.saveTheme(colors);
+  });
+  ipcMain.handle(IPC_CHANNELS.chooseBackgroundImage, () => appConfig.chooseBackgroundImage());
+  ipcMain.handle(IPC_CHANNELS.clearBackgroundImage, () => appConfig.clearBackgroundImage());
 
   const unsubscribe = service.subscribe((agentEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {

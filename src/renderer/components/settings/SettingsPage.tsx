@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ConfigDocument, ConfigTarget, JsonObject } from "@shared/settings-contracts";
 import { useSettings } from "../../hooks/use-settings";
 import { useI18n, type Translate, type UiLanguage } from "../../i18n/i18n";
-import { AppIconSettings } from "./AppIconSettings";
+import { AppearanceSettings } from "./AppearanceSettings";
 import { GeneralSettingsForm } from "./GeneralSettingsForm";
 import { ModelsSettingsForm } from "./ModelsSettingsForm";
 import { AuthSettingsPanel } from "./AuthSettingsPanel";
@@ -79,7 +79,7 @@ function SettingsContent(props: SettingsContentProps) {
       {props.target === "auth" ? (
         <AuthSettingsPanel providers={settings.snapshot?.providers ?? []} flow={settings.authFlow} disabled={settings.loading} onLogin={(id, type) => void settings.login(id, type)} onLogout={(id) => void settings.logout(id)} onRespond={(response) => void settings.respondAuth(response)} onCancel={() => void settings.cancelAuth()} />
       ) : props.target === "app" ? (
-        <AppIconSettings />
+        <AppearanceSettings />
       ) : props.target === "instructions" && settings.snapshot ? (
         <InstructionFilesEditor
           documents={settings.snapshot.instructionFiles}
