@@ -7,6 +7,7 @@ import { useI18n } from "../i18n/i18n";
 interface SidebarProps {
   projectName: string;
   projectPath: string;
+  iconSrc: string;
   sessions: SessionSummary[];
   activeSessionFile: string | null;
   disabled: boolean;
@@ -39,7 +40,7 @@ export function Sidebar(props: SidebarProps) {
     <aside className={`sidebar ${isClosing ? "closing" : ""}`} onAnimationEnd={finishClosing}>
       <div className="sidebar-project">
         <button className="project-button" onClick={props.onChooseProject} title={`${t("sidebar.chooseProject")}: ${props.projectPath}`}>
-          <span className="project-mark"><img src="./ecode-icon.png" alt="" /></span>
+          <span className="project-mark"><img src={props.iconSrc} alt="" /></span>
           <span className="project-copy">
             <strong>{props.projectName}</strong>
             <small>{props.projectPath}</small>

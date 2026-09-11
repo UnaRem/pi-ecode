@@ -13,6 +13,7 @@ describe("Sidebar", () => {
         <Sidebar
           projectName="demo"
           projectPath="C:/demo"
+          iconSrc="./ecode-icon.png"
           sessions={[
             { path: "active.jsonl", id: "active", title: "Active", modifiedAt: 2, messageCount: 1 },
             { path: "inactive.jsonl", id: "inactive", title: "Inactive", modifiedAt: 1, messageCount: 1 },

@@ -76,6 +76,7 @@ export default function App() {
         <Sidebar
           projectName={state.projectName}
           projectPath={state.projectPath}
+          iconSrc={brandIconSrc}
           sessions={state.sessions}
           activeSessionFile={state.sessionFile}
           disabled={state.isStreaming}
