@@ -60,7 +60,7 @@ describe("TaskPlanPanel", () => {
     // Check the stylesheet too: boundary classes alone cannot prevent blank padding.
     const listRule = stylesheet.match(/\.sidebar-task-items\s*\{([^}]+)\}/u)?.[1];
     expect(listRule).toBeDefined();
-    expect(listRule).toContain("max-height: 116px;");
+    expect(listRule).toContain("max-height: 236px;");
     expect(listRule).toContain("padding: 1px 3px;");
     expect(listRule).toContain("overflow-y: auto;");
     expect(listRule).not.toMatch(/(?:^|;)\s*height\s*:/u);
