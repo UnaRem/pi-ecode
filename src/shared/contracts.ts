@@ -38,6 +38,10 @@ export const IPC_CHANNELS = {
   pushProject: "git:push-project",
   settingsEvent: "settings:event",
   event: "agent:event",
+  getAppConfig: "app-config:get",
+  chooseAppIcon: "app-config:choose-icon",
+  clearAppIcon: "app-config:clear-icon",
+  appConfigEvent: "app-config:event",
 } as const;
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -301,6 +305,8 @@ export interface ProjectGitStatus {
   message: string | null;
 }
 
+import type { AppConfigSnapshot, AppConfigChangedEvent } from "./app-config-contracts.js";
+
 export interface DesktopApi {
   chooseProject(): Promise<string | null>;
   openProject(path: string): Promise<AgentSnapshot>;
@@ -337,6 +343,10 @@ export interface DesktopApi {
   cancelAuth(): Promise<void>;
   getProjectGitStatus(): Promise<ProjectGitStatus>;
   pushProject(): Promise<ProjectGitStatus>;
+  getAppConfig(): Promise<AppConfigSnapshot>;
+  chooseAppIcon(): Promise<AppConfigSnapshot>;
+  clearAppIcon(): Promise<AppConfigSnapshot>;
   subscribe(listener: (event: AgentEvent) => void): () => void;
   subscribeSettings(listener: (event: SettingsChangedEvent | AuthFlowEvent) => void): () => void;
+  subscribeAppConfig(listener: (event: AppConfigChangedEvent) => void): () => void;
 }

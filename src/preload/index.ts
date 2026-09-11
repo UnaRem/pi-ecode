@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEvent, DesktopApi, ThinkingLevel } from "../shared/contracts.js";
+import type { AppConfigChangedEvent } from "../shared/app-config-contracts.js";
 import type { AuthFlowEvent, SettingsChangedEvent } from "../shared/settings-contracts.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
@@ -39,6 +40,9 @@ const api: DesktopApi = {
   cancelAuth: () => ipcRenderer.invoke(IPC_CHANNELS.cancelAuth),
   getProjectGitStatus: () => ipcRenderer.invoke(IPC_CHANNELS.getProjectGitStatus),
   pushProject: () => ipcRenderer.invoke(IPC_CHANNELS.pushProject),
+  getAppConfig: () => ipcRenderer.invoke(IPC_CHANNELS.getAppConfig),
+  chooseAppIcon: () => ipcRenderer.invoke(IPC_CHANNELS.chooseAppIcon),
+  clearAppIcon: () => ipcRenderer.invoke(IPC_CHANNELS.clearAppIcon),
   subscribe: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => listener(agentEvent);
     ipcRenderer.on(IPC_CHANNELS.event, handler);
@@ -48,6 +52,11 @@ const api: DesktopApi = {
     const handler = (_event: Electron.IpcRendererEvent, settingsEvent: SettingsChangedEvent | AuthFlowEvent): void => listener(settingsEvent);
     ipcRenderer.on(IPC_CHANNELS.settingsEvent, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.settingsEvent, handler);
+  },
+  subscribeAppConfig: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, appConfigEvent: AppConfigChangedEvent): void => listener(appConfigEvent);
+    ipcRenderer.on(IPC_CHANNELS.appConfigEvent, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.appConfigEvent, handler);
   },
 };
 

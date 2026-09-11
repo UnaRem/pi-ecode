@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { app, BrowserWindow, screen, shell } from "electron";
 import { AgentService } from "./agent/agent-service.js";
+import { AppConfigService } from "./app-config/app-config-service.js";
 import { registerIpc } from "./ipc/register-ipc.js";
 import { SettingsService } from "./settings/settings-service.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
@@ -27,9 +28,18 @@ const settings = new SettingsService({
   },
   onError: (message) => service.reportError(message),
 });
+const appConfig = new AppConfigService({
+  onChanged: (event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.appConfigEvent, event);
+    }
+  },
+  onError: (message) => service.reportError(message),
+});
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let unregisterIpc: (() => void) | undefined;
 let unsubscribeAgent: (() => void) | undefined;
+let unregisterAuth: (() => void) | undefined;
 let unsubscribeAuth: (() => void) | undefined;
 
 function focusMainWindow(): void {
@@ -42,9 +52,11 @@ function focusMainWindow(): void {
 
 function createWindow(): void {
   const iconFileName = process.platform === "win32" ? "ecode-icon.ico" : "ecode-icon.png";
-  const iconPath = app.isPackaged
+  const fallbackIconPath = app.isPackaged
     ? join(process.resourcesPath, iconFileName)
     : join(app.getAppPath(), "resources", iconFileName);
+  // 优先使用用户自定义图标，未配置时回退默认打包图标。
+  const iconPath = appConfig.resolveIconFilePath() ?? fallbackIconPath;
   const initialWidth = Math.min(1440, screen.getPrimaryDisplay().workAreaSize.width);
   const window = new BrowserWindow({
     width: initialWidth,
@@ -94,15 +106,16 @@ if (!hasSingleInstanceLock) {
   void app.whenReady().then(async () => {
     await service.initialize();
     await settings.start();
+    await appConfig.load();
     unsubscribeAgent = service.subscribe((event) => {
       if (event.type === "state" && event.patch.isStreaming === false) void settings.applyPendingIfIdle();
     });
-    unsubscribeAuth = service.subscribeAuth((event) => {
+    unregisterAuth = service.subscribeAuth((event) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, event);
       }
     });
-    unregisterIpc = registerIpc(service, settings);
+    unregisterIpc = registerIpc(service, settings, appConfig);
     createWindow();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

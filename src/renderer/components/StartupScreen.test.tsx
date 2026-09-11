@@ -10,7 +10,7 @@ describe("StartupScreen", () => {
   });
 
   it("renders the current icon and product name", () => {
-    const markup = renderToStaticMarkup(<StartupScreen ready={false} onFinished={vi.fn()} />);
+    const markup = renderToStaticMarkup(<StartupScreen ready={false} iconSrc="./ecode-icon.png" onFinished={vi.fn()} />);
     expect(markup).toContain('src="./ecode-icon.png"');
     expect(markup).toContain("<h1>PiECode</h1>");
     expect(markup).toContain('aria-label="PiECode"');

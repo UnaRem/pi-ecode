@@ -8,10 +8,11 @@ export function remainingStartupTime(startedAt: number, now: number): number {
 
 interface StartupScreenProps {
   ready: boolean;
+  iconSrc: string;
   onFinished: () => void;
 }
 
-export function StartupScreen({ ready, onFinished }: StartupScreenProps) {
+export function StartupScreen({ ready, iconSrc, onFinished }: StartupScreenProps) {
   const visibleAtRef = useRef<number | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -45,7 +46,7 @@ export function StartupScreen({ ready, onFinished }: StartupScreenProps) {
   return (
     <main className={`startup-screen${isVisible ? " visible" : ""}${isLeaving ? " leaving" : ""}`} onAnimationEnd={finish} aria-label="PiECode">
       <div className="startup-brand">
-        <img src="./ecode-icon.png" alt="" />
+        <img src={iconSrc} alt="" />
         <h1>PiECode</h1>
       </div>
     </main>

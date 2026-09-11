@@ -8,10 +8,13 @@ import { Topbar } from "./components/Topbar";
 import { ValidationPanelPresence } from "./components/ValidationPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { useAgent } from "./hooks/use-agent";
+import { useAppConfig } from "./hooks/use-app-config";
 import { useI18n } from "./i18n/i18n";
 
 export default function App() {
   const { state, isLoading, actions } = useAgent();
+  const { snapshot: appConfig } = useAppConfig();
+  const brandIconSrc = appConfig?.iconUrl ?? "./ecode-icon.png";
   const { t } = useI18n();
   const [startupVisible, setStartupVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -45,7 +48,7 @@ export default function App() {
   }, [actions, settingsOpen, state.projectPath]);
 
   if (startupVisible) {
-    return <StartupScreen ready={!isLoading} onFinished={() => setStartupVisible(false)} />;
+    return <StartupScreen ready={!isLoading} iconSrc={brandIconSrc} onFinished={() => setStartupVisible(false)} />;
   }
 
   if (isLoading) {
@@ -55,7 +58,7 @@ export default function App() {
   if (!state.projectPath || !state.projectName) {
     return (
       <div className="project-gate">
-        <div className="brand-mark"><img src="./ecode-icon.png" alt="" /></div>
+        <div className="brand-mark"><img src={brandIconSrc} alt="" /></div>
         <h1>PiECode</h1>
         <p>{t("app.tagline")}</p>
         <button onClick={() => void actions.chooseProject()}>

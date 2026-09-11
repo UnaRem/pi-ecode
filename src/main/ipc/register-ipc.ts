@@ -3,6 +3,7 @@ import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
 import type { AgentService } from "../agent/agent-service.js";
+import type { AppConfigService } from "../app-config/app-config-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
 import { ProjectGitService } from "../project-git-service.js";
 
@@ -48,7 +49,7 @@ function isSaveInstructionFileRequest(value: unknown): value is SaveInstructionF
     && (request.expectedRevision === null || typeof request.expectedRevision === "string");
 }
 
-export function registerIpc(service: AgentService, settings: SettingsService): () => void {
+export function registerIpc(service: AgentService, settings: SettingsService, appConfig: AppConfigService): () => void {
   const projectGit = new ProjectGitService(() => service.activeProjectPath ?? null);
   ipcMain.handle(IPC_CHANNELS.chooseProject, async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
@@ -120,6 +121,9 @@ export function registerIpc(service: AgentService, settings: SettingsService): (
   ipcMain.handle(IPC_CHANNELS.cancelAuth, () => service.cancelAuth());
   ipcMain.handle(IPC_CHANNELS.getProjectGitStatus, () => projectGit.getStatus());
   ipcMain.handle(IPC_CHANNELS.pushProject, () => projectGit.push());
+  ipcMain.handle(IPC_CHANNELS.getAppConfig, () => appConfig.getSnapshot());
+  ipcMain.handle(IPC_CHANNELS.chooseAppIcon, () => appConfig.chooseIcon());
+  ipcMain.handle(IPC_CHANNELS.clearAppIcon, () => appConfig.clearIcon());
 
   const unsubscribe = service.subscribe((agentEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -130,7 +134,7 @@ export function registerIpc(service: AgentService, settings: SettingsService): (
   return () => {
     unsubscribe();
     for (const channel of Object.values(IPC_CHANNELS)) {
-      if (channel !== IPC_CHANNELS.event) ipcMain.removeHandler(channel);
+      if (channel !== IPC_CHANNELS.event && channel !== IPC_CHANNELS.appConfigEvent) ipcMain.removeHandler(channel);
     }
   };
 }

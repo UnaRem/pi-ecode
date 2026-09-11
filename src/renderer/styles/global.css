@@ -175,6 +175,17 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .fff-schema input { height: 31px; padding: 0 8px; border: 1px solid #d9d9d4; border-radius: 7px; background: #fff; font-size: 10px; }
 .settings-readonly, .settings-error, .settings-conflict { max-width: 880px; margin: 0 auto 12px; padding: 9px 11px; border: 1px solid #e1d3b8; border-radius: 8px; color: #765f37; background: #f8f1e4; font-size: 10px; line-height: 1.5; }
 .settings-error { border-color: #e6c5c0; color: var(--danger); background: #faece9; white-space: pre-wrap; }
+.app-icon-settings { max-width: 880px; margin: 0 auto; display: flex; align-items: center; gap: 22px; padding: 18px 0; }
+.app-icon-preview { flex: 0 0 auto; display: grid; place-items: center; width: 88px; height: 88px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.app-icon-preview img { max-width: 64px; max-height: 64px; object-fit: contain; }
+.app-icon-actions { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.app-icon-hint { margin: 0; max-width: 460px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.app-icon-buttons { display: flex; gap: 8px; }
+.app-icon-buttons button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 12px; cursor: pointer; }
+.app-icon-buttons button.primary { border-color: var(--accent); color: var(--accent); }
+.app-icon-buttons button:disabled { opacity: .5; cursor: not-allowed; }
+.app-icon-custom { color: var(--accent); font-size: 10.5px; }
+.app-icon-default { display: inline-flex; align-items: center; gap: 4px; color: var(--faint); font-size: 10.5px; }
 .settings-conflict button { margin-left: 9px; border: 0; color: var(--accent); background: transparent; font-size: 10px; text-decoration: underline; cursor: pointer; }
 .settings-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 220px; color: var(--muted); font-size: 11px; }
 .instruction-files-editor { max-width: 880px; margin: 0 auto; }
