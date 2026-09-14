@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { REDACTED_CONFIG_VALUE } from "../../shared/settings-contracts.js";
+import { SOL_PI_PACKAGE_SOURCE } from "../agent/sol-pi-package.js";
 import { SettingsService } from "./settings-service.js";
 
 const temporaryDirectories: string[] = [];
@@ -49,6 +50,44 @@ describe("SettingsService", () => {
     await harness.service.save({ target: "global-settings", value: { quietStartup: true }, expectedRevision: snapshot.globalSettings.revision });
     expect(JSON.parse(await readFile(join(harness.agentDir, "settings.json"), "utf8"))).toEqual({ quietStartup: true });
     expect(harness.applyCount()).toBe(1);
+  });
+
+  it("registers the pinned SoL-Pi package when a managed feature is enabled", async () => {
+    const harness = await createHarness();
+    const snapshot = await harness.service.getSnapshot();
+    expect(snapshot.solPi).toMatchObject({
+      exists: false,
+      revision: null,
+      value: { version: 1, actionFusion: false, observationPack: false },
+    });
+
+    await harness.service.save({
+      target: "sol-pi",
+      value: { ...snapshot.solPi.value, actionFusion: true },
+      expectedRevision: snapshot.solPi.revision,
+    });
+
+    const settings = JSON.parse(await readFile(join(harness.agentDir, "settings.json"), "utf8")) as { packages: string[] };
+    const solPi = JSON.parse(await readFile(join(harness.agentDir, "sol-pi.json"), "utf8")) as Record<string, unknown>;
+    expect(settings.packages).toEqual([SOL_PI_PACKAGE_SOURCE]);
+    expect(solPi).toMatchObject({ version: 1, actionFusion: true, observationPack: false });
+    expect(harness.applyCount()).toBe(1);
+  });
+
+  it("preserves an existing SoL-Pi package source instead of adding a duplicate", async () => {
+    const harness = await createHarness();
+    const existing = { source: "git:github.com/NVlabs/SoL-Pi@main", extensions: ["src/sol-pi/index.ts"] };
+    await writeFile(join(harness.agentDir, "settings.json"), JSON.stringify({ packages: [existing] }));
+    const snapshot = await harness.service.getSnapshot();
+
+    await harness.service.save({
+      target: "sol-pi",
+      value: { ...snapshot.solPi.value, observationPack: true },
+      expectedRevision: snapshot.solPi.revision,
+    });
+
+    const settings = JSON.parse(await readFile(join(harness.agentDir, "settings.json"), "utf8")) as { packages: unknown[] };
+    expect(settings.packages).toEqual([existing]);
   });
 
   it("loads and saves only the fixed instruction file targets", async () => {

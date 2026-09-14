@@ -13,6 +13,10 @@ function optionalString(value: JsonValue | undefined, path: string, errors: stri
   if (value !== undefined && typeof value !== "string") errors.push(`${path} must be a string.`);
 }
 
+function optionalNonEmptyString(value: JsonValue | undefined, path: string, errors: string[]): void {
+  if (value !== undefined && (typeof value !== "string" || !value.trim())) errors.push(`${path} must be a non-empty string.`);
+}
+
 function optionalBoolean(value: JsonValue | undefined, path: string, errors: string[]): void {
   if (value !== undefined && typeof value !== "boolean") errors.push(`${path} must be a boolean.`);
 }
@@ -102,9 +106,35 @@ function validateFff(value: JsonObject): string[] {
   return errors;
 }
 
+function validateSolPi(value: JsonObject): string[] {
+  const errors: string[] = [];
+  const allowed = new Set([
+    "version",
+    "actionFusion",
+    "observationPack",
+    "evidencePreservingReducer",
+    "evidencePreservingReducerProvider",
+    "evidencePreservingReducerModel",
+    "onlineContextCompact",
+    "cacheWriteReadRatio",
+  ]);
+  for (const key of Object.keys(value)) if (!allowed.has(key)) errors.push(`Unknown SoL-Pi setting: ${key}.`);
+  if (value.version !== 1) errors.push("version must be 1.");
+  optionalBoolean(value.actionFusion, "actionFusion", errors);
+  optionalBoolean(value.observationPack, "observationPack", errors);
+  optionalBoolean(value.evidencePreservingReducer, "evidencePreservingReducer", errors);
+  optionalNonEmptyString(value.evidencePreservingReducerProvider, "evidencePreservingReducerProvider", errors);
+  optionalNonEmptyString(value.evidencePreservingReducerModel, "evidencePreservingReducerModel", errors);
+  optionalBoolean(value.onlineContextCompact, "onlineContextCompact", errors);
+  optionalNonNegativeNumber(value.cacheWriteReadRatio, "cacheWriteReadRatio", errors);
+  return errors;
+}
+
 export function validateConfig(target: ConfigTarget, value: JsonObject): void {
   const errors = target === "models"
     ? validateModels(value)
-    : target === "pi-fff" ? validateFff(value) : validateSettings(value);
+    : target === "pi-fff"
+      ? validateFff(value)
+      : target === "sol-pi" ? validateSolPi(value) : validateSettings(value);
   if (errors.length > 0) throw new Error(errors.join("\n"));
 }

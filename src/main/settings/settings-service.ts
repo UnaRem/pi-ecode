@@ -16,6 +16,7 @@ import type {
   SettingsSnapshot,
 } from "../../shared/settings-contracts.js";
 import { REDACTED_CONFIG_VALUE } from "../../shared/settings-contracts.js";
+import { ensureSolPiPackage } from "../agent/sol-pi-package.js";
 import { validateConfig } from "./settings-validation.js";
 
 interface SettingsServiceOptions {
@@ -36,6 +37,14 @@ interface LoadedDocument extends ConfigDocument {
 
 const SENSITIVE_KEYS = /^(apiKey|authorization|x-api-key|x-auth-token)$/i;
 const MAX_INSTRUCTION_FILE_BYTES = 1_000_000;
+const DEFAULT_SOL_PI_CONFIG: JsonObject = {
+  version: 1,
+  actionFusion: false,
+  observationPack: false,
+  evidencePreservingReducer: false,
+  onlineContextCompact: false,
+  cacheWriteReadRatio: 12.5,
+};
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -83,6 +92,10 @@ function restoreSensitive(next: JsonValue, current: JsonValue | undefined): Json
   return Object.fromEntries(Object.entries(next).map(([childKey, childValue]) => [childKey, restoreSensitive(childValue, currentObject[childKey])]));
 }
 
+function solPiFeatureEnabled(value: JsonObject): boolean {
+  return value.actionFusion === true || value.observationPack === true;
+}
+
 function parseJsonObject(content: string, path: string): JsonObject {
   const parsed: unknown = JSON.parse(content);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${path} must contain a JSON object.`);
@@ -113,11 +126,12 @@ export class SettingsService {
 
   async getSnapshot(): Promise<SettingsSnapshot> {
     const paths = this.paths();
-    const [globalSettings, projectSettings, models, fff, globalAppendSystem, projectAgents, providers] = await Promise.all([
+    const [globalSettings, projectSettings, models, fff, solPi, globalAppendSystem, projectAgents, providers] = await Promise.all([
       this.loadDocument(paths.globalSettings, false),
       this.loadDocument(paths.projectSettings, false),
       this.loadDocument(paths.models, true),
       this.loadDocument(paths.fff, false),
+      this.loadSolPiDocument(paths.solPi),
       this.loadInstructionFile(paths.globalAppendSystem),
       this.loadInstructionFile(paths.projectAgents),
       this.providerStatuses(),
@@ -128,6 +142,7 @@ export class SettingsService {
       effectiveSettings: mergeObjects(globalSettings.rawValue, projectSettings.rawValue),
       models: this.publicDocument(models),
       fff: this.publicDocument(fff),
+      solPi: this.publicDocument(solPi),
       instructionFiles: {
         "global-append-system": globalAppendSystem,
         "project-agents": projectAgents,
@@ -148,10 +163,16 @@ export class SettingsService {
       throw new Error("Project settings are read-only until the project is trusted by pi.");
     }
     validateConfig(request.target, request.value);
-    const current = await this.loadDocument(path, request.target === "models");
+    const current = request.target === "sol-pi"
+      ? await this.loadSolPiDocument(path)
+      : await this.loadDocument(path, request.target === "models");
     if (current.revision !== request.expectedRevision) throw new Error("The configuration changed on disk. Reload it before saving.");
     const restored = restoreSensitive(request.value, current.rawValue);
     if (!isObject(restored)) throw new Error("Configuration root must be an object.");
+    if (request.target === "sol-pi" && solPiFeatureEnabled(restored)) {
+      this.suppressWatchUntil = Date.now() + 750;
+      await ensureSolPiPackage(this.options.getProjectPath() ?? this.options.agentDir, this.options.agentDir);
+    }
     await this.writeAtomic(path, restored);
     const diskSnapshot = await this.getSnapshot();
     this.assertSnapshotValid(diskSnapshot);
@@ -204,13 +225,14 @@ export class SettingsService {
     }
   }
 
-  private paths(): Record<"globalSettings" | "projectSettings" | "models" | "fff" | "globalAppendSystem" | "projectAgents", string> {
+  private paths(): Record<"globalSettings" | "projectSettings" | "models" | "fff" | "solPi" | "globalAppendSystem" | "projectAgents", string> {
     const projectPath = this.options.getProjectPath();
     return {
       globalSettings: join(this.options.agentDir, "settings.json"),
       projectSettings: projectPath ? join(projectPath, ".pi", "settings.json") : join(this.options.agentDir, "missing-project-settings.json"),
       models: join(this.options.agentDir, "models.json"),
       fff: join(this.options.agentDir, "pi-fff.json"),
+      solPi: join(this.options.agentDir, "sol-pi.json"),
       globalAppendSystem: join(this.options.agentDir, "APPEND_SYSTEM.md"),
       projectAgents: projectPath ? join(projectPath, "AGENTS.md") : join(this.options.agentDir, "missing-project-agents.md"),
     };
@@ -220,6 +242,7 @@ export class SettingsService {
     const paths = this.paths();
     if (target === "global-settings") return paths.globalSettings;
     if (target === "project-settings") return paths.projectSettings;
+    if (target === "sol-pi") return paths.solPi;
     return target === "models" ? paths.models : paths.fff;
   }
 
@@ -249,6 +272,13 @@ export class SettingsService {
       if (code === "ENOENT") return { path, exists: false, revision: null, content: "", error: null };
       return { path, exists: true, revision: null, content: "", error: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  private async loadSolPiDocument(path: string): Promise<LoadedDocument> {
+    const document = await this.loadDocument(path, false);
+    if (document.exists || document.error) return document;
+    const defaults = structuredClone(DEFAULT_SOL_PI_CONFIG);
+    return { ...document, value: defaults, rawValue: structuredClone(defaults) };
   }
 
   private publicDocument(document: LoadedDocument): ConfigDocument {
@@ -325,6 +355,7 @@ export class SettingsService {
       ["project-settings", snapshot.projectSettings],
       ["models", snapshot.models],
       ["pi-fff", snapshot.fff],
+      ["sol-pi", snapshot.solPi],
     ];
     try {
       for (const [target, document] of documents) {

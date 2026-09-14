@@ -43,7 +43,7 @@ function isAuthPromptResponse(value: unknown): value is AuthPromptResponse {
 function isSaveConfigRequest(value: unknown): value is SaveConfigRequest {
   if (!value || typeof value !== "object") return false;
   const request = value as Partial<SaveConfigRequest>;
-  const targets = ["global-settings", "project-settings", "models", "pi-fff"];
+  const targets = ["global-settings", "project-settings", "models", "pi-fff", "sol-pi"];
   return typeof request.target === "string"
     && targets.includes(request.target)
     && Boolean(request.value)

@@ -14,11 +14,22 @@ describe("validateConfig", () => {
       enableHomeDirScanning: false,
       followSymlinks: true,
     })).not.toThrow();
+    expect(() => validateConfig("sol-pi", {
+      version: 1,
+      actionFusion: true,
+      observationPack: true,
+      evidencePreservingReducer: false,
+      onlineContextCompact: false,
+      cacheWriteReadRatio: 12.5,
+    })).not.toThrow();
   });
 
   it("rejects invalid documented values and unknown pi-fff fields", () => {
     expect(() => validateConfig("global-settings", { defaultThinkingLevel: "huge" })).toThrow("defaultThinkingLevel");
     expect(() => validateConfig("pi-fff", { mode: "fast", extra: true })).toThrow("Unknown pi-fff setting");
+    expect(() => validateConfig("sol-pi", { version: 2, actionFusion: "yes" })).toThrow("version must be 1");
+    expect(() => validateConfig("sol-pi", { version: 1, extra: true })).toThrow("Unknown SoL-Pi setting");
+    expect(() => validateConfig("sol-pi", { version: 1, evidencePreservingReducerModel: "" })).toThrow("non-empty string");
   });
 
   it("requires ids for configured custom models", () => {
