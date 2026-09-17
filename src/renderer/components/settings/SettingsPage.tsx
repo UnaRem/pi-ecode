@@ -202,6 +202,7 @@ export function SettingsPage(props: SettingsPageProps) {
       <div className="settings-layout">
         <SettingsNavigation target={target} effectiveCount={effectiveCount} onChange={changeTarget} />
         <SettingsContent
+          key={target}
           target={target}
           heading={heading}
           document={document}
