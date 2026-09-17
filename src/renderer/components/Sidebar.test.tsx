@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/i18n";
 import { Sidebar } from "./Sidebar";
@@ -34,5 +35,13 @@ describe("Sidebar", () => {
 
     expect(markup.match(/aria-label="Delete conversation"/g)).toHaveLength(1);
     expect(markup).toContain('class="session-row active"');
+  });
+
+  it("keeps the sidebar mounted and animates collapse through a reversible transition", () => {
+    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    expect(stylesheet).toMatch(/\.sidebar\s*\{[^}]*margin-left:\s*calc\(0px - var\(--sidebar-width\)\);[^}]*opacity:\s*0;/u);
+    expect(stylesheet).toMatch(/\.app-shell\.sidebar-visible \.sidebar\s*\{[^}]*margin-left:\s*0;[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/u);
+    expect(stylesheet).not.toContain("@keyframes sidebar-enter");
+    expect(stylesheet).not.toContain(".sidebar.closing");
   });
 });
