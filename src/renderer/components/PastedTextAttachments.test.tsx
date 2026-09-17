@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/i18n";
 import { PastedTextAttachments } from "./PastedTextAttachments";
@@ -17,5 +18,11 @@ describe("PastedTextAttachments", () => {
 
     expect(markup).toContain('class="pasted-text-list pasted-text-list-composer"');
     expect(markup).not.toContain('class="pasted-text-list composer"');
+  });
+
+  it("keeps the dialog mounted while its close animation plays", () => {
+    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    expect(stylesheet).toContain("@keyframes overlay-close");
+    expect(stylesheet).toMatch(/\.pasted-text-dialog\.closing[^{]*\{[^}]*animation-name:\s*overlay-close/u);
   });
 });

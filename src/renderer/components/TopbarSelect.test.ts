@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { nextOptionIndex, TopbarSelect } from "./TopbarSelect";
 
@@ -30,5 +31,11 @@ describe("TopbarSelect", () => {
     expect(nextOptionIndex(0, "ArrowUp", 3)).toBe(0);
     expect(nextOptionIndex(1, "Home", 3)).toBe(0);
     expect(nextOptionIndex(1, "End", 3)).toBe(2);
+  });
+
+  it("closes through a leave animation instead of unmounting instantly", () => {
+    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    expect(stylesheet).toContain("@keyframes select-menu-leave");
+    expect(stylesheet).toMatch(/\.select-menu\.leaving\s*\{[^}]*animation:\s*select-menu-leave/u);
   });
 });

@@ -1,14 +1,14 @@
 import { Check, ChevronDown } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useId,
   useRef,
   useState,
-  type Dispatch,
+  type AnimationEvent,
   type FocusEvent,
   type KeyboardEvent,
   type RefObject,
-  type SetStateAction,
 } from "react";
 
 export interface TopbarSelectOption {
@@ -39,20 +39,20 @@ function useSelectDismissal(
   open: boolean,
   disabled: boolean,
   shellRef: RefObject<HTMLDivElement | null>,
-  setOpen: Dispatch<SetStateAction<boolean>>,
+  close: () => void,
 ): void {
   useEffect(() => {
     if (!open) return;
     const closeOnOutsideClick = (event: PointerEvent): void => {
-      if (!shellRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!shellRef.current?.contains(event.target as Node)) close();
     };
     document.addEventListener("pointerdown", closeOnOutsideClick);
     return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
-  }, [open, setOpen, shellRef]);
+  }, [open, close, shellRef]);
 
   useEffect(() => {
-    if (disabled) setOpen(false);
-  }, [disabled, setOpen]);
+    if (disabled) close();
+  }, [disabled, close]);
 }
 
 interface SelectMenuProps {
@@ -62,13 +62,21 @@ interface SelectMenuProps {
   options: TopbarSelectOption[];
   activeIndex: number;
   optionRefs: RefObject<Array<HTMLButtonElement | null>>;
+  leaving: boolean;
   onSelect: (index: number) => void;
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>, index: number) => void;
+  onAnimationEnd: (event: AnimationEvent<HTMLDivElement>) => void;
 }
 
 function SelectMenu(props: SelectMenuProps) {
   return (
-    <div id={props.id} className="select-menu" role="listbox" aria-label={props.label}>
+    <div
+      id={props.id}
+      className={`select-menu ${props.leaving ? "leaving" : ""}`}
+      role="listbox"
+      aria-label={props.label}
+      onAnimationEnd={props.onAnimationEnd}
+    >
       {props.options.map((option, index) => (
         <button
           key={option.value}
@@ -96,22 +104,32 @@ export function TopbarSelect(props: TopbarSelectProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [open, setOpen] = useState(false);
+  const [menuLeaving, setMenuLeaving] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const selectedIndex = props.options.findIndex((option) => option.value === props.value);
   const selectedOption = props.options[selectedIndex];
 
-  useSelectDismissal(open, props.disabled, shellRef, setOpen);
+  // Menu unmounts only after its leave animation so quick toggles never trap the menu.
+  const menuMounted = open || menuLeaving;
+  const closeMenu = useCallback((restoreFocus: boolean): void => {
+    setOpen(false);
+    setMenuLeaving(true);
+    if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
+
+  useSelectDismissal(open || menuLeaving, props.disabled, shellRef, () => closeMenu(true));
+
+  const finishMenuLeave = (event: AnimationEvent<HTMLDivElement>): void => {
+    if (event.animationName !== "select-menu-leave") return;
+    setMenuLeaving(false);
+  };
 
   const openMenu = (index = selectedIndex >= 0 ? selectedIndex : 0): void => {
     if (props.disabled || props.options.length === 0) return;
     setActiveIndex(index);
+    setMenuLeaving(false);
     setOpen(true);
     requestAnimationFrame(() => optionRefs.current[index]?.focus());
-  };
-
-  const closeMenu = (restoreFocus: boolean): void => {
-    setOpen(false);
-    if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
   const selectOption = (index: number): void => {
@@ -173,7 +191,7 @@ export function TopbarSelect(props: TopbarSelectProps) {
         <span>{selectedOption?.label ?? props.placeholder ?? ""}</span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
-      {open && (
+      {menuMounted && (
         <SelectMenu
           id={listboxId}
           label={props.label}
@@ -181,8 +199,10 @@ export function TopbarSelect(props: TopbarSelectProps) {
           options={props.options}
           activeIndex={activeIndex}
           optionRefs={optionRefs}
+          leaving={menuLeaving}
           onSelect={selectOption}
           onKeyDown={onOptionKeyDown}
+          onAnimationEnd={finishMenuLeave}
         />
       )}
     </div>
