@@ -56,10 +56,9 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .project-gate .error-banner { max-width: 500px; margin-top: 18px; }
 
 .app-shell { display: flex; width: 100%; height: 100%; background: var(--bg); }
-.sidebar { --sidebar-width: 254px; width: var(--sidebar-width); min-width: var(--sidebar-width); display: flex; flex-direction: column; padding: 10px 10px 9px; overflow: hidden; border-right: 1px solid var(--line); background: var(--panel); animation: sidebar-enter 180ms cubic-bezier(.2, .75, .25, 1) both; }
-.sidebar.closing { pointer-events: none; animation: sidebar-leave 160ms cubic-bezier(.55, 0, 1, .45) both; }
-@keyframes sidebar-enter { from { margin-left: calc(0px - var(--sidebar-width)); opacity: 0; transform: translateX(-10px); } to { margin-left: 0; opacity: 1; transform: translateX(0); } }
-@keyframes sidebar-leave { from { margin-left: 0; opacity: 1; transform: translateX(0); } to { margin-left: calc(0px - var(--sidebar-width)); opacity: 0; transform: translateX(-10px); } }
+/* Sidebar stays mounted; collapse via margin/opacity transition so it can reverse mid-flight. */
+.sidebar { --sidebar-width: 254px; width: var(--sidebar-width); min-width: var(--sidebar-width); display: flex; flex-direction: column; padding: 10px 10px 9px; overflow: hidden; border-right: 1px solid var(--line); background: var(--panel); margin-left: calc(0px - var(--sidebar-width)); opacity: 0; transform: translateX(-10px); transition: margin-left 160ms cubic-bezier(.55, 0, 1, .45), opacity 160ms ease-in, transform 160ms ease-in; pointer-events: none; }
+.app-shell.sidebar-visible .sidebar { margin-left: 0; opacity: 1; transform: translateX(0); pointer-events: auto; transition: margin-left 180ms cubic-bezier(.2, .75, .25, 1), opacity 180ms ease-out, transform 180ms cubic-bezier(.2, .75, .25, 1); }
 .sidebar-project { display: flex; align-items: center; gap: 3px; margin-bottom: 12px; }
 .project-button { min-width: 0; flex: 1; display: flex; align-items: center; gap: 9px; height: 42px; padding: 4px 7px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
 .project-button:hover { background: rgba(0, 0, 0, .04); }

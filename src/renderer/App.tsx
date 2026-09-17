@@ -79,24 +79,22 @@ export default function App() {
 
   return (
     <div className={`app-shell ${sidebarOpen ? "sidebar-visible" : ""} ${customBackdropActive ? "has-custom-backdrop" : ""}`}>
-      {sidebarOpen && (
-        <Sidebar
-          projectName={state.projectName}
-          projectPath={state.projectPath}
-          iconSrc={brandIconSrc}
-          sessions={state.sessions}
-          activeSessionFile={state.sessionFile}
-          disabled={state.isStreaming}
-          taskPlan={state.taskPlan}
-          settingsActive={settingsOpen}
-          onChooseProject={() => { if (leaveSettings()) void actions.chooseProject(); }}
-          onNewSession={() => { if (leaveSettings()) void actions.newSession(); }}
-          onSwitchSession={(path) => { if (leaveSettings()) void actions.switchSession(path); }}
-          onDeleteSession={(path) => void actions.deleteSession(path)}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onCollapse={() => setSidebarOpen(false)}
-        />
-      )}
+      <Sidebar
+        projectName={state.projectName}
+        projectPath={state.projectPath}
+        iconSrc={brandIconSrc}
+        sessions={state.sessions}
+        activeSessionFile={state.sessionFile}
+        disabled={state.isStreaming}
+        taskPlan={state.taskPlan}
+        settingsActive={settingsOpen}
+        onChooseProject={() => { if (leaveSettings()) void actions.chooseProject(); }}
+        onNewSession={() => { if (leaveSettings()) void actions.newSession(); }}
+        onSwitchSession={(path) => { if (leaveSettings()) void actions.switchSession(path); }}
+        onDeleteSession={(path) => void actions.deleteSession(path)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onCollapse={() => setSidebarOpen(false)}
+      />
       <section className="workspace" style={workspaceStyle}>
         {settingsOpen ? (
           <SettingsPage onClose={() => void leaveSettings()} onDirtyChange={setSettingsDirty} />
