@@ -18,7 +18,13 @@
   --danger: #b64d42;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+/* Keep scrollbar geometry stable; only the scrolling container reveals its thumb. */
+[data-scrolling] { scrollbar-color: #8f9994 transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: transparent; background-clip: padding-box; }
+[data-scrolling]::-webkit-scrollbar-thumb { background-color: #8f9994; }
 html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
@@ -346,8 +352,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .version-status.discarded { background: #c6c6c0; }
 
 .conversation-stage { position: relative; min-width: 0; min-height: 0; flex: 1; display: flex; overflow: hidden; background-image: var(--conversation-bg-image, none); background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed; }
-.conversation { position: relative; min-width: 0; min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: none; }
-.conversation::-webkit-scrollbar { display: none; }
+.conversation { position: relative; min-width: 0; min-height: 0; flex: 1; overflow-y: auto; }
 .conversation-inner { width: min(760px, calc(100% - 56px)); min-height: 100%; margin: 0 auto; padding: 34px 0 42px; }
 .conversation-outline { position: sticky; z-index: 4; top: 50%; width: 28px; height: 0; margin-left: max(12px, calc(50% - 430px)); }
 .outline-track { display: flex; max-height: 58vh; flex-direction: column; align-items: center; gap: 4px; padding: 7px 5px; overflow: hidden; border-radius: 12px; background: rgba(247, 247, 245, .88); transform: translateY(-50%); backdrop-filter: blur(5px); }
@@ -369,8 +374,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 @keyframes task-plan-flash { 0%, 45% { opacity: 0; transform: scaleX(.2); } 72% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(.35); } }
 .sidebar-task-section .sidebar-label { margin-top: 12px; }
 .sidebar-task-plan { margin: 0 6px 10px; }
-.sidebar-task-items { max-height: 236px; margin: 0; padding: 1px 3px; overflow-y: auto; list-style: none; scrollbar-width: none; }
-.sidebar-task-items::-webkit-scrollbar { display: none; }
+.sidebar-task-items { max-height: 236px; margin: 0; padding: 1px 3px; overflow-y: auto; list-style: none; }
 .sidebar-task-items li { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: stretch; gap: 7px; min-height: 23px; color: #555550; font-size: 11.5px; line-height: 1.45; }
 .sidebar-task-items li > span:last-child { align-self: start; overflow-wrap: anywhere; }
 .sidebar-task-marker { position: relative; width: 16px; min-height: 23px; }
@@ -434,19 +438,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .tool-batch-list.scrollable:focus-visible { border-radius: 8px; outline: 2px solid #86a9a0; outline-offset: 2px; }
 .tool-batch-list.scrollable,
 .tool-execution-list,
-.tool-execution-detail { scrollbar-color: #b8bfbb transparent; scrollbar-gutter: stable; scrollbar-width: thin; }
-.tool-batch-list.scrollable::-webkit-scrollbar,
-.tool-execution-list::-webkit-scrollbar,
-.tool-execution-detail::-webkit-scrollbar { width: 8px; height: 8px; }
-.tool-batch-list.scrollable::-webkit-scrollbar-track,
-.tool-execution-list::-webkit-scrollbar-track,
-.tool-execution-detail::-webkit-scrollbar-track { background: transparent; }
-.tool-batch-list.scrollable::-webkit-scrollbar-thumb,
-.tool-execution-list::-webkit-scrollbar-thumb,
-.tool-execution-detail::-webkit-scrollbar-thumb { min-height: 36px; border: 2px solid transparent; border-radius: 999px; background: #b8bfbb; background-clip: padding-box; }
-.tool-batch-list.scrollable::-webkit-scrollbar-thumb:hover,
-.tool-execution-list::-webkit-scrollbar-thumb:hover,
-.tool-execution-detail::-webkit-scrollbar-thumb:hover { background-color: #8f9994; }
+.tool-execution-detail { scrollbar-gutter: stable; }
 .timeline-tool { min-width: 0; display: grid; grid-template-rows: 1fr; }
 .timeline-tool.entering { animation: tool-card-enter 220ms cubic-bezier(.2, .75, .25, 1) both; }
 .tool-card-reveal { min-height: 0; overflow: hidden; }

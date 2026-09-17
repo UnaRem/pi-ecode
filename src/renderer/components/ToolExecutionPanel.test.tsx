@@ -47,8 +47,11 @@ describe("ToolExecutionPanel", () => {
     expect(stylesheet).toContain("@keyframes tool-panel-leave");
     expect(stylesheet).toMatch(/@media \(min-width: 1001px\)[\s\S]*?\.app-shell:has\(\.tool-execution-panel:not\(\.leaving\)\) \.workspace\s*\{[^}]*margin-right:\s*var\(--tool-panel-width\)/u);
     expect(stylesheet).not.toContain(".workspace:has(.tool-execution-panel:not(.leaving)) .composer-area");
-    expect(stylesheet).toMatch(/\.tool-batch-list\.scrollable,[\s\S]*?\.tool-execution-list,[\s\S]*?\.tool-execution-detail\s*\{[^}]*scrollbar-gutter:\s*stable;[^}]*scrollbar-width:\s*thin;/u);
-    expect(stylesheet).toMatch(/\.tool-execution-detail::-webkit-scrollbar-thumb:hover\s*\{[^}]*background-color:\s*#8f9994;/u);
+    expect(stylesheet).toMatch(/\.tool-batch-list\.scrollable,[\s\S]*?\.tool-execution-list,[\s\S]*?\.tool-execution-detail\s*\{[^}]*scrollbar-gutter:\s*stable;/u);
+    expect(stylesheet).toMatch(/\*\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*transparent transparent;/u);
+    expect(stylesheet).toContain("[data-scrolling] { scrollbar-color: #8f9994 transparent; }");
+    expect(stylesheet).not.toContain("scrollbar-thumb:hover");
+    expect(stylesheet).not.toContain("scrollbar-width: none");
   });
 
   it("reveals new tool cards before showing a category-colored running slider", () => {

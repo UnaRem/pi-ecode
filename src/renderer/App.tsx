@@ -9,9 +9,11 @@ import { ValidationPanelPresence } from "./components/ValidationPanel";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { useAgent } from "./hooks/use-agent";
 import { useAppConfig } from "./hooks/use-app-config";
+import { useScrollbarVisibility } from "./hooks/use-scrollbar-visibility";
 import { useI18n } from "./i18n/i18n";
 
 export default function App() {
+  useScrollbarVisibility();
   const { state, isLoading, actions } = useAgent();
   const { snapshot: appConfig } = useAppConfig();
   const brandIconSrc = appConfig?.iconUrl ?? "./ecode-icon.png";
