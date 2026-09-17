@@ -46,6 +46,23 @@ describe("AgentService prompt lifecycle", () => {
     await expect(service.deleteSession("C:/outside.jsonl")).rejects.toThrow("active project");
   });
 
+  it("persists explicit model selections as the default for new sessions", async () => {
+    const model = { provider: "provider", id: "last-selected" };
+    const session = {
+      model,
+      modelRuntime: { getModel: vi.fn(() => model) },
+      setModel: vi.fn(async () => undefined),
+      getAvailableThinkingLevels: () => [],
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+
+    await service.setModel(model.provider, model.id);
+
+    expect(session.modelRuntime.getModel).toHaveBeenCalledWith(model.provider, model.id);
+    expect(session.setModel).toHaveBeenCalledWith(model, { persist: true });
+  });
+
   it("normalizes and persists a renamed session", () => {
     const session = { setSessionName: vi.fn() } as unknown as AgentSession;
     const service = new AgentService();

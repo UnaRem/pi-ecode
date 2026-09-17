@@ -403,7 +403,7 @@ export class AgentService {
     const session = this.requireRuntime().session;
     const model = session.modelRuntime.getModel(provider, modelId);
     if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
-    await session.setModel(model);
+    await session.setModel(model, { persist: true });
     this.emitModelState(session);
   }
 
