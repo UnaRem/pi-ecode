@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { ToolCard } from "./ToolCard";
 import { useI18n } from "../i18n/i18n";
+import { useScrollFollow } from "../hooks/use-scroll-follow";
 
 export type ConversationRenderGroup =
   | { kind: "message"; id: string; item: Extract<ConversationItem, { kind: "message" }> }
@@ -44,6 +45,7 @@ export function ToolBatch({
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const followingRef = useRef(true);
   const knownToolIdsRef = useRef(new Set(tools.map((tool) => tool.id)));
   const [animatedToolIds, setAnimatedToolIds] = useState(() => {
@@ -60,42 +62,33 @@ export function ToolBatch({
     if (newToolIds.length > 0) {
       setAnimatedToolIds((current) => new Set([...current, ...newToolIds]));
     }
-    const list = listRef.current;
-    if (!list) return;
-    if (!scrollable) {
-      followingRef.current = true;
-      return;
-    }
-    if (followingRef.current) list.scrollTop = list.scrollHeight;
-  }, [scrollable, tools]);
+  }, [animateNewTools, tools]);
 
-  const updateFollowing = (): void => {
-    const list = listRef.current;
-    if (!list) return;
-    followingRef.current = isScrollAreaAtBottom(list.scrollTop, list.clientHeight, list.scrollHeight);
-  };
+  useScrollFollow(listRef, contentRef, followingRef);
 
   return (
     <section className="tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
       <div
         ref={listRef}
         className={scrollable ? "tool-batch-list scrollable" : "tool-batch-list"}
-        onScroll={updateFollowing}
+        data-scroll-follow
         role={scrollable ? "region" : undefined}
         aria-label={scrollable ? t("tool.batch", { count: tools.length }) : undefined}
         tabIndex={scrollable ? 0 : undefined}
       >
-        {tools.map((tool) => (
-          <div className={animatedToolIds.has(tool.id) ? "timeline-tool entering" : "timeline-tool"} key={tool.id}>
-            <div className="tool-card-reveal">
-              <ToolCard
-                tool={tool}
-                selected={tool.id === selectedToolId}
-                onSelect={() => onSelectTool(tool.id)}
-              />
+        <div ref={contentRef} className="tool-batch-content">
+          {tools.map((tool) => (
+            <div className={animatedToolIds.has(tool.id) ? "timeline-tool entering" : "timeline-tool"} key={tool.id}>
+              <div className="tool-card-reveal">
+                <ToolCard
+                  tool={tool}
+                  selected={tool.id === selectedToolId}
+                  onSelect={() => onSelectTool(tool.id)}
+                />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );

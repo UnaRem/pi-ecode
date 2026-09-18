@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Sparkles } from "lucide-react";
 import type { ConversationItem } from "@shared/contracts";
 import { ConversationOutline } from "./ConversationOutline";
@@ -9,6 +9,7 @@ import { ToolExecutionPanelPresence, useToolExecution } from "./ToolExecutionPan
 import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
 import { PastedTextAttachments } from "./PastedTextAttachments";
 import { useI18n } from "../i18n/i18n";
+import { useScrollFollow } from "../hooks/use-scroll-follow";
 
 interface ConversationProps {
   timeline: ConversationItem[];
@@ -25,43 +26,6 @@ interface ConversationProps {
 }
 
 const BOTTOM_THRESHOLD = 48;
-
-export function conversationContentGrew(previousScrollHeight: number, scrollHeight: number): boolean {
-  return scrollHeight > previousScrollHeight;
-}
-
-export function followConversationGrowth(
-  container: { scrollHeight: number; scrollTop: number },
-  previousScrollHeight: number,
-  following: boolean,
-): number {
-  const nextScrollHeight = container.scrollHeight;
-  if (following && conversationContentGrew(previousScrollHeight, nextScrollHeight)) {
-    container.scrollTop = nextScrollHeight;
-  }
-  return nextScrollHeight;
-}
-
-function useGrowingContentFollow(
-  containerRef: RefObject<HTMLElement | null>,
-  contentRef: RefObject<HTMLDivElement | null>,
-  followingRef: RefObject<boolean>,
-): void {
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    const content = contentRef.current;
-    if (!container || !content) return;
-    let previousScrollHeight = 0;
-    const followGrowth = (): void => {
-      previousScrollHeight = followConversationGrowth(container, previousScrollHeight, followingRef.current);
-    };
-    followGrowth();
-    // Panel and card animations reflow text after React commits, so follow the rendered size itself.
-    const observer = new ResizeObserver(followGrowth);
-    observer.observe(content);
-    return () => observer.disconnect();
-  }, [containerRef, contentRef, followingRef]);
-}
 
 export function formatWorkingDuration(elapsedMs: number): string {
   const totalSeconds = Math.floor(Math.max(0, elapsedMs) / 1000);
@@ -219,10 +183,14 @@ export function Conversation(props: ConversationProps) {
     ? t("conversation.workingTime", { time: workingDuration })
     : t("conversation.working");
 
-  const setFollowing = (following: boolean): void => {
+  const setFollowing = useCallback((following: boolean): void => {
     followingRef.current = following;
     setIsFollowing(following);
-  };
+  }, []);
+  const onWheel = useScrollFollow(containerRef, contentRef, followingRef, {
+    threshold: BOTTOM_THRESHOLD,
+    onFollowingChange: setFollowing,
+  });
   const scrollToBottom = (behavior: ScrollBehavior): void => {
     const container = containerRef.current;
     if (!container) return;
@@ -242,8 +210,6 @@ export function Conversation(props: ConversationProps) {
     requestAnimationFrame(() => scrollToBottom("auto"));
   }, [latestUserId]);
 
-  useGrowingContentFollow(containerRef, contentRef, followingRef);
-
   const firstTimelineId = props.timeline[0]?.id;
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -261,13 +227,6 @@ export function Conversation(props: ConversationProps) {
     props.onLoadOlder?.();
   };
 
-  const onScroll = (): void => {
-    const container = containerRef.current;
-    if (!container) return;
-    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= BOTTOM_THRESHOLD;
-    if (atBottom !== followingRef.current) setFollowing(atBottom);
-  };
-
   const selectTurn = (id: string): void => {
     const element = userElements.current.get(id);
     if (!element) return;
@@ -282,8 +241,8 @@ export function Conversation(props: ConversationProps) {
         ref={containerRef}
         className="conversation"
         aria-live="polite"
-        onScroll={onScroll}
-        onWheel={(event) => { if (event.deltaY < 0) setFollowing(false); }}
+        data-scroll-follow
+        onWheel={onWheel}
       >
         <ConversationOutline
           messages={userMessages}

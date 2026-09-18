@@ -2,25 +2,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/i18n";
-import { Conversation, conversationContentGrew, followConversationGrowth, formatWorkingDuration } from "./Conversation";
+import { Conversation, formatWorkingDuration } from "./Conversation";
 import { normalizeNickname } from "./MessageRoleLabel";
 
 describe("Conversation", () => {
   afterEach(() => vi.unstubAllGlobals());
-
-  it("follows rendered height growth without treating shrinkage as new content", () => {
-    const container = { scrollHeight: 720, scrollTop: 10 };
-    expect(conversationContentGrew(720, 720)).toBe(false);
-    expect(conversationContentGrew(720, 680)).toBe(false);
-    expect(conversationContentGrew(720, 721)).toBe(true);
-
-    container.scrollHeight = 721;
-    expect(followConversationGrowth(container, 720, true)).toBe(721);
-    expect(container.scrollTop).toBe(721);
-    container.scrollHeight = 800;
-    followConversationGrowth(container, 721, false);
-    expect(container.scrollTop).toBe(721);
-  });
 
   it("formats elapsed time as cumulative hours, minutes, and seconds", () => {
     expect(formatWorkingDuration(0)).toBe("00:00:00");
