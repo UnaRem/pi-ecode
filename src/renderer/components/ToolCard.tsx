@@ -16,8 +16,9 @@ const CATEGORY_KEYS: Record<ToolCategory, MessageKey> = {
 
 function previewLines(output: string): string {
   const lines = output.split("\n");
-  const preview = lines.slice(0, 3).join("\n");
-  return lines.length > 3 ? `${preview}\n…` : preview;
+  const preview = lines.slice(0, 2);
+  if (lines.length > 2) preview[1] = `${preview[1]}…`;
+  return preview.join("\n");
 }
 
 export function ToolCard({ tool, selected, onSelect }: { tool: ToolActivity; selected: boolean; onSelect: () => void }) {
@@ -32,7 +33,7 @@ export function ToolCard({ tool, selected, onSelect }: { tool: ToolActivity; sel
   return (
     <button
       type="button"
-      className={`tool-card category-${category} ${tool.status} ${selected ? "selected" : ""}`}
+      className={`tool-card category-${category} ${tool.status}`}
       data-tool-label={t(CATEGORY_KEYS[category])}
       onClick={onSelect}
       aria-pressed={selected}

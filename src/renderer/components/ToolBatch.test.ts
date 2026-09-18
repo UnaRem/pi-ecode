@@ -42,7 +42,8 @@ describe("ToolBatch", () => {
     expect(markup).toContain('class="tool-batch-list scrollable"');
     expect(markup).toContain('role="region"');
     expect(markup).toContain('tabindex="0"');
-    expect(markup).toContain('class="tool-card category-inspect success selected"');
+    expect(markup).toContain('class="tool-card category-inspect success"');
+    expect(markup).not.toContain("selected");
     expect(markup).toContain('aria-pressed="true"');
     expect(markup).not.toContain('aria-expanded=');
     expect(markup).not.toContain("tool-batch-toggle");

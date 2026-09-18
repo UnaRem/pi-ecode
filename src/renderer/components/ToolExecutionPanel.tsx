@@ -8,35 +8,12 @@ export function latestUnseenRunningTool(tools: ToolActivity[], seenToolIds: Read
   return tools.filter((tool) => tool.status === "running" && !seenToolIds.has(tool.id)).at(-1) ?? null;
 }
 
-export function toolsInSelectedTurn(timeline: ConversationItem[], selectedToolId: string | null): ToolActivity[] {
-  const selectedIndex = timeline.findIndex((item) => item.kind === "tool" && item.tool.id === selectedToolId);
-  if (selectedIndex < 0) return [];
-  let start = 0;
-  let end = timeline.length;
-  for (let index = selectedIndex; index >= 0; index--) {
-    const item = timeline[index];
-    if (item?.kind === "message" && item.message.role === "user") {
-      start = index + 1;
-      break;
-    }
-  }
-  for (let index = selectedIndex + 1; index < timeline.length; index++) {
-    const item = timeline[index];
-    if (item?.kind === "message" && item.message.role === "user") {
-      end = index;
-      break;
-    }
-  }
-  return timeline.slice(start, end).flatMap((item) => item.kind === "tool" ? [item.tool] : []);
-}
-
 export function useToolExecution(timeline: ConversationItem[], conversationKey: string) {
   const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const seenRunningTools = useRef(new Set<string>());
   const tools = useMemo(() => timeline.flatMap((item) => item.kind === "tool" ? [item.tool] : []), [timeline]);
   const selectedTool = tools.find((tool) => tool.id === selectedToolId) ?? null;
-  const turnTools = useMemo(() => toolsInSelectedTurn(timeline, selectedToolId), [timeline, selectedToolId]);
 
   useEffect(() => {
     seenRunningTools.current.clear();
@@ -62,7 +39,6 @@ export function useToolExecution(timeline: ConversationItem[], conversationKey: 
   return {
     selectedToolId: panelOpen ? selectedToolId : null,
     selectedTool,
-    turnTools,
     panelOpen,
     selectTool,
     closePanel,
@@ -82,8 +58,6 @@ function ToolStatus({ status }: { status: ToolActivity["status"] }) {
 
 interface ToolExecutionPanelProps {
   tool: ToolActivity;
-  turnTools: ToolActivity[];
-  onSelect: (toolId: string) => void;
   onClose: () => void;
   leaving?: boolean;
   onAnimationEnd?: (event: AnimationEvent<HTMLElement>) => void;
@@ -92,8 +66,6 @@ interface ToolExecutionPanelProps {
 export function ToolExecutionPanelPresence({
   open,
   tool,
-  turnTools,
-  onSelect,
   onClose,
 }: Omit<ToolExecutionPanelProps, "tool" | "leaving" | "onAnimationEnd"> & { open: boolean; tool: ToolActivity | null }) {
   const [mounted, setMounted] = useState(open && tool !== null);
@@ -117,8 +89,6 @@ export function ToolExecutionPanelPresence({
   return (
     <ToolExecutionPanel
       tool={tool}
-      turnTools={turnTools}
-      onSelect={onSelect}
       onClose={onClose}
       leaving={leaving}
       onAnimationEnd={finishLeaving}
@@ -128,14 +98,11 @@ export function ToolExecutionPanelPresence({
 
 export function ToolExecutionPanel({
   tool,
-  turnTools,
-  onSelect,
   onClose,
   leaving = false,
   onAnimationEnd,
 }: ToolExecutionPanelProps) {
   const { t } = useI18n();
-  const selectedToolButtonRef = useRef<HTMLButtonElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const followingDetailRef = useRef(true);
   const previousToolIdRef = useRef(tool.id);
@@ -143,10 +110,6 @@ export function ToolExecutionPanel({
   const [fullOutput, setFullOutput] = useState<{ toolId: string; text: string } | null>(null);
   const [outputLoading, setOutputLoading] = useState(false);
   const [outputError, setOutputError] = useState<string | null>(null);
-
-  useLayoutEffect(() => {
-    selectedToolButtonRef.current?.scrollIntoView({ block: "nearest" });
-  }, [tool.id, turnTools.length]);
 
   useEffect(() => {
     outputRequestRef.current += 1;
@@ -197,21 +160,6 @@ export function ToolExecutionPanel({
         <div><strong>{t("tool.panelTitle")}</strong><ToolStatus status={tool.status} /></div>
         <button className="icon-button" onClick={onClose} aria-label={t("tool.closePanel")}><X size={17} /></button>
       </header>
-      <nav className="tool-execution-list" aria-label={t("tool.turnCalls")}>
-        {turnTools.map((item, index) => (
-          <button
-            key={item.id}
-            ref={item.id === tool.id ? selectedToolButtonRef : undefined}
-            className={`${item.status} ${item.id === tool.id ? "selected" : ""}`}
-            onClick={() => onSelect(item.id)}
-            aria-current={item.id === tool.id ? "true" : undefined}
-          >
-            <span>{index + 1}</span>
-            <strong>{item.title}</strong>
-            <ToolStatus status={item.status} />
-          </button>
-        ))}
-      </nav>
       <div ref={detailRef} className="tool-execution-detail" onScroll={updateDetailFollowing}>
         <h2>{tool.title}</h2>
         <section>

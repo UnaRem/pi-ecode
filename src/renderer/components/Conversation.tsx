@@ -266,8 +266,6 @@ export function Conversation(props: ConversationProps) {
       <ToolExecutionPanelPresence
         open={toolExecution.panelOpen}
         tool={toolExecution.selectedTool}
-        turnTools={toolExecution.turnTools}
-        onSelect={toolExecution.selectTool}
         onClose={toolExecution.closePanel}
       />
     </div>
