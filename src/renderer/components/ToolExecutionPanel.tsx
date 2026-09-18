@@ -223,9 +223,11 @@ export function ToolExecutionPanel({
           {tool.outputTruncated && fullOutput?.toolId !== tool.id && (
             <div className="tool-output-truncated">
               <span>{t("tool.outputTruncated", { count: tool.outputLength ?? tool.output.length })}</span>
-              <button type="button" disabled={outputLoading} onClick={() => void loadFullOutput()}>
-                {t(outputLoading ? "tool.loadingFullOutput" : "tool.loadFullOutput")}
-              </button>
+              {tool.status !== "running" && (
+                <button type="button" disabled={outputLoading} onClick={() => void loadFullOutput()}>
+                  {t(outputLoading ? "tool.loadingFullOutput" : "tool.loadFullOutput")}
+                </button>
+              )}
             </div>
           )}
           {outputError && <div className="tool-output-error" role="alert">{outputError}</div>}

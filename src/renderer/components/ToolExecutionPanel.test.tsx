@@ -96,6 +96,14 @@ describe("ToolExecutionPanel", () => {
     );
     expect(markup).toContain("Previewing 100000 characters");
     expect(markup).toContain("Load full output");
+
+    const runningMarkup = renderToStaticMarkup(
+      <I18nProvider>
+        <ToolExecutionPanel tool={{ ...selected, status: "running" }} turnTools={[selected]} onSelect={vi.fn()} onClose={vi.fn()} />
+      </I18nProvider>,
+    );
+    expect(runningMarkup).toContain("Previewing 100000 characters");
+    expect(runningMarkup).not.toContain("Load full output");
   });
 
   it("renders turn navigation and the selected call details", () => {
