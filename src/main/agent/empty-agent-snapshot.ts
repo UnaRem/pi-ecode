@@ -8,6 +8,7 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
   sessionTitle: null,
   sessions: [],
   timeline: [],
+  timelineHasMore: false,
   models: [],
   selectedModel: null,
   thinkingLevel: "off",

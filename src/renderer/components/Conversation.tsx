@@ -18,6 +18,9 @@ interface ConversationProps {
   error: string | null;
   canContinue: boolean;
   notice: string | null;
+  hasOlderTimeline?: boolean;
+  isLoadingOlder?: boolean;
+  onLoadOlder?: () => void;
   onContinue: () => void;
 }
 
@@ -107,6 +110,13 @@ function ConversationBody(props: ConversationBodyProps) {
         </section>
       ) : (
         <>
+          {props.hasOlderTimeline && (
+            <div className="conversation-history-loader">
+              <button type="button" disabled={props.isLoadingOlder} onClick={props.onLoadOlder}>
+                {t(props.isLoadingOlder ? "conversation.loadingOlder" : "conversation.loadOlder")}
+              </button>
+            </div>
+          )}
           {renderGroups.map((group, groupIndex) => group.kind === "message" ? (
             <article
               key={group.id}
@@ -193,6 +203,7 @@ export function Conversation(props: ConversationProps) {
   const containerRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const userElements = useRef(new Map<string, HTMLElement>());
+  const historyAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const followingRef = useRef(true);
   const [isFollowing, setIsFollowing] = useState(true);
   const { nicknames, saveNickname } = useMessageNicknames();
@@ -233,6 +244,23 @@ export function Conversation(props: ConversationProps) {
 
   useGrowingContentFollow(containerRef, contentRef, followingRef);
 
+  const firstTimelineId = props.timeline[0]?.id;
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const anchor = historyAnchorRef.current;
+    if (!container || !anchor) return;
+    container.scrollTop = anchor.scrollTop + container.scrollHeight - anchor.scrollHeight;
+    historyAnchorRef.current = null;
+  }, [firstTimelineId]);
+
+  const loadOlder = (): void => {
+    const container = containerRef.current;
+    if (!container || props.isLoadingOlder) return;
+    historyAnchorRef.current = { scrollHeight: container.scrollHeight, scrollTop: container.scrollTop };
+    setFollowing(false);
+    props.onLoadOlder?.();
+  };
+
   const onScroll = (): void => {
     const container = containerRef.current;
     if (!container) return;
@@ -266,6 +294,7 @@ export function Conversation(props: ConversationProps) {
         />
         <ConversationBody
           {...props}
+          onLoadOlder={loadOlder}
           contentRef={contentRef}
           userElements={userElements}
           workingLabel={workingLabel}

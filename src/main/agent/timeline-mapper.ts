@@ -40,11 +40,32 @@ export function toolItem(tool: ToolActivity): ConversationItem {
   return { kind: "tool", id: tool.id, tool };
 }
 
-export function mapTimeline(messages: AgentMessage[]): ConversationItem[] {
+export interface MessageWindow {
+  messages: AgentMessage[];
+  startIndex: number;
+  hasMore: boolean;
+}
+
+export function recentMessageWindow(messages: AgentMessage[], maximumTurns: number): MessageWindow {
+  let turns = 0;
+  let startIndex = 0;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index]?.role !== "user") continue;
+    turns += 1;
+    if (turns === maximumTurns) {
+      startIndex = index;
+      break;
+    }
+  }
+  return { messages: messages.slice(startIndex), startIndex, hasMore: startIndex > 0 };
+}
+
+export function mapTimeline(messages: AgentMessage[], startIndex = 0): ConversationItem[] {
   const timeline: ConversationItem[] = [];
   const toolIndexes = new Map<string, number>();
 
-  messages.forEach((message, messageIndex) => {
+  messages.forEach((message, localIndex) => {
+    const messageIndex = startIndex + localIndex;
     const timestamp = "timestamp" in message && typeof message.timestamp === "number"
       ? message.timestamp
       : Date.now() + messageIndex;

@@ -75,6 +75,7 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
     return snapshot;
   });
   ipcMain.handle(IPC_CHANNELS.getSnapshot, () => service.getSnapshot());
+  ipcMain.handle(IPC_CHANNELS.loadOlderTimeline, () => service.loadOlderTimeline());
   ipcMain.handle(IPC_CHANNELS.newSession, () => service.newSession());
   ipcMain.handle(IPC_CHANNELS.switchSession, (_event, path: string) => service.switchSession(path));
   ipcMain.handle(IPC_CHANNELS.deleteSession, (_event, path: string) => service.deleteSession(path));

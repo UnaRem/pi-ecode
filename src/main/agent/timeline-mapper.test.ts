@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { createPastedTextAttachment, serializePastedTexts } from "../../shared/pasted-text.js";
-import { mapTimeline } from "./timeline-mapper.js";
+import { mapTimeline, recentMessageWindow } from "./timeline-mapper.js";
 
 describe("mapTimeline", () => {
   it("keeps text, tool calls, results, and later text in conversation order", () => {
@@ -38,6 +38,19 @@ describe("mapTimeline", () => {
       kind: "tool",
       tool: { id: "call-1", input: expect.stringContaining("app.ts"), output: "const value = 1;" },
     });
+  });
+
+  it("keeps complete recent turns with stable source indexes", () => {
+    const messages = Array.from({ length: 4 }, (_, turn) => [
+      { role: "user", content: [{ type: "text", text: `Question ${turn}` }], timestamp: turn * 2 + 1 },
+      { role: "assistant", content: [{ type: "text", text: `Answer ${turn}` }], timestamp: turn * 2 + 2 },
+    ]).flat() as unknown as AgentMessage[];
+
+    const window = recentMessageWindow(messages, 2);
+    const timeline = mapTimeline(window.messages, window.startIndex);
+    expect(window).toMatchObject({ startIndex: 4, hasMore: true });
+    expect(timeline).toHaveLength(4);
+    expect(timeline[0]).toMatchObject({ id: "user-5-4", message: { text: "Question 2" } });
   });
 
   it("restores pasted text attachments without exposing their protocol markers", () => {

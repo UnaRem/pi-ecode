@@ -11,6 +11,7 @@ function messageFromError(error: unknown): string {
 export function useAgent() {
   const [state, dispatch] = useReducer(reduceAgentEvent, INITIAL_AGENT_STATE);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const timeline = useMemo(() => optimisticTimeline(state), [state.timeline, state.pendingPrompts]);
 
   const run = useCallback(async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
@@ -75,6 +76,19 @@ export function useAgent() {
   const renameSession = useCallback(async (title: string) => {
     await run(() => window.piDesktop.renameSession(title));
   }, [run]);
+
+  const loadOlderTimeline = useCallback(async () => {
+    if (!state.timelineHasMore || isLoadingOlder) return;
+    setIsLoadingOlder(true);
+    try {
+      const page = await window.piDesktop.loadOlderTimeline();
+      dispatch({ type: "timeline-page", page });
+    } catch (error) {
+      dispatch({ type: "error", message: messageFromError(error) });
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [isLoadingOlder, state.timelineHasMore]);
 
   const continueAfterError = useCallback(async () => {
     dispatch({ type: "state", patch: { error: null, canContinue: false } });
@@ -158,12 +172,14 @@ export function useAgent() {
   return {
     state: { ...state, timeline },
     isLoading,
+    isLoadingOlder,
     actions: {
       chooseProject,
       newSession,
       switchSession,
       deleteSession,
       renameSession,
+      loadOlderTimeline,
       continueAfterError,
       send,
       editorRestored,

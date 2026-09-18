@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentSnapshot, ConversationItem, ImageAttachment } from "@shared/contracts";
+import type { AgentEvent, AgentSnapshot, AgentTimelinePage, ConversationItem, ImageAttachment } from "@shared/contracts";
 import { parsePastedTexts } from "../../shared/pasted-text";
 
 export interface PendingPrompt {
@@ -13,7 +13,8 @@ export type AgentViewEvent = AgentEvent
   | { type: "prompt-started"; prompt: Omit<PendingPrompt, "settled"> }
   | { type: "prompt-finished"; id: string }
   | { type: "prompt-failed"; id: string; error: string }
-  | { type: "editor-restored"; version: number };
+  | { type: "editor-restored"; version: number }
+  | { type: "timeline-page"; page: AgentTimelinePage };
 
 export interface AgentViewState extends AgentSnapshot {
   restoredEditorText: string | null;
@@ -31,6 +32,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   sessionFile: null,
   sessionTitle: null,
   sessions: [],
+  timelineHasMore: false,
   models: [],
   selectedModel: null,
   thinkingLevel: "off",
@@ -169,6 +171,9 @@ function finishPendingPrompt(
 }
 
 export function reduceAgentEvent(state: AgentViewState, event: AgentViewEvent): AgentViewState {
+  if (event.type === "timeline-page") {
+    return { ...state, timeline: event.page.timeline, timelineHasMore: event.page.hasMore };
+  }
   if (event.type === "editor-restored") {
     return event.version === state.editorRestoreVersion
       ? { ...state, restoredEditorText: null, restoredEditorImages: [], editorRestoreMode: "replace" } : state;

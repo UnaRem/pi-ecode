@@ -14,7 +14,7 @@ import { useI18n } from "./i18n/i18n";
 
 export default function App() {
   useScrollbarVisibility();
-  const { state, isLoading, actions } = useAgent();
+  const { state, isLoading, isLoadingOlder, actions } = useAgent();
   const { snapshot: appConfig } = useAppConfig();
   const brandIconSrc = appConfig?.iconUrl ?? "./ecode-icon.png";
   const customBackdropActive = Boolean(appConfig?.backgroundImageUrl || appConfig?.theme?.background);
@@ -138,6 +138,9 @@ export default function App() {
           error={state.error}
           canContinue={state.canContinue}
           notice={state.notice}
+          hasOlderTimeline={state.timelineHasMore}
+          isLoadingOlder={isLoadingOlder}
+          onLoadOlder={() => void actions.loadOlderTimeline()}
           onContinue={() => void actions.continueAfterError()}
         />
         <Composer

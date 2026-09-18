@@ -121,6 +121,29 @@ describe("Conversation", () => {
     expect(markup).toContain('class="message user turn-start"');
   });
 
+  it("offers bounded history paging only when older turns remain", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(createElement(
+      I18nProvider,
+      null,
+      createElement(Conversation, {
+        timeline: [{ kind: "message", id: "user-1", message: { id: "user-1", role: "user", text: "Recent", timestamp: 1 } }],
+        isStreaming: false,
+        workingStartedAt: null,
+        projectName: "demo",
+        error: null,
+        canContinue: false,
+        notice: null,
+        hasOlderTimeline: true,
+        isLoadingOlder: true,
+        onLoadOlder: vi.fn(),
+        onContinue: vi.fn(),
+      }),
+    ));
+    expect(markup).toContain("Loading earlier messages…");
+    expect(markup).toContain("disabled");
+  });
+
   it("offers continuation only for a recoverable interruption", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(createElement(

@@ -4,6 +4,7 @@ export const IPC_CHANNELS = {
   chooseProject: "desktop:choose-project",
   openProject: "agent:open-project",
   getSnapshot: "agent:get-snapshot",
+  loadOlderTimeline: "agent:load-older-timeline",
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
   deleteSession: "agent:delete-session",
@@ -250,6 +251,11 @@ export interface ExtensionUiResponse {
   value: string | string[] | boolean | null;
 }
 
+export interface AgentTimelinePage {
+  timeline: ConversationItem[];
+  hasMore: boolean;
+}
+
 export interface AgentSnapshot {
   projectPath: string | null;
   projectName: string | null;
@@ -258,6 +264,7 @@ export interface AgentSnapshot {
   sessionTitle: string | null;
   sessions: SessionSummary[];
   timeline: ConversationItem[];
+  timelineHasMore: boolean;
   models: ModelOption[];
   selectedModel: string | null;
   thinkingLevel: ThinkingLevel;
@@ -309,6 +316,7 @@ export interface DesktopApi {
   chooseProject(): Promise<string | null>;
   openProject(path: string): Promise<AgentSnapshot>;
   getSnapshot(): Promise<AgentSnapshot>;
+  loadOlderTimeline(): Promise<AgentTimelinePage>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   deleteSession(path: string): Promise<void>;

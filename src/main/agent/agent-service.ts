@@ -16,6 +16,7 @@ import type { AuthFlowEvent, AuthPromptResponse, AuthType, ProviderStatus } from
 import type {
   AgentEvent,
   AgentSnapshot,
+  AgentTimelinePage,
   ConversationMessage,
   ConversationItem,
   ImageAttachment,
@@ -34,7 +35,7 @@ import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { ConfirmationService } from "./confirmation.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
-import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
+import { mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
@@ -45,6 +46,8 @@ import { PromptLifecycle } from "./prompt-lifecycle.js";
 import { listSessionSummaries } from "./session-summaries.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
+
+const HISTORY_PAGE_TURNS = 25;
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -65,6 +68,7 @@ export class AgentService {
   private readonly pendingStreamItems = new Map<string, ConversationItem>();
   private pendingStreamContext: AgentSession | undefined;
   private streamTimer: ReturnType<typeof setTimeout> | undefined;
+  private visibleTimelineTurns = HISTORY_PAGE_TURNS;
   private readonly promptLifecycle = new PromptLifecycle((session) => {
     const isStreaming = this.promptLifecycle.isActive(session);
     this.emit({ type: "state", patch: { isStreaming, workingStartedAt: this.promptLifecycle.workingStartedAt,
@@ -188,6 +192,17 @@ export class AgentService {
     }
   }
 
+  loadOlderTimeline(): AgentTimelinePage {
+    const session = this.requireRuntime().session;
+    this.visibleTimelineTurns += HISTORY_PAGE_TURNS;
+    return this.timelinePage(session);
+  }
+
+  private timelinePage(session: AgentSession): AgentTimelinePage {
+    const window = recentMessageWindow(session.messages, this.visibleTimelineTurns);
+    return { timeline: mapTimeline(window.messages, window.startIndex), hasMore: window.hasMore };
+  }
+
   get agentDirectory(): string {
     return getAgentDir();
   }
@@ -272,7 +287,7 @@ export class AgentService {
       this.history.getState(session),
       this.history.getReview(session),
     ]);
-    const timeline = mapTimeline(session.messages);
+    const timelinePage = this.timelinePage(session);
     const model = session.model;
     const usage = session.getContextUsage();
     const contextFiles = session.resourceLoader.getAgentsFiles().agentsFiles.map((file) => file.path);
@@ -285,7 +300,8 @@ export class AgentService {
       sessionFile: session.sessionFile ?? null,
       sessionTitle: session.sessionName ?? null,
       sessions,
-      timeline,
+      timeline: timelinePage.timeline,
+      timelineHasMore: timelinePage.hasMore,
       models: availableModels.map<ModelOption>((item) => ({
         id: item.id,
         provider: item.provider,
@@ -549,6 +565,7 @@ export class AgentService {
 
   private async bindSession(session: AgentSession): Promise<void> {
     this.unsubscribe?.();
+    this.visibleTimelineTurns = HISTORY_PAGE_TURNS;
     this.extensionUi.cancelPending();
     this.contextEstimate = this.nativeCompaction.storedEstimatedTokensAfter(session);
     this.compactionStatus = { status: "idle" };
