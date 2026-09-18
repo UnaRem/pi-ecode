@@ -17,6 +17,7 @@ import type {
   AgentEvent,
   AgentSnapshot,
   ConversationMessage,
+  ConversationItem,
   ImageAttachment,
   ModelOption,
   ThinkingLevel,
@@ -61,6 +62,9 @@ export class AgentService {
   private liveAssistantId: string | undefined;
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
+  private readonly pendingStreamItems = new Map<string, ConversationItem>();
+  private pendingStreamContext: AgentSession | undefined;
+  private streamTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly promptLifecycle = new PromptLifecycle((session) => {
     const isStreaming = this.promptLifecycle.isActive(session);
     this.emit({ type: "state", patch: { isStreaming, workingStartedAt: this.promptLifecycle.workingStartedAt,
@@ -138,6 +142,21 @@ export class AgentService {
 
   private emit(event: AgentEvent): void {
     for (const listener of this.listeners) listener(event);
+  }
+
+  private publishStreamItem(item: ConversationItem): void {
+    // Keep only the latest progress per item until the next paint opportunity.
+    this.pendingStreamItems.set(item.id, item);
+    if (this.streamTimer === undefined) this.streamTimer = setTimeout(() => this.flushStreamItems(), 33);
+  }
+
+  private flushStreamItems(): void {
+    if (this.streamTimer !== undefined) clearTimeout(this.streamTimer);
+    this.streamTimer = undefined;
+    for (const item of this.pendingStreamItems.values()) this.emit({ type: "timeline-upsert", item });
+    this.pendingStreamItems.clear();
+    if (this.pendingStreamContext) this.emitContext(this.pendingStreamContext);
+    this.pendingStreamContext = undefined;
   }
 
   async openProject(inputPath: string): Promise<AgentSnapshot> {
@@ -218,6 +237,7 @@ export class AgentService {
 
   async reloadRuntimeConfiguration(): Promise<void> {
     const previousRuntime = this.requireRuntime();
+    this.flushStreamItems();
     const cwd = this.projectPath;
     if (!cwd) return;
     const sessionFile = previousRuntime.session.sessionFile;
@@ -302,6 +322,7 @@ export class AgentService {
 
   async switchSession(sessionPath: string): Promise<AgentSnapshot> {
     const runtime = this.requireRuntime();
+    this.flushStreamItems();
     const sessions = await listSessionSummaries(this.projectPath);
     if (!sessions.some((session) => session.path === sessionPath)) {
       throw new Error("That session does not belong to the active project.");
@@ -389,6 +410,7 @@ export class AgentService {
 
   async stop(): Promise<void> {
     const session = this.requireRuntime().session;
+    this.flushStreamItems();
     this.extensionUi.cancelPending();
     if (session.isCompacting) session.abortCompaction();
     await this.promptLifecycle.stop(session);
@@ -549,6 +571,7 @@ export class AgentService {
         this.emit({ type: "state", patch: { isStreaming: true, error: null, canContinue: false } });
         break;
       case "agent_settled": {
+        this.flushStreamItems();
         const failure = providerFailure(session.messages);
         this.emit({ type: "state", patch: {
           isStreaming: this.promptLifecycle.isActive(session), pendingCount: session.pendingMessageCount,
@@ -596,11 +619,14 @@ export class AgentService {
             text: this.liveAssistantText,
             timestamp: Date.now(),
           };
-          this.emit({ type: "timeline-upsert", item: messageItem(message) });
+          this.pendingStreamContext = session;
+          this.publishStreamItem(messageItem(message));
+        } else {
+          this.emitContext(session);
         }
-        this.emitContext(session);
         break;
       case "message_end": {
+        this.flushStreamItems();
         if (event.message.role === "user") {
           const item = mapTimeline([event.message]).at(0);
           if (item?.kind === "message") {
@@ -611,6 +637,7 @@ export class AgentService {
         break;
       }
       case "tool_execution_start": {
+        this.flushStreamItems();
         const tool: ToolActivity = {
           id: event.toolCallId,
           name: event.toolName,
@@ -630,10 +657,11 @@ export class AgentService {
         if (!current) break;
         const tool = { ...current, output: textFromToolResult(event.partialResult) };
         this.liveTools.set(tool.id, tool);
-        this.emit({ type: "timeline-upsert", item: toolItem(tool) });
+        this.publishStreamItem(toolItem(tool));
         break;
       }
       case "tool_execution_end": {
+        this.flushStreamItems();
         const current = this.liveTools.get(event.toolCallId);
         const tool: ToolActivity = {
           id: event.toolCallId,
@@ -746,6 +774,10 @@ export class AgentService {
   }
 
   private async disposeRuntime(): Promise<void> {
+    if (this.streamTimer !== undefined) clearTimeout(this.streamTimer);
+    this.streamTimer = undefined;
+    this.pendingStreamItems.clear();
+    this.pendingStreamContext = undefined;
     this.extensionUi.cancelPending();
     await this.validation.stop();
     this.unsubscribe?.();

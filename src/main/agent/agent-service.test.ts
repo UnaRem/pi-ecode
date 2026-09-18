@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, SessionSummary } from "../../shared/contracts.js";
 
 const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[] }));
@@ -17,6 +17,7 @@ describe("AgentService prompt lifecycle", () => {
   afterEach(() => {
     sessionSummaryState.sessions = [];
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("moves only inactive sessions from the active project to trash", async () => {
@@ -133,6 +134,37 @@ describe("AgentService prompt lifecycle", () => {
       type: "state",
       patch: { isStreaming: false, workingStartedAt: null, pendingCount: 0 },
     });
+  });
+
+  it("coalesces high-frequency assistant updates before publishing", () => {
+    vi.useFakeTimers();
+    const session = {
+      sessionId: "session-1",
+      model: null,
+      isCompacting: false,
+      getContextUsage: () => undefined,
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const handleEvent = (service as unknown as {
+      handleSessionEvent: (activeSession: AgentSession, event: AgentSessionEvent) => void;
+    }).handleSessionEvent.bind(service);
+
+    for (const delta of ["Hello", " ", "world"]) {
+      handleEvent(session, {
+        type: "message_update",
+        message: { role: "assistant", content: [] },
+        assistantMessageEvent: { type: "text_delta", delta },
+      } as unknown as AgentSessionEvent);
+    }
+
+    expect(events).toEqual([]);
+    vi.advanceTimersByTime(33);
+    expect(events.filter((event) => event.type === "timeline-upsert")).toEqual([
+      expect.objectContaining({ item: expect.objectContaining({ message: expect.objectContaining({ text: "Hello world" }) }) }),
+    ]);
+    expect(events.filter((event) => event.type === "context")).toHaveLength(1);
   });
 
   it("honors stop requests made before agent_start", async () => {
