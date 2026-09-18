@@ -7,6 +7,8 @@ directories:
 files:
   - out/**/*
   - package.json
+  - "!node_modules/@earendil-works/pi-coding-agent/docs{,/**/*}"
+  - "!node_modules/@earendil-works/pi-coding-agent/examples{,/**/*}"
 extraResources:
   - from: resources/ecode-icon.ico
     to: ecode-icon.ico
