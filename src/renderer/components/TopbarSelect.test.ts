@@ -38,4 +38,12 @@ describe("TopbarSelect", () => {
     expect(stylesheet).toContain("@keyframes select-menu-leave");
     expect(stylesheet).toMatch(/\.select-menu\.leaving\s*\{[^}]*animation:\s*select-menu-leave/u);
   });
+
+  it("does not mount or refocus a closed menu during streaming rerenders", () => {
+    const source = readFileSync(new URL("./TopbarSelect.tsx", import.meta.url), "utf8");
+    expect(source).toContain("useSelectDismissal(open, props.disabled, shellRef, dismissMenu)");
+    expect(source).toContain("const dismissMenu = useCallback(() => closeMenu(false)");
+    expect(source).toContain("if (!openRef.current) return;");
+    expect(source).not.toContain("useSelectDismissal(open || menuLeaving");
+  });
 });

@@ -103,6 +103,7 @@ export function TopbarSelect(props: TopbarSelectProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const openRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [menuLeaving, setMenuLeaving] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -112,12 +113,15 @@ export function TopbarSelect(props: TopbarSelectProps) {
   // Menu unmounts only after its leave animation so quick toggles never trap the menu.
   const menuMounted = open || menuLeaving;
   const closeMenu = useCallback((restoreFocus: boolean): void => {
+    if (!openRef.current) return;
+    openRef.current = false;
     setOpen(false);
     setMenuLeaving(true);
     if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
 
-  useSelectDismissal(open || menuLeaving, props.disabled, shellRef, () => closeMenu(true));
+  const dismissMenu = useCallback(() => closeMenu(false), [closeMenu]);
+  useSelectDismissal(open, props.disabled, shellRef, dismissMenu);
 
   const finishMenuLeave = (event: AnimationEvent<HTMLDivElement>): void => {
     if (event.animationName !== "select-menu-leave") return;
@@ -128,6 +132,7 @@ export function TopbarSelect(props: TopbarSelectProps) {
     if (props.disabled || props.options.length === 0) return;
     setActiveIndex(index);
     setMenuLeaving(false);
+    openRef.current = true;
     setOpen(true);
     requestAnimationFrame(() => optionRefs.current[index]?.focus());
   };
@@ -170,7 +175,7 @@ export function TopbarSelect(props: TopbarSelectProps) {
   };
 
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
-    if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    if (!event.currentTarget.contains(event.relatedTarget)) closeMenu(false);
   };
 
   return (
