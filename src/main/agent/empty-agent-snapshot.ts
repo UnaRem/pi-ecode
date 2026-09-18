@@ -7,8 +7,6 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
   sessionFile: null,
   sessionTitle: null,
   sessions: [],
-  messages: [],
-  tools: [],
   timeline: [],
   models: [],
   selectedModel: null,

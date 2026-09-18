@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentSnapshot, ConversationItem, ImageAttachment, ToolActivity } from "@shared/contracts";
+import type { AgentEvent, AgentSnapshot, ConversationItem, ImageAttachment } from "@shared/contracts";
 import { parsePastedTexts } from "../../shared/pasted-text";
 
 export interface PendingPrompt {
@@ -16,7 +16,6 @@ export type AgentViewEvent = AgentEvent
   | { type: "editor-restored"; version: number };
 
 export interface AgentViewState extends AgentSnapshot {
-  liveAssistant: string;
   restoredEditorText: string | null;
   restoredEditorImages: ImageAttachment[];
   editorRestoreVersion: number;
@@ -32,8 +31,6 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   sessionFile: null,
   sessionTitle: null,
   sessions: [],
-  messages: [],
-  tools: [],
   models: [],
   selectedModel: null,
   thinkingLevel: "off",
@@ -84,7 +81,6 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
     compaction: { status: "idle" },
   },
   policy: { contextFiles: [], workflow: "manual-review", gitCommits: "required-after-verification" },
-  liveAssistant: "",
   pendingPrompts: [],
   editorRestoreMode: "replace",
   restoredEditorText: null,
@@ -100,12 +96,6 @@ function upsertTimeline(
   const index = timeline.findIndex((item) => item.id === next.id);
   if (index < 0) return [...timeline, next];
   return timeline.map((item, itemIndex) => itemIndex === index ? next : item);
-}
-
-function upsertTool(tools: ToolActivity[], next: ToolActivity): ToolActivity[] {
-  const index = tools.findIndex((tool) => tool.id === next.id);
-  if (index < 0) return [...tools, next];
-  return tools.map((tool, toolIndex) => (toolIndex === index ? next : tool));
 }
 
 function restorePendingPrompts(state: AgentViewState, prompts: PendingPrompt[]): AgentViewState {
@@ -208,24 +198,11 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
         pendingPrompts: event.snapshot.sessionId === state.sessionId && event.snapshot.projectPath === state.projectPath
           ? state.pendingPrompts.slice(newlyPublishedUsers(state.timeline, event.snapshot.timeline)) : [],
         editorRestoreMode: "replace",
-        liveAssistant: "",
         restoredEditorText: null,
         restoredEditorImages: [],
         editorRestoreVersion: state.editorRestoreVersion,
         notice: null,
       };
-    case "assistant-delta":
-      return { ...state, liveAssistant: state.liveAssistant + event.delta };
-    case "message": {
-      const exists = state.messages.some((message) => message.id === event.message.id);
-      return {
-        ...state,
-        messages: exists ? state.messages : [...state.messages, event.message],
-        liveAssistant: event.message.role === "assistant" ? "" : state.liveAssistant,
-      };
-    }
-    case "tool":
-      return { ...state, tools: upsertTool(state.tools, event.tool) };
     case "timeline-upsert":
       return { ...state, timeline: upsertTimeline(state.timeline, event.item) };
     case "context":

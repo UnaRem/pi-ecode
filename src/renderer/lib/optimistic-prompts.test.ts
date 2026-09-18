@@ -18,7 +18,7 @@ describe("optimistic prompts", () => {
   it("shows text and attachments before any server response without altering authoritative history", () => {
     const state = send(initial);
     expect(state.timeline).toEqual([]);
-    expect(state.messages).toEqual([]);
+    expect(state.timeline).toEqual([]);
     expect(optimisticTimeline(state)).toEqual([{
       kind: "message", id: "send-1",
       message: { id: "send-1", role: "user", text: "Fix it", timestamp: 1, images: [image], pastedTexts: [] },

@@ -32,7 +32,7 @@ import { WorkspaceHistory } from "../history/workspace-history.js";
 import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { ConfirmationService } from "./confirmation.js";
-import { formatToolInput, mapMessages, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
+import { formatToolInput, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
 import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
@@ -252,7 +252,6 @@ export class AgentService {
       this.history.getState(session),
       this.history.getReview(session),
     ]);
-    const mapped = mapMessages(session.messages);
     const timeline = mapTimeline(session.messages);
     const model = session.model;
     const usage = session.getContextUsage();
@@ -266,8 +265,6 @@ export class AgentService {
       sessionFile: session.sessionFile ?? null,
       sessionTitle: session.sessionName ?? null,
       sessions,
-      messages: mapped.messages,
-      tools: mapped.tools,
       timeline,
       models: availableModels.map<ModelOption>((item) => ({
         id: item.id,
@@ -600,7 +597,6 @@ export class AgentService {
             timestamp: Date.now(),
           };
           this.emit({ type: "timeline-upsert", item: messageItem(message) });
-          this.emit({ type: "assistant-delta", delta: event.assistantMessageEvent.delta });
         }
         this.emitContext(session);
         break;
@@ -608,7 +604,6 @@ export class AgentService {
         if (event.message.role === "user") {
           const item = mapTimeline([event.message]).at(0);
           if (item?.kind === "message") {
-            this.emit({ type: "message", message: item.message });
             this.emit({ type: "timeline-upsert", item });
           }
         }
@@ -625,7 +620,6 @@ export class AgentService {
           status: "running",
         };
         this.liveTools.set(tool.id, tool);
-        this.emit({ type: "tool", tool });
         this.emit({ type: "timeline-upsert", item: toolItem(tool) });
         this.liveAssistantId = undefined;
         this.liveAssistantText = "";
@@ -636,7 +630,6 @@ export class AgentService {
         if (!current) break;
         const tool = { ...current, output: textFromToolResult(event.partialResult) };
         this.liveTools.set(tool.id, tool);
-        this.emit({ type: "tool", tool });
         this.emit({ type: "timeline-upsert", item: toolItem(tool) });
         break;
       }
@@ -651,7 +644,6 @@ export class AgentService {
           status: event.isError ? "error" : "success",
         };
         this.liveTools.set(tool.id, tool);
-        this.emit({ type: "tool", tool });
         this.emit({ type: "timeline-upsert", item: toolItem(tool) });
         break;
       }

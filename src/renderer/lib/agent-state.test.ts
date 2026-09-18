@@ -11,18 +11,16 @@ const snapshot: AgentSnapshot = {
 };
 
 describe("reduceAgentEvent", () => {
-  it("assembles streaming text and clears it on the final message", () => {
+  it("replaces streaming text with the final timeline message", () => {
     let state = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "snapshot", snapshot });
-    state = reduceAgentEvent(state, { type: "assistant-delta", delta: "Hello " });
-    state = reduceAgentEvent(state, { type: "assistant-delta", delta: "world" });
-    expect(state.liveAssistant).toBe("Hello world");
-
-    state = reduceAgentEvent(state, {
-      type: "message",
-      message: { id: "answer-1", role: "assistant", text: "Hello world", timestamp: 1 },
-    });
-    expect(state.liveAssistant).toBe("");
-    expect(state.messages.at(-1)?.text).toBe("Hello world");
+    for (const text of ["Hello ", "Hello world"]) {
+      state = reduceAgentEvent(state, {
+        type: "timeline-upsert",
+        item: { kind: "message", id: "answer-1", message: { id: "answer-1", role: "assistant", text, timestamp: 1 } },
+      });
+    }
+    expect(state.timeline).toHaveLength(1);
+    expect(state.timeline[0]).toMatchObject({ message: { text: "Hello world" } });
   });
 
   it("keeps assistant segments and tools in streamed timeline order", () => {
@@ -65,15 +63,15 @@ describe("reduceAgentEvent", () => {
 
   it("replaces tool progress by call id", () => {
     const running = reduceAgentEvent(INITIAL_AGENT_STATE, {
-      type: "tool",
-      tool: { id: "call-1", name: "bash", title: "bash · npm test", input: "npm test", output: "", status: "running" },
+      type: "timeline-upsert",
+      item: { kind: "tool", id: "call-1", tool: { id: "call-1", name: "bash", title: "bash · npm test", input: "npm test", output: "", status: "running" } },
     });
     const finished = reduceAgentEvent(running, {
-      type: "tool",
-      tool: { id: "call-1", name: "bash", title: "bash · npm test", input: "npm test", output: "passed", status: "success" },
+      type: "timeline-upsert",
+      item: { kind: "tool", id: "call-1", tool: { id: "call-1", name: "bash", title: "bash · npm test", input: "npm test", output: "passed", status: "success" } },
     });
-    expect(finished.tools).toHaveLength(1);
-    expect(finished.tools[0]).toMatchObject({ output: "passed", status: "success" });
+    expect(finished.timeline).toHaveLength(1);
+    expect(finished.timeline[0]).toMatchObject({ tool: { output: "passed", status: "success" } });
   });
 
   it("applies task plan updates without changing the conversation timeline", () => {
@@ -157,11 +155,11 @@ describe("reduceAgentEvent", () => {
 
   it("does not append duplicate finalized messages", () => {
     const event = {
-      type: "message" as const,
-      message: { id: "user-1", role: "user" as const, text: "Fix it", timestamp: 1 },
+      type: "timeline-upsert" as const,
+      item: { kind: "message" as const, id: "user-1", message: { id: "user-1", role: "user" as const, text: "Fix it", timestamp: 1 } },
     };
     const once = reduceAgentEvent(INITIAL_AGENT_STATE, event);
     const twice = reduceAgentEvent(once, event);
-    expect(twice.messages).toHaveLength(1);
+    expect(twice.timeline).toHaveLength(1);
   });
 });

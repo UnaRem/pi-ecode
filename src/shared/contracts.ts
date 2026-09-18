@@ -257,8 +257,6 @@ export interface AgentSnapshot {
   sessionFile: string | null;
   sessionTitle: string | null;
   sessions: SessionSummary[];
-  messages: ConversationMessage[];
-  tools: ToolActivity[];
   timeline: ConversationItem[];
   models: ModelOption[];
   selectedModel: string | null;
@@ -281,9 +279,6 @@ export interface AgentSnapshot {
 
 export type AgentEvent =
   | { type: "snapshot"; snapshot: AgentSnapshot }
-  | { type: "assistant-delta"; delta: string }
-  | { type: "message"; message: ConversationMessage }
-  | { type: "tool"; tool: ToolActivity }
   | { type: "timeline-upsert"; item: ConversationItem }
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
