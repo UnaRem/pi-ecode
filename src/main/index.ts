@@ -7,7 +7,8 @@ import { SettingsService } from "./settings/settings-service.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
 const APP_ID = "com.piecode.desktop";
-if (process.platform === "win32") app.setAppUserModelId(APP_ID);
+const IS_BRANDED_DEVELOPMENT_RUNTIME = process.env.PI_ECODE_DEVELOPMENT_RUNTIME === "1";
+if (process.platform === "win32" && !IS_BRANDED_DEVELOPMENT_RUNTIME) app.setAppUserModelId(APP_ID);
 
 const service = new AgentService(
   (url) => shell.openExternal(url),
@@ -55,7 +56,7 @@ function createWindow(): void {
   // 窗口/任务栏图标固定为 PiECode 品牌图标（打包资源），不可配置。
   // Windows 任务栏图标在打包态无法通过运行时 setIcon 可靠变更，属平台固有限制。
   // 品牌开发可执行文件也会使 isPackaged 为 true，但图标仍位于项目资源目录。
-  const isPackagedRuntime = app.isPackaged && process.env.PI_ECODE_DEVELOPMENT_RUNTIME !== "1";
+  const isPackagedRuntime = app.isPackaged && !IS_BRANDED_DEVELOPMENT_RUNTIME;
   const iconPath = isPackagedRuntime
     ? join(process.resourcesPath, iconFileName)
     : join(app.getAppPath(), "resources", iconFileName);
@@ -81,7 +82,10 @@ function createWindow(): void {
   });
 
   window.setMenuBarVisibility(false);
-  if (process.platform === "win32") window.setAppDetails({ appId: APP_ID, appIconPath: iconPath, appIconIndex: 0 });
+  // The branded development executable already embeds the icon; an unregistered AppUserModelID makes Windows fall back to a generic taskbar icon.
+  if (process.platform === "win32" && !IS_BRANDED_DEVELOPMENT_RUNTIME) {
+    window.setAppDetails({ appId: APP_ID, appIconPath: iconPath, appIconIndex: 0 });
+  }
   window.webContents.once("did-finish-load", () => {
     window.show();
     // Hand keyboard focus to the renderer after showing the initially hidden window.
