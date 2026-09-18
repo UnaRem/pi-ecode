@@ -5,7 +5,6 @@ import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
-import { ToolExecutionPanelPresence, useToolExecution } from "./ToolExecutionPanel";
 import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
 import { PastedTextAttachments } from "./PastedTextAttachments";
 import { useI18n } from "../i18n/i18n";
@@ -23,6 +22,8 @@ interface ConversationProps {
   isLoadingOlder?: boolean;
   onLoadOlder?: () => void;
   onContinue: () => void;
+  selectedToolId?: string | null;
+  onSelectTool?: (toolId: string) => void;
 }
 
 const BOTTOM_THRESHOLD = 48;
@@ -177,7 +178,6 @@ export function Conversation(props: ConversationProps) {
   const latestUserId = userMessages.at(-1)?.id ?? null;
   const [activeUserId, setActiveUserId] = useActiveUserTracking(containerRef, userElements, userMessages, latestUserId);
   const conversationKey = userMessages.at(0)?.id ?? "empty";
-  const toolExecution = useToolExecution(props.timeline, conversationKey);
   const workingDuration = useWorkingDuration(props.isStreaming ? props.workingStartedAt : null);
   const workingLabel = workingDuration
     ? t("conversation.workingTime", { time: workingDuration })
@@ -257,8 +257,8 @@ export function Conversation(props: ConversationProps) {
           workingLabel={workingLabel}
           nicknames={nicknames}
           onNicknameChange={saveNickname}
-          onSelectTool={toolExecution.selectTool}
-          selectedToolId={toolExecution.selectedToolId}
+          onSelectTool={props.onSelectTool ?? (() => undefined)}
+          selectedToolId={props.selectedToolId ?? null}
         />
       </main>
       {!isFollowing && (
@@ -272,11 +272,6 @@ export function Conversation(props: ConversationProps) {
           <ArrowDown size={24} aria-hidden="true" />
         </button>
       )}
-      <ToolExecutionPanelPresence
-        open={toolExecution.panelOpen}
-        tool={toolExecution.selectedTool}
-        onClose={toolExecution.closePanel}
-      />
     </div>
   );
 }

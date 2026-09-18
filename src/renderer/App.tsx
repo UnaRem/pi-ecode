@@ -10,6 +10,7 @@ import { SettingsPage } from "./components/settings/SettingsPage";
 import { useAgent } from "./hooks/use-agent";
 import { useAppConfig } from "./hooks/use-app-config";
 import { useScrollbarVisibility } from "./hooks/use-scrollbar-visibility";
+import { useWorkspaceTools } from "./hooks/use-workspace-tools";
 import { useI18n } from "./i18n/i18n";
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
   const selectedModel = state.models.find((model) => `${model.provider}/${model.id}` === state.selectedModel);
   const activeSession = state.sessions.find((session) => session.path === state.sessionFile);
   const sessionTitle = state.sessionTitle ?? (activeSession?.messageCount ? activeSession.title : null);
+  const workspaceTools = useWorkspaceTools(state.timeline, state.sessionFile ?? "new-session");
 
   const leaveSettings = useCallback((): boolean => {
     if (settingsDirty && !window.confirm(t("settings.confirmDiscard"))) return false;
@@ -142,6 +144,8 @@ export default function App() {
           isLoadingOlder={isLoadingOlder}
           onLoadOlder={() => void actions.loadOlderTimeline()}
           onContinue={() => void actions.continueAfterError()}
+          selectedToolId={workspaceTools.selectedToolId}
+          onSelectTool={workspaceTools.selectTool}
         />
         <Composer
           isStreaming={state.isStreaming}
