@@ -1,0 +1,54 @@
+.workspace-inspector {
+  width: var(--inspector-width);
+  min-width: var(--inspector-width);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+.inspector-tabs { height: var(--topbar-height); flex: 0 0 auto; display: flex; align-items: end; padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+.inspector-tabs span { position: relative; display: flex; height: 100%; align-items: center; color: var(--color-accent); font-size: 13px; font-weight: 700; }
+.inspector-tabs span::after { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; border-radius: var(--radius-pill); content: ""; background: var(--color-accent); }
+.inspector-scroll { min-height: 0; flex: 1; overflow-y: auto; }
+.inspector-section { padding: var(--space-4); border-bottom: 1px solid var(--color-border); background: var(--color-surface-subtle); }
+.inspector-section:focus-visible { outline-offset: -3px; }
+.inspector-section > header { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
+.inspector-section > header strong { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; font-weight: 700; }
+.inspector-section > header > span { min-width: 20px; padding: 2px 6px; border-radius: var(--radius-pill); color: var(--color-text-muted); background: var(--color-surface-muted); font-size: 10px; text-align: center; }
+.inspector-tool-list { display: flex; flex-direction: column; gap: var(--space-1); }
+.inspector-tool-list > p, .inspector-file-list > p { margin: 0; padding: var(--space-3); color: var(--color-text-muted); font-size: 11px; text-align: center; }
+.inspector-tool-list > button { min-width: 0; min-height: 34px; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); color: var(--color-text-muted); background: transparent; text-align: left; cursor: pointer; }
+.inspector-tool-list > button:hover { background: var(--color-surface-muted); }
+.inspector-tool-list > button.selected { border-color: #c9d9ff; color: var(--color-text); background: var(--color-accent-soft); }
+.inspector-tool-list strong { min-width: 0; overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.inspector-tool-status { display: grid; place-items: center; color: var(--color-text-faint); }
+.inspector-tool-status.running { color: var(--color-accent); }
+.inspector-tool-status.success { color: var(--color-success); }
+.inspector-tool-status.error { color: var(--color-danger); }
+.inspector-output { padding-inline: 0; }
+.inspector-output > header { padding-inline: var(--space-4); }
+.inspector-output pre { max-height: 240px; min-height: 120px; margin: 0; padding: var(--space-4); overflow: auto; color: var(--color-code-text); background: var(--color-code-bg); font: 10.5px/1.6 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inspector-validation > header button, .inspector-candidate-action { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; gap: 5px; padding: 0 var(--space-2); border: 1px solid #c9d9ff; border-radius: var(--radius-md); color: var(--color-accent); background: var(--color-accent-soft); font-size: 10px; cursor: pointer; }
+.inspector-validation > header button:hover, .inspector-candidate-action:hover { border-color: var(--color-accent); }
+.inspector-validation-steps { display: grid; gap: var(--space-1); }
+.inspector-validation-steps > div { display: flex; min-height: 28px; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: 10.5px; }
+.inspector-validation-steps > div.running { color: var(--color-accent); }
+.inspector-validation-steps > div.passed { color: var(--color-success); }
+.inspector-validation-steps > div.failed { color: var(--color-danger); }
+.inspector-candidate-action { width: 100%; margin-top: var(--space-3); }
+.inspector-validation-message { margin: var(--space-2) 0 0; color: var(--color-text-muted); font-size: 10px; line-height: 1.45; }
+.inspector-validation-message.failed { color: var(--color-danger); }
+.inspector-validation-message.passed, .inspector-validation-message.ready { color: var(--color-success); }
+.inspector-version-list { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2); }
+.inspector-version-list code { overflow: hidden; color: var(--color-text-faint); font: 9px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.inspector-file-list { display: flex; flex-direction: column; gap: 2px; }
+.inspector-file { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) 18px auto; align-items: center; gap: var(--space-2); min-height: 30px; color: var(--color-text-muted); }
+.inspector-file > svg { color: var(--color-accent); }
+.inspector-file code { min-width: 0; overflow: hidden; color: var(--color-text-muted); font: 10px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.inspector-file > span { color: var(--color-accent); font-size: 9px; font-weight: 700; }
+.inspector-file > button { padding: 3px 5px; border: 0; border-radius: var(--radius-sm); color: var(--color-text-faint); background: transparent; font-size: 9px; cursor: pointer; }
+.inspector-file > button:hover { color: var(--color-danger); background: var(--color-danger-soft); }
+.inspector-changes details { margin-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.inspector-changes summary { padding: var(--space-2) 0; color: var(--color-accent); font-size: 10px; cursor: pointer; }
+.inspector-changes details pre { max-height: 220px; margin: 0; padding: var(--space-3); overflow: auto; border-radius: var(--radius-md); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre; }

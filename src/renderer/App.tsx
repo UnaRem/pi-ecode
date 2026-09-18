@@ -5,7 +5,7 @@ import { Conversation } from "./components/Conversation";
 import { Sidebar } from "./components/Sidebar";
 import { StartupScreen } from "./components/StartupScreen";
 import { Topbar } from "./components/Topbar";
-import { ValidationPanelPresence } from "./components/ValidationPanel";
+import { WorkspaceInspector } from "./components/WorkspaceInspector";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { useAgent } from "./hooks/use-agent";
 import { useAppConfig } from "./hooks/use-app-config";
@@ -26,7 +26,6 @@ export default function App() {
   const { t } = useI18n();
   const [startupVisible, setStartupVisible] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [validationOpen, setValidationOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const selectedModel = state.models.find((model) => `${model.provider}/${model.id}` === state.selectedModel);
@@ -40,10 +39,6 @@ export default function App() {
     setSettingsDirty(false);
     return true;
   }, [settingsDirty, t]);
-
-  useEffect(() => {
-    if (!state.validation.isSelfProject) setValidationOpen(false);
-  }, [state.validation.isSelfProject]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -118,19 +113,7 @@ export default function App() {
           onRenameSession={(title) => void actions.renameSession(title)}
           onSetModel={(value) => void actions.setModel(value)}
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
-          onToggleValidation={() => setValidationOpen((open) => !open)}
-        />
-        <ValidationPanelPresence
-          open={validationOpen && state.validation.isSelfProject}
-          validation={state.validation}
-          review={state.review}
-          candidate={state.candidate}
-          onRun={() => void actions.runValidation()}
-          onStop={() => void actions.stopValidation()}
-          onRejectFile={(path) => void actions.rejectReviewFile(path)}
-          onPrepareCandidate={() => void actions.prepareCandidate()}
-          onActivateCandidate={() => void actions.activateCandidate()}
-          onClose={() => setValidationOpen(false)}
+          onToggleValidation={() => document.querySelector<HTMLElement>(".inspector-validation")?.focus()}
         />
         <Conversation
           timeline={state.timeline}
@@ -171,7 +154,19 @@ export default function App() {
           </>
         )}
       </section>
-      <aside className="workspace-inspector" data-region="inspector" aria-hidden="true" />
+      <WorkspaceInspector
+        tools={workspaceTools.tools}
+        selectedTool={workspaceTools.selectedTool}
+        validation={state.validation}
+        review={state.review}
+        candidate={state.candidate}
+        onSelectTool={workspaceTools.selectTool}
+        onRunValidation={() => void actions.runValidation()}
+        onStopValidation={() => void actions.stopValidation()}
+        onRejectFile={(path) => void actions.rejectReviewFile(path)}
+        onPrepareCandidate={() => void actions.prepareCandidate()}
+        onActivateCandidate={() => void actions.activateCandidate()}
+      />
     </div>
   );
 }
