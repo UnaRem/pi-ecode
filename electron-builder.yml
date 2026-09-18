@@ -11,6 +11,9 @@ extraResources:
   - from: resources/ecode-icon.ico
     to: ecode-icon.ico
 win:
+  electronLanguages:
+    - en-US
+    - zh-CN
   executableName: PiECode
   icon: ecode-icon.ico
   target:

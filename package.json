@@ -17,11 +17,7 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.84.4",
     "@earendil-works/pi-coding-agent": "^0.84.4",
-    "chokidar": "^4.0.3",
-    "lucide-react": "^1.38.0",
-    "pdfjs-dist": "^6.3.289",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "chokidar": "^4.0.3"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
@@ -31,6 +27,10 @@
     "electron": "^44.0.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "lucide-react": "^1.38.0",
+    "pdfjs-dist": "^6.3.289",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "rcedit": "^5.0.1",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
