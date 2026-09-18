@@ -6,6 +6,7 @@ export const IPC_CHANNELS = {
   getSnapshot: "agent:get-snapshot",
   loadOlderTimeline: "agent:load-older-timeline",
   getToolOutput: "agent:get-tool-output",
+  getConversationImage: "agent:get-conversation-image",
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
   deleteSession: "agent:delete-session",
@@ -81,12 +82,25 @@ export interface ImageAttachment {
   data: string;
 }
 
+export interface ConversationImage {
+  id: string;
+  fileName: string;
+  mimeType: ImageAttachment["mimeType"];
+  data?: string;
+  sourceId?: string;
+}
+
+export interface ConversationImagePayload {
+  mimeType: ImageAttachment["mimeType"];
+  data: Uint8Array;
+}
+
 export interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
   timestamp: number;
-  images?: ImageAttachment[];
+  images?: ConversationImage[];
   pastedTexts?: PastedTextAttachment[];
   isError?: boolean;
 }
@@ -321,6 +335,7 @@ export interface DesktopApi {
   getSnapshot(): Promise<AgentSnapshot>;
   loadOlderTimeline(): Promise<AgentTimelinePage>;
   getToolOutput(toolCallId: string): Promise<string>;
+  getConversationImage(sourceId: string): Promise<ConversationImagePayload>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   deleteSession(path: string): Promise<void>;

@@ -560,6 +560,9 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .image-strip { display: flex; gap: 7px; padding: 2px 2px 8px; overflow-x: auto; }
 .image-chip { position: relative; width: 74px; flex: 0 0 auto; padding: 3px; border: 1px solid var(--line-soft); border-radius: 8px; background: #f6f6f3; }
 .image-preview-button { display: block; width: 100%; padding: 0; border: 0; color: inherit; background: transparent; text-align: left; cursor: zoom-in; }
+.image-preview-button:disabled { cursor: default; }
+.image-loading { display: block; width: 100%; height: 110px; background: #deded9; }
+.image-chip .image-loading { width: 66px; height: 48px; border-radius: 5px; }
 .image-chip img { display: block; width: 66px; height: 48px; border-radius: 5px; object-fit: cover; }
 .image-chip span { display: block; overflow: hidden; padding: 3px 2px 0; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .image-chip .image-remove-button { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: #fff; cursor: pointer; }

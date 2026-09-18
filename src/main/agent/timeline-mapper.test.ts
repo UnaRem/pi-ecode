@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { createPastedTextAttachment, serializePastedTexts } from "../../shared/pasted-text.js";
-import { mapTimeline, recentMessageWindow } from "./timeline-mapper.js";
+import { conversationImagePayload, mapTimeline, recentMessageWindow } from "./timeline-mapper.js";
 
 describe("mapTimeline", () => {
   it("keeps text, tool calls, results, and later text in conversation order", () => {
@@ -84,7 +84,12 @@ describe("mapTimeline", () => {
 
     expect(mapTimeline(messages)[0]).toMatchObject({
       kind: "message",
-      message: { text: "Inspect this", images: [{ mimeType: "image/png", data: "aGVsbG8=" }] },
+      message: { text: "Inspect this", images: [{ mimeType: "image/png", sourceId: "0:1" }] },
     });
+    expect(conversationImagePayload(messages, "0:1")).toMatchObject({
+      mimeType: "image/png",
+      data: Uint8Array.from([104, 101, 108, 108, 111]),
+    });
+    expect(conversationImagePayload(messages, "0:99")).toBeNull();
   });
 });

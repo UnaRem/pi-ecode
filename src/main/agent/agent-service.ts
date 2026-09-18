@@ -17,6 +17,7 @@ import type {
   AgentEvent,
   AgentSnapshot,
   AgentTimelinePage,
+  ConversationImagePayload,
   ConversationMessage,
   ConversationItem,
   ImageAttachment,
@@ -35,7 +36,7 @@ import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { ConfirmationService } from "./confirmation.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
-import { mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
+import { conversationImagePayload, mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
@@ -205,6 +206,13 @@ export class AgentService {
     ));
     if (!message || message.role !== "toolResult") throw new Error("Tool output is not available in the active session.");
     return textFromContent(message.content);
+  }
+
+  getConversationImage(sourceId: string): ConversationImagePayload {
+    if (!sourceId || sourceId.length > 80) throw new Error("Invalid conversation image id.");
+    const payload = conversationImagePayload(this.requireRuntime().session.messages, sourceId);
+    if (!payload) throw new Error("Conversation image is not available in the active session.");
+    return payload;
   }
 
   private timelinePage(session: AgentSession): AgentTimelinePage {
@@ -654,7 +662,9 @@ export class AgentService {
       case "message_end": {
         this.flushStreamItems();
         if (event.message.role === "user") {
-          const item = mapTimeline([event.message]).at(0);
+          const storedIndex = session.messages.indexOf(event.message);
+          const messageIndex = storedIndex >= 0 ? storedIndex : Math.max(0, session.messages.length - 1);
+          const item = mapTimeline([event.message], messageIndex).at(0);
           if (item?.kind === "message") {
             this.emit({ type: "timeline-upsert", item });
           }

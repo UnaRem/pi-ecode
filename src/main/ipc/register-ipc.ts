@@ -80,6 +80,10 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
     if (typeof toolCallId !== "string") throw new Error("Invalid tool call id.");
     return service.getToolOutput(toolCallId);
   });
+  ipcMain.handle(IPC_CHANNELS.getConversationImage, (_event, sourceId: unknown) => {
+    if (typeof sourceId !== "string") throw new Error("Invalid conversation image id.");
+    return service.getConversationImage(sourceId);
+  });
   ipcMain.handle(IPC_CHANNELS.newSession, () => service.newSession());
   ipcMain.handle(IPC_CHANNELS.switchSession, (_event, path: string) => service.switchSession(path));
   ipcMain.handle(IPC_CHANNELS.deleteSession, (_event, path: string) => service.deleteSession(path));

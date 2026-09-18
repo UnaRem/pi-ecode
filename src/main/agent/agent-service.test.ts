@@ -91,6 +91,21 @@ describe("AgentService prompt lifecycle", () => {
     expect(() => service.getToolOutput("x".repeat(201))).toThrow("Invalid tool call id");
   });
 
+  it("reads historical images only by active-session indexes", () => {
+    const session = {
+      messages: [{ role: "user", content: [
+        { type: "text", text: "Inspect" },
+        { type: "image", mimeType: "image/png", data: "aGVsbG8=" },
+      ] }],
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+
+    expect(service.getConversationImage("0:1").data).toEqual(Uint8Array.from([104, 101, 108, 108, 111]));
+    expect(() => service.getConversationImage("../image.png")).toThrow("active session");
+    expect(() => service.getConversationImage("0:9")).toThrow("active session");
+  });
+
   it("continues a transient provider failure with a hidden control message", async () => {
     const session = {
       isIdle: true,

@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ConversationItem, ConversationMessage, ImageAttachment, ToolActivity } from "../../shared/contracts.js";
+import type { ConversationImagePayload, ConversationItem, ConversationMessage, ImageAttachment, ToolActivity } from "../../shared/contracts.js";
 import { parsePastedTexts } from "../../shared/pasted-text.js";
 import { formatToolInput, textFromContent, toolOutputView, toolTitle } from "./message-mapper.js";
 
@@ -19,17 +19,33 @@ function blocks(content: unknown): ContentBlock[] {
   return content.filter((block): block is ContentBlock => typeof block === "object" && block !== null);
 }
 
-function imagesFromContent(content: unknown): ImageAttachment[] {
-  return blocks(content).flatMap((block, index) => {
+function imagesFromContent(content: unknown, messageIndex: number): NonNullable<ConversationMessage["images"]> {
+  return blocks(content).flatMap((block, blockIndex) => {
     if (block.type !== "image" || typeof block.data !== "string" || !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(block.mimeType ?? "")) return [];
     const mimeType = block.mimeType as ImageAttachment["mimeType"];
     return [{
-      id: `message-image-${index}-${block.data.slice(0, 12)}`,
-      fileName: `image-${index + 1}.${mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1]}`,
+      id: `message-image-${messageIndex}-${blockIndex}`,
+      fileName: `image-${blockIndex + 1}.${mimeType === "image/jpeg" ? "jpg" : mimeType.split("/")[1]}`,
       mimeType,
-      data: block.data,
+      sourceId: `${messageIndex}:${blockIndex}`,
     }];
   });
+}
+
+export function conversationImagePayload(messages: AgentMessage[], sourceId: string): ConversationImagePayload | null {
+  const match = /^(\d+):(\d+)$/u.exec(sourceId);
+  if (!match) return null;
+  const messageIndex = Number(match[1]);
+  const blockIndex = Number(match[2]);
+  const message = messages[messageIndex];
+  if (!message || !("content" in message)) return null;
+  const block = blocks(message.content)[blockIndex];
+  if (!block || block.type !== "image" || typeof block.data !== "string"
+    || !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(block.mimeType ?? "")) return null;
+  return {
+    mimeType: block.mimeType as ImageAttachment["mimeType"],
+    data: Uint8Array.from(Buffer.from(block.data, "base64")),
+  };
 }
 
 export function messageItem(message: ConversationMessage): ConversationItem {
@@ -71,7 +87,7 @@ export function mapTimeline(messages: AgentMessage[], startIndex = 0): Conversat
       : Date.now() + messageIndex;
     if (message.role === "user") {
       const parsedText = parsePastedTexts(textFromContent(message.content));
-      const images = imagesFromContent(message.content);
+      const images = imagesFromContent(message.content, messageIndex);
       if (parsedText.message || images.length > 0 || parsedText.attachments.length > 0) timeline.push(messageItem({
         id: `user-${timestamp}-${messageIndex}`,
         role: "user",
