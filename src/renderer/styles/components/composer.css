@@ -1,8 +1,8 @@
 .composer-area { padding: 0 var(--space-5) var(--space-4); background-color: color-mix(in srgb, var(--color-surface) 88%, transparent); }
 .composer { width: min(var(--conversation-max-width), 100%); min-height: 112px; padding: var(--space-3) var(--space-3) var(--space-2) var(--space-4); border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-md); transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease; }
-.app-shell.has-custom-backdrop .composer { background: rgba(255, 255, 255, .86); backdrop-filter: blur(18px) saturate(1.05); }
-.composer:focus-within { border-color: #a9c0fb; box-shadow: 0 0 0 3px rgba(52, 104, 232, .09), var(--shadow-md); }
-.composer.working { border-color: #b9cdfd; box-shadow: 0 0 0 3px rgba(52, 104, 232, .08), var(--shadow-md); }
+.app-shell.has-custom-backdrop .composer { background: var(--color-backdrop-surface-strong); backdrop-filter: blur(18px) saturate(1.05); }
+.composer:focus-within { border-color: var(--color-accent-border-focus); box-shadow: 0 0 0 3px var(--color-focus-ring), var(--shadow-md); }
+.composer.working { border-color: var(--color-accent-border-strong); box-shadow: 0 0 0 3px var(--color-focus-ring-soft), var(--shadow-md); }
 .composer::before { display: none; }
 .composer textarea { min-height: 58px; padding: var(--space-1) 2px var(--space-2); color: var(--color-text); font-size: 13px; line-height: 1.55; }
 .composer textarea::placeholder { color: var(--color-text-faint); }
@@ -13,23 +13,23 @@
 .composer-tool-button { width: 30px; height: 30px; }
 .composer-tool-button:hover, .context-button:hover { color: var(--color-accent); background: var(--color-accent-soft); }
 .context-button.cancel { color: var(--color-danger); background: var(--color-danger-soft); }
-.send-button { width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--color-accent); box-shadow: 0 4px 10px rgba(52, 104, 232, .22); }
+.send-button { width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--color-accent); box-shadow: var(--shadow-accent-md); }
 .send-button:hover, .send-button.steer:hover { background: var(--color-accent-hover); }
 .send-button.steer { background: var(--color-accent); }
 .send-button.stop { color: var(--color-danger); background: var(--color-danger-soft); box-shadow: none; }
-.send-button.stop:hover { color: var(--color-danger); background: #fbdedb; }
+.send-button.stop:hover { color: var(--color-danger); background: var(--color-danger-soft); }
 .send-button:disabled { color: var(--color-text-faint); background: var(--color-surface-muted); box-shadow: none; }
 .composer-note { color: var(--color-text-faint); }
 
 .compaction-status-panel, .extension-question { width: min(var(--conversation-max-width), 100%); border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-raised); box-shadow: var(--shadow-md); }
 .compaction-status-panel { color: var(--color-accent); }
-.compaction-status-panel.completed { border-color: #bfe8d4; color: var(--color-success); background: var(--color-success-soft); }
-.compaction-status-panel.failed { border-color: #f0c9c5; color: var(--color-danger); background: var(--color-danger-soft); }
-.compaction-indeterminate { background: #dbe5ff; }
+.compaction-status-panel.completed { border-color: var(--color-success-border); color: var(--color-success); background: var(--color-success-soft); }
+.compaction-status-panel.failed { border-color: var(--color-danger-border); color: var(--color-danger); background: var(--color-danger-soft); }
+.compaction-indeterminate { background: var(--color-accent-soft); }
 .compaction-indeterminate i { background: var(--color-accent); }
 .extension-question-header > div { color: var(--color-accent); }
 .extension-question-options > button { border-color: var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface-subtle); }
-.extension-question-options > button:hover, .extension-question-options > button.selected { border-color: #b9cdfd; background: var(--color-accent-soft); }
+.extension-question-options > button:hover, .extension-question-options > button.selected { border-color: var(--color-accent-border-strong); background: var(--color-accent-soft); }
 .extension-question-options > button.selected .extension-option-icon { color: var(--color-accent); }
 .extension-question textarea { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface-subtle); }
 .extension-question-actions button.primary { border-color: var(--color-accent); background: var(--color-accent); }

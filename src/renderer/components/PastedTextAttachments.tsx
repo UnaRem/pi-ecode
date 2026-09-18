@@ -16,7 +16,7 @@ function formatByteSize(byteSize: number): string {
 
 export function PastedTextAttachments({ attachments, variant, onRemove }: PastedTextAttachmentsProps) {
   const { t } = useI18n();
-  // active keeps the dialog mounted while its close animation plays, mirroring ToolExecutionPanelPresence.
+  // Keep the dialog mounted until its visual exit completes.
   const [active, setActive] = useState<PastedTextAttachment | null>(null);
   const [closing, setClosing] = useState(false);
 

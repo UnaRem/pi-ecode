@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 function stylesheet(name: string): string {
@@ -37,6 +37,15 @@ describe("renderer style system", () => {
       "--inspector-width",
       "--duration-standard",
     ]) expect(tokens).toContain(token);
+  });
+
+  it("keeps raw color values inside the token layer during migration", () => {
+    const componentDirectory = new URL("./components/", import.meta.url);
+    const componentFiles = readdirSync(componentDirectory).filter((name) => name.endsWith(".css") && name !== "legacy.css");
+    for (const name of componentFiles) {
+      const content = readFileSync(new URL(name, componentDirectory), "utf8");
+      expect(content, name).not.toMatch(/#[0-9a-f]{3,8}|rgba?\(/iu);
+    }
   });
 
   it("provides one global reduced-motion fallback", () => {

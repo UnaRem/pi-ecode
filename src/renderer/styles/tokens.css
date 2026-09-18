@@ -42,15 +42,36 @@
   --color-accent: var(--blue-600);
   --color-accent-hover: var(--blue-700);
   --color-accent-soft: var(--blue-100);
+  --color-accent-border: #c9d9ff;
+  --color-accent-border-strong: #b9cdfd;
+  --color-accent-border-soft: #d7e3ff;
+  --color-accent-border-hover: #bfd0ff;
+  --color-accent-border-focus: #a9c0fb;
   --color-success: var(--green-500);
   --color-success-soft: var(--green-50);
+  --color-success-border: #bfe8d4;
   --color-danger: var(--red-500);
   --color-danger-soft: var(--red-50);
+  --color-danger-border: #f0c9c5;
   --color-warning: var(--amber-500);
   --color-warning-soft: var(--amber-50);
+  --color-warning-border: #f1dcae;
+  --color-warning-text: #8a651e;
   --color-code-bg: #162131;
   --color-code-text: #dbe8f6;
   --color-focus: #6d95f7;
+  --color-focus-ring: rgba(52, 104, 232, .1);
+  --color-focus-ring-soft: rgba(52, 104, 232, .08);
+  --color-backdrop-surface: rgba(255, 255, 255, .78);
+  --color-backdrop-surface-strong: rgba(255, 255, 255, .86);
+  --color-chrome-glass: rgba(255, 255, 255, .92);
+  --color-backdrop-border: rgba(255, 255, 255, .65);
+  --color-overlay-scrim: rgba(18, 28, 44, .78);
+  --color-overlay-border: rgba(255, 255, 255, .32);
+  --color-tool-inspect: #5186b8;
+  --color-tool-mutate: #b8793f;
+  --color-tool-execute: #7666b3;
+  --color-tool-research: #3c8c88;
 
   /* Compatibility aliases removed after all component sheets migrate. */
   --bg: var(--color-app-bg);
@@ -88,6 +109,10 @@
   --shadow-sm: 0 1px 3px rgba(39, 55, 78, .08);
   --shadow-md: 0 8px 24px rgba(39, 55, 78, .1);
   --shadow-lg: 0 18px 46px rgba(39, 55, 78, .14);
+  --shadow-inset: inset 0 1px 2px rgba(39, 55, 78, .05);
+  --shadow-accent-sm: 0 4px 12px rgba(52, 104, 232, .12);
+  --shadow-accent-md: 0 5px 14px rgba(52, 104, 232, .2);
+  --shadow-accent-lg: 0 8px 22px rgba(52, 104, 232, .24);
 
   --sidebar-width: clamp(210px, 20vw, 248px);
   --inspector-width: clamp(260px, 27vw, 344px);

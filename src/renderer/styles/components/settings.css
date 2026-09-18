@@ -32,16 +32,16 @@
 .add-provider button, .provider-config-card button, .auth-provider-actions button, .app-icon-buttons button,
 .instruction-file-actions button, .settings-actions button { border-color: var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface); }
 .add-provider button:hover, .provider-config-card button:hover, .auth-provider-actions button:hover,
-.app-icon-buttons button:hover, .instruction-file-actions button:hover, .settings-actions button:hover { border-color: #b9cdfd; color: var(--color-accent); background: var(--color-accent-soft); }
+.app-icon-buttons button:hover, .instruction-file-actions button:hover, .settings-actions button:hover { border-color: var(--color-accent-border-strong); color: var(--color-accent); background: var(--color-accent-soft); }
 .app-icon-buttons button.primary, .instruction-file-actions button.primary, .settings-actions button.primary { border-color: var(--color-accent); color: white; background: var(--color-accent); }
-.auth-flow-status, .auth-prompt-panel, .fff-status { border-color: #c9d9ff; color: var(--color-accent); background: var(--color-accent-soft); }
-.auth-flow-status.failed { border-color: #f0c9c5; color: var(--color-danger); background: var(--color-danger-soft); }
+.auth-flow-status, .auth-prompt-panel, .fff-status { border-color: var(--color-accent-border); color: var(--color-accent); background: var(--color-accent-soft); }
+.auth-flow-status.failed { border-color: var(--color-danger-border); color: var(--color-danger); background: var(--color-danger-soft); }
 .auth-provider-icon { color: var(--color-accent); background: var(--color-accent-soft); }
 .auth-provider-copy code { color: var(--color-text-faint); }
 .auth-provider-copy span, .auth-options small { color: var(--color-text-muted); }
-.settings-readonly, .settings-conflict { border-color: #f1dcae; color: #8a651e; background: var(--color-warning-soft); }
-.settings-error { border-color: #f0c9c5; color: var(--color-danger); background: var(--color-danger-soft); }
-.settings-pending { color: #8a651e; background: var(--color-warning-soft); }
+.settings-readonly, .settings-conflict { border-color: var(--color-warning-border); color: var(--color-warning-text); background: var(--color-warning-soft); }
+.settings-error { border-color: var(--color-danger-border); color: var(--color-danger); background: var(--color-danger-soft); }
+.settings-pending { color: var(--color-warning-text); background: var(--color-warning-soft); }
 .app-icon-preview { border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .app-icon-hint { color: var(--color-text-muted); }
 .app-icon-custom { color: var(--color-accent); }
@@ -49,7 +49,7 @@
 .app-background-preview { border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .instruction-file-tabs button { border-radius: var(--radius-md); color: var(--color-text-muted); }
 .instruction-file-tabs button:hover { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface); }
-.instruction-file-tabs button.active { border-color: #c9d9ff; color: var(--color-accent); background: var(--color-accent-soft); }
+.instruction-file-tabs button.active { border-color: var(--color-accent-border); color: var(--color-accent); background: var(--color-accent-soft); }
 .instruction-file-card > header > span.exists { color: var(--color-success); background: var(--color-success-soft); }
 .settings-actions { border-top-color: var(--color-border); background: var(--color-surface-raised); }
 

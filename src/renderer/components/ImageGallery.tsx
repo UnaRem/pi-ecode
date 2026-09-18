@@ -49,7 +49,7 @@ function useImageSources(images: ConversationImage[]): ReadonlyMap<string, strin
 export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
   const { t } = useI18n();
   const sources = useImageSources(images);
-  // active keeps the lightbox mounted while its close animation plays, mirroring ToolExecutionPanelPresence.
+  // Keep the lightbox mounted until its visual exit completes.
   const [activeId, setActiveId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const active = useMemo(() => images.find((image) => image.id === activeId) ?? null, [activeId, images]);

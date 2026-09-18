@@ -20,7 +20,7 @@
 .inspector-tool-list > p, .inspector-file-list > p { margin: 0; padding: var(--space-3); color: var(--color-text-muted); font-size: 11px; text-align: center; }
 .inspector-tool-list > button { min-width: 0; min-height: 34px; display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); color: var(--color-text-muted); background: transparent; text-align: left; cursor: pointer; }
 .inspector-tool-list > button:hover { background: var(--color-surface-muted); }
-.inspector-tool-list > button.selected { border-color: #c9d9ff; color: var(--color-text); background: var(--color-accent-soft); }
+.inspector-tool-list > button.selected { border-color: var(--color-accent-border); color: var(--color-text); background: var(--color-accent-soft); }
 .inspector-tool-list strong { min-width: 0; overflow: hidden; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .inspector-tool-status { display: grid; place-items: center; color: var(--color-text-faint); }
 .inspector-tool-status.running { color: var(--color-accent); }
@@ -29,7 +29,7 @@
 .inspector-output { padding-inline: 0; }
 .inspector-output > header { padding-inline: var(--space-4); }
 .inspector-output pre { max-height: 240px; min-height: 120px; margin: 0; padding: var(--space-4); overflow: auto; color: var(--color-code-text); background: var(--color-code-bg); font: 10.5px/1.6 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
-.inspector-validation > header button, .inspector-candidate-action { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; gap: 5px; padding: 0 var(--space-2); border: 1px solid #c9d9ff; border-radius: var(--radius-md); color: var(--color-accent); background: var(--color-accent-soft); font-size: 10px; cursor: pointer; }
+.inspector-validation > header button, .inspector-candidate-action { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; gap: 5px; padding: 0 var(--space-2); border: 1px solid var(--color-accent-border); border-radius: var(--radius-md); color: var(--color-accent); background: var(--color-accent-soft); font-size: 10px; cursor: pointer; }
 .inspector-validation > header button:hover, .inspector-candidate-action:hover { border-color: var(--color-accent); }
 .inspector-validation-steps { display: grid; gap: var(--space-1); }
 .inspector-validation-steps > div { display: flex; min-height: 28px; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: 10.5px; }
