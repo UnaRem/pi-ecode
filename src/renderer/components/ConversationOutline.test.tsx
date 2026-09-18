@@ -17,12 +17,13 @@ describe("ConversationOutline", () => {
     }));
     const markup = renderToStaticMarkup(
       <I18nProvider>
-        <ConversationOutline messages={messages} activeId="user-50" showLatest onSelect={vi.fn()} onLatest={vi.fn()} />
+        <ConversationOutline messages={messages} activeId="user-50" onSelect={vi.fn()} />
       </I18nProvider>,
     );
 
     expect(markup.match(/<button class="outline-marker/g)).toHaveLength(50);
-    expect(markup).toContain("outline-track has-latest");
+    expect(markup).toContain('class="outline-track"');
+    expect(markup).not.toContain("outline-latest");
     expect(markup).toContain("--outline-natural-height:650px");
     expect(markup).toContain("outline-marker active");
   });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { Sparkles } from "lucide-react";
+import { ArrowDown, Sparkles } from "lucide-react";
 import type { ConversationItem } from "@shared/contracts";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
@@ -247,9 +247,7 @@ export function Conversation(props: ConversationProps) {
         <ConversationOutline
           messages={userMessages}
           activeId={activeUserId}
-          showLatest={!isFollowing}
           onSelect={selectTurn}
-          onLatest={() => scrollToBottom("smooth")}
         />
         <ConversationBody
           {...props}
@@ -263,6 +261,17 @@ export function Conversation(props: ConversationProps) {
           selectedToolId={toolExecution.selectedToolId}
         />
       </main>
+      {!isFollowing && (
+        <button
+          type="button"
+          className="conversation-latest"
+          onClick={() => scrollToBottom(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth")}
+          aria-label={t("conversation.jumpLatest")}
+          title={t("conversation.jumpLatest")}
+        >
+          <ArrowDown size={24} aria-hidden="true" />
+        </button>
+      )}
       <ToolExecutionPanelPresence
         open={toolExecution.panelOpen}
         tool={toolExecution.selectedTool}

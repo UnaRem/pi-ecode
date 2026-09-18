@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/i18n";
@@ -7,6 +8,12 @@ import { normalizeNickname } from "./MessageRoleLabel";
 
 describe("Conversation", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("positions the latest button outside the outline at the composer edge", () => {
+    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    expect(stylesheet).toMatch(/\.conversation-latest\s*\{[^}]*position:\s*absolute;[^}]*right:\s*max\(28px, calc\(50% - 380px\)\);[^}]*bottom:\s*12px;[^}]*width:\s*44px;[^}]*height:\s*44px;/u);
+    expect(stylesheet).not.toContain(".outline-latest");
+  });
 
   it("formats elapsed time as cumulative hours, minutes, and seconds", () => {
     expect(formatWorkingDuration(0)).toBe("00:00:00");

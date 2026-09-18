@@ -362,12 +362,11 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .conversation-outline { position: sticky; z-index: 4; top: 50%; width: 28px; height: 0; margin-left: max(12px, calc(50% - 430px)); }
 .outline-track { display: flex; max-height: 58vh; flex-direction: column; align-items: center; gap: 4px; padding: 7px 5px; overflow: hidden; border-radius: 12px; background: rgba(247, 247, 245, .88); transform: translateY(-50%); backdrop-filter: blur(5px); }
 .outline-markers { display: flex; width: 18px; height: min(var(--outline-natural-height), calc(58vh - 14px)); min-height: 0; flex: 0 1 auto; flex-direction: column; align-items: center; overflow: visible; }
-.outline-track.has-latest .outline-markers { height: min(var(--outline-natural-height), calc(58vh - 40px)); }
 .outline-marker { position: relative; width: 18px; height: 13px; min-height: 0; flex: 1 1 13px; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .outline-line { position: absolute; top: 50%; left: 5px; width: 8px; height: 2px; border-radius: 2px; background: #c4c4be; transform: translateY(-50%); transition: width .15s ease, background .15s ease; }
 .outline-marker:hover .outline-line, .outline-marker.active .outline-line { width: 14px; background: #4e6f65; }
-.outline-latest { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; margin-top: 2px; padding: 0; border: 1px solid #cbd8d3; border-radius: 50%; color: #4f6f66; background: rgba(255, 255, 255, .92); box-shadow: 0 2px 7px rgba(40, 60, 52, .12); cursor: pointer; transition: color .15s ease, background .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
-.outline-latest:hover { border-color: var(--accent); color: #fff; background: var(--accent); box-shadow: 0 3px 9px rgba(45, 91, 78, .24); transform: translateY(-1px); }
+.conversation-latest { position: absolute; z-index: 6; right: max(28px, calc(50% - 380px)); bottom: 12px; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 1px solid #bdcec8; border-radius: 50%; color: #41695e; background: rgba(255, 255, 255, .96); box-shadow: 0 5px 16px rgba(39, 65, 57, .16); cursor: pointer; transition: color 150ms ease, background 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
+.conversation-latest:hover { border-color: var(--accent); color: #fff; background: var(--accent); box-shadow: 0 7px 20px rgba(45, 91, 78, .24); }
 .outline-preview { position: absolute; z-index: 2; left: 30px; width: 260px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: #fff; box-shadow: 0 7px 24px rgba(40, 40, 35, .12); font-size: 10.5px; line-height: 1.45; text-align: left; pointer-events: none; transform: translateY(-50%); }
 .outline-preview strong { display: block; margin-bottom: 3px; color: var(--text); font-size: 10px; }
 .conversation-inner.empty { display: grid; place-items: center; padding-bottom: 12vh; }
@@ -637,6 +636,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   .validation-toggle > span, .git-push-button > span { display: none; }
   .conversation-inner { width: calc(100% - 38px); }
   .conversation-outline { display: none; }
+  .conversation-latest { right: 19px; }
   .composer-area { padding-inline: 19px; }
   .settings-layout { grid-template-columns: 138px minmax(0, 1fr); }
   .settings-content { padding-inline: 16px; }
@@ -647,7 +647,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: 0ms !important; }
   .timeline-tool.entering { animation: none; }
   .tool-card.running::after { opacity: 1; animation: none; transform: translateX(125%); }
 }
