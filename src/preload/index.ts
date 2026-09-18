@@ -9,6 +9,7 @@ const api: DesktopApi = {
   openProject: (path) => ipcRenderer.invoke(IPC_CHANNELS.openProject, path),
   getSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.getSnapshot),
   loadOlderTimeline: () => ipcRenderer.invoke(IPC_CHANNELS.loadOlderTimeline),
+  getToolOutput: (toolCallId) => ipcRenderer.invoke(IPC_CHANNELS.getToolOutput, toolCallId),
   newSession: () => ipcRenderer.invoke(IPC_CHANNELS.newSession),
   switchSession: (path) => ipcRenderer.invoke(IPC_CHANNELS.switchSession, path),
   deleteSession: (path) => ipcRenderer.invoke(IPC_CHANNELS.deleteSession, path),

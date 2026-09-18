@@ -76,6 +76,21 @@ describe("AgentService prompt lifecycle", () => {
     expect(savedTitle).toHaveLength(80);
   });
 
+  it("reads full tool output only from the active session", () => {
+    const session = {
+      messages: [{
+        role: "toolResult", toolCallId: "call-1", toolName: "bash",
+        content: [{ type: "text", text: "complete output" }], isError: false,
+      }],
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+
+    expect(service.getToolOutput("call-1")).toBe("complete output");
+    expect(() => service.getToolOutput("missing")).toThrow("active session");
+    expect(() => service.getToolOutput("x".repeat(201))).toThrow("Invalid tool call id");
+  });
+
   it("continues a transient provider failure with a hidden control message", async () => {
     const session = {
       isIdle: true,

@@ -139,10 +139,21 @@ export function ToolExecutionPanel({
   const detailRef = useRef<HTMLDivElement>(null);
   const followingDetailRef = useRef(true);
   const previousToolIdRef = useRef(tool.id);
+  const outputRequestRef = useRef(0);
+  const [fullOutput, setFullOutput] = useState<{ toolId: string; text: string } | null>(null);
+  const [outputLoading, setOutputLoading] = useState(false);
+  const [outputError, setOutputError] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     selectedToolButtonRef.current?.scrollIntoView({ block: "nearest" });
   }, [tool.id, turnTools.length]);
+
+  useEffect(() => {
+    outputRequestRef.current += 1;
+    setFullOutput(null);
+    setOutputLoading(false);
+    setOutputError(null);
+  }, [tool.id]);
 
   useLayoutEffect(() => {
     const detail = detailRef.current;
@@ -159,6 +170,22 @@ export function ToolExecutionPanel({
     if (!detail) return;
     followingDetailRef.current = isScrollAreaAtBottom(detail.scrollTop, detail.clientHeight, detail.scrollHeight);
   };
+
+  const loadFullOutput = async (): Promise<void> => {
+    const request = ++outputRequestRef.current;
+    setOutputLoading(true);
+    setOutputError(null);
+    try {
+      const text = await window.piDesktop.getToolOutput(tool.id);
+      if (outputRequestRef.current === request) setFullOutput({ toolId: tool.id, text });
+    } catch (error) {
+      if (outputRequestRef.current === request) setOutputError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (outputRequestRef.current === request) setOutputLoading(false);
+    }
+  };
+
+  const displayedOutput = fullOutput?.toolId === tool.id ? fullOutput.text : tool.output;
 
   return (
     <aside
@@ -193,7 +220,16 @@ export function ToolExecutionPanel({
         </section>
         <section>
           <h3>{t("tool.output")}</h3>
-          <pre className="tool-execution-output">{tool.output || (tool.status === "running" ? t("tool.waitingOutput") : t("tool.noOutput"))}</pre>
+          {tool.outputTruncated && fullOutput?.toolId !== tool.id && (
+            <div className="tool-output-truncated">
+              <span>{t("tool.outputTruncated", { count: tool.outputLength ?? tool.output.length })}</span>
+              <button type="button" disabled={outputLoading} onClick={() => void loadFullOutput()}>
+                {t(outputLoading ? "tool.loadingFullOutput" : "tool.loadFullOutput")}
+              </button>
+            </div>
+          )}
+          {outputError && <div className="tool-output-error" role="alert">{outputError}</div>}
+          <pre className="tool-execution-output">{displayedOutput || (tool.status === "running" ? t("tool.waitingOutput") : t("tool.noOutput"))}</pre>
         </section>
       </div>
     </aside>

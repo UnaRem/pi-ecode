@@ -2,6 +2,9 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ConversationMessage, ToolActivity } from "../../shared/contracts.js";
 import { parsePastedTexts } from "../../shared/pasted-text.js";
 
+const TOOL_OUTPUT_PREVIEW_LENGTH = 64 * 1024;
+const TOOL_OUTPUT_PREFIX_LENGTH = 48 * 1024;
+
 interface TextBlock {
   type?: string;
   text?: string;
@@ -27,6 +30,16 @@ export function textFromContent(content: unknown): string {
 export function textFromToolResult(result: unknown): string {
   if (typeof result !== "object" || result === null || !("content" in result)) return "";
   return textFromContent(result.content);
+}
+
+export function toolOutputView(output: string): Pick<ToolActivity, "output" | "outputLength" | "outputTruncated"> {
+  if (output.length <= TOOL_OUTPUT_PREVIEW_LENGTH) return { output };
+  const omitted = output.length - TOOL_OUTPUT_PREVIEW_LENGTH;
+  return {
+    output: `${output.slice(0, TOOL_OUTPUT_PREFIX_LENGTH)}\n\n… ${omitted} characters omitted …\n\n${output.slice(-16 * 1024)}`,
+    outputLength: output.length,
+    outputTruncated: true,
+  };
 }
 
 export function formatToolInput(args: unknown): string {
@@ -93,7 +106,7 @@ export function mapMessages(messages: AgentMessage[]): { messages: ConversationM
         name: message.toolName,
         title: existing?.title ?? message.toolName,
         input: existing?.input ?? "",
-        output: textFromContent(message.content),
+        ...toolOutputView(textFromContent(message.content)),
         status: message.isError ? "error" : "success",
       });
     }

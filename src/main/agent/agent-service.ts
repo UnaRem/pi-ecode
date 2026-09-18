@@ -34,7 +34,7 @@ import { WorkspaceHistory } from "../history/workspace-history.js";
 import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { ConfirmationService } from "./confirmation.js";
-import { formatToolInput, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
+import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
 import { mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
@@ -196,6 +196,15 @@ export class AgentService {
     const session = this.requireRuntime().session;
     this.visibleTimelineTurns += HISTORY_PAGE_TURNS;
     return this.timelinePage(session);
+  }
+
+  getToolOutput(toolCallId: string): string {
+    if (!toolCallId || toolCallId.length > 200) throw new Error("Invalid tool call id.");
+    const message = this.requireRuntime().session.messages.findLast((entry) => (
+      entry.role === "toolResult" && entry.toolCallId === toolCallId
+    ));
+    if (!message || message.role !== "toolResult") throw new Error("Tool output is not available in the active session.");
+    return textFromContent(message.content);
   }
 
   private timelinePage(session: AgentSession): AgentTimelinePage {
@@ -672,7 +681,7 @@ export class AgentService {
       case "tool_execution_update": {
         const current = this.liveTools.get(event.toolCallId);
         if (!current) break;
-        const tool = { ...current, output: textFromToolResult(event.partialResult) };
+        const tool = { ...current, ...toolOutputView(textFromToolResult(event.partialResult)) };
         this.liveTools.set(tool.id, tool);
         this.publishStreamItem(toolItem(tool));
         break;
@@ -685,7 +694,7 @@ export class AgentService {
           name: event.toolName,
           title: current?.title ?? event.toolName,
           input: current?.input ?? "",
-          output: textFromToolResult(event.result),
+          ...toolOutputView(textFromToolResult(event.result)),
           status: event.isError ? "error" : "success",
         };
         this.liveTools.set(tool.id, tool);

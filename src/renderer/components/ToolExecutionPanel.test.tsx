@@ -86,6 +86,18 @@ describe("ToolExecutionPanel", () => {
     expect(closedMarkup).toBe("");
   });
 
+  it("offers full output loading only for truncated previews", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const selected = { ...tool("selected"), outputTruncated: true, outputLength: 100_000 };
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ToolExecutionPanel tool={selected} turnTools={[selected]} onSelect={vi.fn()} onClose={vi.fn()} />
+      </I18nProvider>,
+    );
+    expect(markup).toContain("Previewing 100000 characters");
+    expect(markup).toContain("Load full output");
+  });
+
   it("renders turn navigation and the selected call details", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const selected = tool("selected", "running");

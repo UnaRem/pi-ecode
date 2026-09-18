@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { createPastedTextAttachment, serializePastedTexts } from "../../shared/pasted-text.js";
-import { formatToolInput, mapMessages, textFromContent, textFromToolResult, toolTitle } from "./message-mapper.js";
+import { formatToolInput, mapMessages, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
 
 describe("message mapper helpers", () => {
   it("keeps only visible text blocks", () => {
@@ -28,6 +28,16 @@ describe("message mapper helpers", () => {
   it("formats shell commands directly and other inputs as JSON", () => {
     expect(formatToolInput({ command: "npm test" })).toBe("npm test");
     expect(formatToolInput({ path: "src/App.tsx", offset: 1 })).toContain('"path": "src/App.tsx"');
+  });
+
+  it("keeps a bounded head and tail preview for large tool output", () => {
+    const output = `${"a".repeat(60 * 1024)}${"z".repeat(20 * 1024)}`;
+    const view = toolOutputView(output);
+    expect(view.outputTruncated).toBe(true);
+    expect(view.outputLength).toBe(output.length);
+    expect(view.output.length).toBeLessThan(output.length);
+    expect(view.output.startsWith("aaa")).toBe(true);
+    expect(view.output.endsWith("zzz")).toBe(true);
   });
 
   it("extracts text from tool results and creates compact titles", () => {

@@ -498,6 +498,10 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .tool-execution-detail h3 { margin: 0 0 6px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .tool-execution-detail pre { min-height: 38px; margin: 0; padding: 10px; overflow: auto; border: 1px solid var(--line-soft); border-radius: 7px; color: #555550; background: #fafaf8; font: 10.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tool-execution-output { color: #62625e !important; }
+.tool-output-truncated { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 7px; color: var(--muted); font-size: 10px; }
+.tool-output-truncated button { flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--accent); background: #fff; cursor: pointer; }
+.tool-output-truncated button:disabled { cursor: default; opacity: .62; }
+.tool-output-error { margin-bottom: 7px; color: var(--danger); font-size: 10px; overflow-wrap: anywhere; }
 .error-banner, .notice-banner { padding: 10px 12px; border-radius: 8px; font-size: 11.5px; line-height: 1.45; animation: panel-enter 200ms cubic-bezier(.2, .75, .25, 1) both; }
 .error-banner { border: 1px solid #e5c6c2; color: #8f3f36; background: #f9ebe8; }
 .error-banner.recoverable { display: flex; align-items: center; gap: 12px; }

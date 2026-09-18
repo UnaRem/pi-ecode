@@ -5,6 +5,7 @@ export const IPC_CHANNELS = {
   openProject: "agent:open-project",
   getSnapshot: "agent:get-snapshot",
   loadOlderTimeline: "agent:load-older-timeline",
+  getToolOutput: "agent:get-tool-output",
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
   deleteSession: "agent:delete-session",
@@ -96,6 +97,8 @@ export interface ToolActivity {
   title: string;
   input: string;
   output: string;
+  outputTruncated?: boolean;
+  outputLength?: number;
   status: "running" | "success" | "error";
 }
 
@@ -317,6 +320,7 @@ export interface DesktopApi {
   openProject(path: string): Promise<AgentSnapshot>;
   getSnapshot(): Promise<AgentSnapshot>;
   loadOlderTimeline(): Promise<AgentTimelinePage>;
+  getToolOutput(toolCallId: string): Promise<string>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   deleteSession(path: string): Promise<void>;

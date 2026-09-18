@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ConversationItem, ConversationMessage, ImageAttachment, ToolActivity } from "../../shared/contracts.js";
 import { parsePastedTexts } from "../../shared/pasted-text.js";
-import { formatToolInput, textFromContent, toolTitle } from "./message-mapper.js";
+import { formatToolInput, textFromContent, toolOutputView, toolTitle } from "./message-mapper.js";
 
 interface ContentBlock {
   type?: string;
@@ -116,7 +116,7 @@ export function mapTimeline(messages: AgentMessage[], startIndex = 0): Conversat
         name: message.toolName,
         title: existing?.kind === "tool" ? existing.tool.title : message.toolName,
         input: existing?.kind === "tool" ? existing.tool.input : "",
-        output: textFromContent(message.content),
+        ...toolOutputView(textFromContent(message.content)),
         status: message.isError ? "error" : "success",
       };
       if (index === undefined) {
