@@ -18,7 +18,7 @@ export default function App() {
   const { state, isLoading, isLoadingOlder, actions } = useAgent();
   const { snapshot: appConfig } = useAppConfig();
   const brandIconSrc = appConfig?.iconUrl ?? "./ecode-icon.png";
-  const customBackdropActive = Boolean(appConfig?.backgroundImageUrl || appConfig?.theme?.background);
+  const customBackdropActive = Boolean(appConfig?.backgroundImageUrl);
   const conversationBackgroundUrl = appConfig?.backgroundImageUrl ?? null;
   const workspaceStyle: CSSProperties | undefined = conversationBackgroundUrl
     ? { "--conversation-bg-image": `url("${conversationBackgroundUrl}")` } as CSSProperties
