@@ -1,0 +1,39 @@
+.loading-screen, .project-gate, .startup-screen { color: var(--color-text); background: var(--color-app-bg); }
+.loading-screen { color: var(--color-text-muted); }
+.startup-brand img { border-color: var(--color-border); box-shadow: var(--shadow-lg); }
+.startup-brand h1, .project-gate h1 { color: var(--color-text); }
+.project-gate .brand-mark { box-shadow: var(--shadow-md); }
+.project-gate p { color: var(--color-text-muted); }
+.project-gate > button { min-height: var(--control-height-lg); padding-inline: var(--space-4); border-color: var(--color-accent); border-radius: var(--radius-lg); color: white; background: var(--color-accent); box-shadow: 0 5px 14px rgba(52, 104, 232, .2); }
+.project-gate > button:hover { background: var(--color-accent-hover); }
+
+.image-chip, .message-image, .pasted-text-chip, .pdf-panel { border-color: var(--color-border); background: var(--color-surface-subtle); }
+.image-loading { background: var(--color-surface-muted); }
+.image-lightbox, .pasted-text-dialog { z-index: var(--z-overlay); background: rgba(18, 28, 44, .78); }
+.image-lightbox > img, .pasted-text-dialog > div { border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+.image-lightbox-close, .pasted-text-dialog > div > button { border-color: rgba(255, 255, 255, .32); }
+.pasted-text-dialog > div { background: var(--color-surface); }
+.pasted-text-dialog pre { color: var(--color-text); }
+.pasted-text-chip > button:first-child { color: var(--color-text-muted); }
+.pasted-text-chip strong { color: var(--color-text); }
+.pdf-panel-header { border-bottom-color: var(--color-border); color: var(--color-text-muted); }
+.pdf-panel-header strong { color: var(--color-text); }
+.pdf-preview { color: var(--color-text-muted); background: var(--color-surface-muted); }
+.pdf-controls { border-top-color: var(--color-border); }
+.pdf-controls button, .pdf-controls input { border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface); }
+.pdf-controls .pdf-add-page { border-color: var(--color-accent); color: white; background: var(--color-accent); }
+
+.extension-question { border-color: var(--color-border); background: var(--color-surface-raised); box-shadow: var(--shadow-md); }
+.extension-question-header > div { color: var(--color-accent); }
+.extension-question-header small { color: var(--color-text-muted); background: var(--color-surface-muted); }
+.extension-question-title { color: var(--color-text); }
+.extension-question-message { color: var(--color-text-muted); }
+.extension-question-options > button { border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-subtle); }
+.extension-question-options > button:hover, .extension-question-options > button.selected { border-color: #b9cdfd; background: var(--color-accent-soft); }
+.extension-question-actions button { border-color: var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface-subtle); }
+.extension-question-actions button.primary { border-color: var(--color-accent); color: white; background: var(--color-accent); }
+
+.git-push-error { z-index: var(--z-dropdown); border-color: #f0c9c5; border-radius: var(--radius-md); color: var(--color-danger); background: var(--color-danger-soft); box-shadow: var(--shadow-md); }
+.error-banner, .notice-banner, .compaction-status-panel, .extension-question { animation-duration: var(--duration-standard); animation-timing-function: var(--ease-standard); }
+.select-menu { animation-duration: var(--duration-fast); animation-timing-function: var(--ease-standard); }
+.select-menu.leaving, .image-lightbox.closing, .pasted-text-dialog.closing { animation-duration: var(--duration-fast); animation-timing-function: var(--ease-exit); }

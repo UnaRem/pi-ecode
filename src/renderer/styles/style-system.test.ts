@@ -18,6 +18,8 @@ describe("renderer style system", () => {
       '@import "./components/inspector.css";',
       '@import "./components/conversation.css";',
       '@import "./components/composer.css";',
+      '@import "./components/settings.css";',
+      '@import "./components/overlays.css";',
       "",
     ].join("\n"));
   });

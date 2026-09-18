@@ -1,0 +1,59 @@
+.settings-page { color: var(--color-text); background: var(--color-surface); }
+.settings-header { min-height: var(--topbar-height); padding-inline: var(--space-4); border-bottom-color: var(--color-border); background: var(--color-surface); }
+.settings-header strong { font-size: 14px; }
+.settings-header span { color: var(--color-text-muted); }
+.settings-layout { grid-template-columns: 180px minmax(0, 1fr); }
+.settings-nav { padding: var(--space-4) var(--space-3); border-right-color: var(--color-border); background: var(--color-surface-subtle); }
+.settings-nav button { min-height: var(--control-height); padding-inline: var(--space-3); border-radius: var(--radius-md); color: var(--color-text-muted); }
+.settings-nav button:hover { color: var(--color-text); background: var(--color-surface-muted); }
+.settings-nav button.active { color: var(--color-accent); background: var(--color-accent-soft); }
+.settings-nav-note { color: var(--color-text-faint); }
+.settings-content { padding: var(--space-6); background: var(--color-surface); }
+.settings-content-title h2 { color: var(--color-text); font-size: 20px; }
+.settings-content-title code { color: var(--color-text-faint); }
+.settings-groups, .models-settings, .auth-settings, .fff-settings, .appearance-settings, .instruction-files-editor { max-width: 880px; }
+.settings-group, .provider-config-card, .appearance-card, .instruction-file-card, .auth-provider, .fff-schema { border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-subtle); box-shadow: var(--shadow-sm); }
+.settings-group h3, .instruction-file-card > header { border-bottom-color: var(--color-border); }
+.settings-field > span, .provider-config-card label > span, .model-config-card label > span { color: var(--color-text-muted); }
+.settings-field code, .provider-config-card code, .model-config-card code { color: var(--color-text); }
+.settings-field small { color: var(--color-text-faint); }
+.settings-field input, .settings-field select, .settings-field textarea,
+.provider-config-card input, .provider-config-card select, .provider-config-card textarea,
+.add-provider input, .fff-schema input, .instruction-file-card > textarea {
+  border-color: var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+.settings-field input:focus, .settings-field select:focus, .settings-field textarea:focus,
+.provider-config-card input:focus, .provider-config-card select:focus, .provider-config-card textarea:focus,
+.instruction-file-card > textarea:focus { border-color: var(--color-focus); }
+.model-config-card { border-color: var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.add-provider button, .provider-config-card button, .auth-provider-actions button, .app-icon-buttons button,
+.instruction-file-actions button, .settings-actions button { border-color: var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface); }
+.add-provider button:hover, .provider-config-card button:hover, .auth-provider-actions button:hover,
+.app-icon-buttons button:hover, .instruction-file-actions button:hover, .settings-actions button:hover { border-color: #b9cdfd; color: var(--color-accent); background: var(--color-accent-soft); }
+.app-icon-buttons button.primary, .instruction-file-actions button.primary, .settings-actions button.primary { border-color: var(--color-accent); color: white; background: var(--color-accent); }
+.auth-flow-status, .auth-prompt-panel, .fff-status { border-color: #c9d9ff; color: var(--color-accent); background: var(--color-accent-soft); }
+.auth-flow-status.failed { border-color: #f0c9c5; color: var(--color-danger); background: var(--color-danger-soft); }
+.auth-provider-icon { color: var(--color-accent); background: var(--color-accent-soft); }
+.auth-provider-copy code { color: var(--color-text-faint); }
+.auth-provider-copy span, .auth-options small { color: var(--color-text-muted); }
+.settings-readonly, .settings-conflict { border-color: #f1dcae; color: #8a651e; background: var(--color-warning-soft); }
+.settings-error { border-color: #f0c9c5; color: var(--color-danger); background: var(--color-danger-soft); }
+.settings-pending { color: #8a651e; background: var(--color-warning-soft); }
+.app-icon-preview { border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.app-icon-hint { color: var(--color-text-muted); }
+.app-icon-custom { color: var(--color-accent); }
+.app-icon-default { color: var(--color-text-faint); }
+.app-background-preview { border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
+.instruction-file-tabs button { border-radius: var(--radius-md); color: var(--color-text-muted); }
+.instruction-file-tabs button:hover { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface); }
+.instruction-file-tabs button.active { border-color: #c9d9ff; color: var(--color-accent); background: var(--color-accent-soft); }
+.instruction-file-card > header > span.exists { color: var(--color-success); background: var(--color-success-soft); }
+.settings-actions { border-top-color: var(--color-border); background: var(--color-surface-raised); }
+
+@media (max-width: 900px) {
+  .settings-layout { grid-template-columns: 138px minmax(0, 1fr); }
+  .settings-content { padding: var(--space-4); }
+}
