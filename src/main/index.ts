@@ -54,7 +54,9 @@ function createWindow(): void {
   const iconFileName = process.platform === "win32" ? "ecode-icon.ico" : "ecode-icon.png";
   // 窗口/任务栏图标固定为 PiECode 品牌图标（打包资源），不可配置。
   // Windows 任务栏图标在打包态无法通过运行时 setIcon 可靠变更，属平台固有限制。
-  const iconPath = app.isPackaged
+  // 品牌开发可执行文件也会使 isPackaged 为 true，但图标仍位于项目资源目录。
+  const isPackagedRuntime = app.isPackaged && process.env.PI_ECODE_DEVELOPMENT_RUNTIME !== "1";
+  const iconPath = isPackagedRuntime
     ? join(process.resourcesPath, iconFileName)
     : join(app.getAppPath(), "resources", iconFileName);
   const initialWidth = Math.min(1440, screen.getPrimaryDisplay().workAreaSize.width);
