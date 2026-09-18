@@ -38,7 +38,7 @@ describe("Sidebar", () => {
   });
 
   it("keeps the sidebar mounted and animates collapse through a reversible transition", () => {
-    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     expect(stylesheet).toMatch(/\.sidebar\s*\{[^}]*margin-left:\s*calc\(0px - var\(--sidebar-width\)\);[^}]*opacity:\s*0;/u);
     expect(stylesheet).toMatch(/\.app-shell\.sidebar-visible \.sidebar\s*\{[^}]*margin-left:\s*0;[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/u);
     expect(stylesheet).not.toContain("@keyframes sidebar-enter");

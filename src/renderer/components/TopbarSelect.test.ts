@@ -34,7 +34,7 @@ describe("TopbarSelect", () => {
   });
 
   it("closes through a leave animation instead of unmounting instantly", () => {
-    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     expect(stylesheet).toContain("@keyframes select-menu-leave");
     expect(stylesheet).toMatch(/\.select-menu\.leaving\s*\{[^}]*animation:\s*select-menu-leave/u);
   });

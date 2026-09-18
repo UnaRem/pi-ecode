@@ -1,0 +1,105 @@
+:root {
+  color: #172033;
+  background: #eef3f9;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  /* Palette primitives: component styles must consume semantic tokens below. */
+  --blue-50: #f1f6ff;
+  --blue-100: #e3edff;
+  --blue-500: #4f7ff7;
+  --blue-600: #3468e8;
+  --blue-700: #2854c7;
+  --slate-0: #ffffff;
+  --slate-25: #fbfcfe;
+  --slate-50: #f6f8fb;
+  --slate-100: #edf1f6;
+  --slate-200: #dde4ed;
+  --slate-300: #c8d2df;
+  --slate-500: #748197;
+  --slate-700: #3f4b5f;
+  --slate-900: #172033;
+  --green-50: #edfaf4;
+  --green-500: #2cbd78;
+  --green-700: #168654;
+  --red-50: #fff1f0;
+  --red-500: #e45d54;
+  --amber-50: #fff8e8;
+  --amber-500: #e9a62b;
+
+  /* Semantic color contract. */
+  --color-app-bg: #eef3f9;
+  --color-surface: var(--slate-0);
+  --color-surface-subtle: var(--slate-50);
+  --color-surface-muted: var(--slate-100);
+  --color-surface-raised: rgba(255, 255, 255, .94);
+  --color-text: var(--slate-900);
+  --color-text-muted: var(--slate-500);
+  --color-text-faint: #99a4b6;
+  --color-border: var(--slate-200);
+  --color-border-strong: var(--slate-300);
+  --color-accent: var(--blue-600);
+  --color-accent-hover: var(--blue-700);
+  --color-accent-soft: var(--blue-100);
+  --color-success: var(--green-500);
+  --color-success-soft: var(--green-50);
+  --color-danger: var(--red-500);
+  --color-danger-soft: var(--red-50);
+  --color-warning: var(--amber-500);
+  --color-warning-soft: var(--amber-50);
+  --color-code-bg: #162131;
+  --color-code-text: #dbe8f6;
+  --color-focus: #6d95f7;
+
+  /* Compatibility aliases removed after all component sheets migrate. */
+  --bg: var(--color-app-bg);
+  --panel: var(--color-surface-subtle);
+  --panel-strong: var(--color-surface-muted);
+  --surface: var(--color-surface);
+  --text: var(--color-text);
+  --muted: var(--color-text-muted);
+  --faint: var(--color-text-faint);
+  --line: var(--color-border);
+  --line-soft: #e8edf3;
+  --accent: var(--color-accent);
+  --accent-soft: var(--color-accent-soft);
+  --danger: var(--color-danger);
+
+  /* 4px spacing scale. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+  --control-height-sm: 30px;
+  --control-height: 36px;
+  --control-height-lg: 44px;
+
+  --shadow-sm: 0 1px 3px rgba(39, 55, 78, .08);
+  --shadow-md: 0 8px 24px rgba(39, 55, 78, .1);
+  --shadow-lg: 0 18px 46px rgba(39, 55, 78, .14);
+
+  --sidebar-width: clamp(210px, 20vw, 248px);
+  --inspector-width: clamp(260px, 27vw, 344px);
+  --conversation-max-width: 760px;
+  --topbar-height: 56px;
+  --z-dropdown: 20;
+  --z-overlay: 40;
+  --z-tooltip: 60;
+
+  --duration-fast: 120ms;
+  --duration-standard: 180ms;
+  --duration-slow: 240ms;
+  --ease-standard: cubic-bezier(.2, .75, .25, 1);
+  --ease-exit: cubic-bezier(.55, 0, 1, .45);
+}

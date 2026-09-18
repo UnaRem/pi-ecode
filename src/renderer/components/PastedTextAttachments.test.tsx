@@ -21,7 +21,7 @@ describe("PastedTextAttachments", () => {
   });
 
   it("keeps the dialog mounted while its close animation plays", () => {
-    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     expect(stylesheet).toContain("@keyframes overlay-close");
     expect(stylesheet).toMatch(/\.pasted-text-dialog\.closing[^{]*\{[^}]*animation-name:\s*overlay-close/u);
   });

@@ -10,7 +10,7 @@ describe("Conversation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("positions the latest button outside the outline at the composer edge", () => {
-    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     expect(stylesheet).toMatch(/\.conversation-latest\s*\{[^}]*position:\s*absolute;[^}]*right:\s*max\(28px, calc\(50% - 380px\)\);[^}]*bottom:\s*12px;[^}]*width:\s*44px;[^}]*height:\s*44px;/u);
     expect(stylesheet).not.toContain(".outline-latest");
   });

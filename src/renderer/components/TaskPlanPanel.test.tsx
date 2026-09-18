@@ -56,7 +56,7 @@ describe("TaskPlanPanel", () => {
   });
 
   it("uses content height without artificial edge spacing in every list state", () => {
-    const stylesheet = readFileSync(new URL("../styles/global.css", import.meta.url), "utf8");
+    const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     // Check the stylesheet too: boundary classes alone cannot prevent blank padding.
     const listRule = stylesheet.match(/\.sidebar-task-items\s*\{([^}]+)\}/u)?.[1];
     expect(listRule).toBeDefined();

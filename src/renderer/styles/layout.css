@@ -1,0 +1,16 @@
+/*
+ * Layout ownership contract
+ * - App shell owns columns and viewport allocation.
+ * - Region roots own scrolling; descendants must not introduce page-level scroll.
+ * - Components consume layout tokens instead of declaring global widths.
+ */
+.app-shell {
+  --sidebar-width: clamp(210px, 20vw, 248px);
+  --inspector-width: clamp(260px, 27vw, 344px);
+}
+
+.conversation-inner,
+.composer-inner {
+  width: min(var(--conversation-max-width), calc(100% - 56px));
+  margin-inline: auto;
+}
