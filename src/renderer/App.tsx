@@ -78,7 +78,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-shell ${sidebarOpen ? "sidebar-visible" : ""} ${customBackdropActive ? "has-custom-backdrop" : ""}`}>
+    <div className={`app-shell app-frame ${sidebarOpen ? "sidebar-visible" : ""} ${customBackdropActive ? "has-custom-backdrop" : ""}`}>
       <Sidebar
         projectName={state.projectName}
         projectPath={state.projectPath}
@@ -95,7 +95,7 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onCollapse={() => setSidebarOpen(false)}
       />
-      <section className="workspace" style={workspaceStyle}>
+      <section className="workspace" data-region="workspace" style={workspaceStyle}>
         {settingsOpen ? (
           <SettingsPage onClose={() => void leaveSettings()} onDirtyChange={setSettingsDirty} />
         ) : (
@@ -167,6 +167,7 @@ export default function App() {
           </>
         )}
       </section>
+      <aside className="workspace-inspector" data-region="inspector" aria-hidden="true" />
     </div>
   );
 }

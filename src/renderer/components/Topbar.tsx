@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { LoaderCircle, PanelLeftOpen, Pencil, ShieldCheck } from "lucide-react";
+import { FolderClosed, LoaderCircle, PanelLeftOpen, Pencil, ShieldCheck } from "lucide-react";
 import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { GitPushButton } from "./GitPushButton";
@@ -88,16 +88,17 @@ export function Topbar(props: TopbarProps) {
     if (model) props.onSetModel(`${model.provider}/${model.id}`);
   };
   return (
-    <header className="topbar">
+    <header className="topbar" data-region="topbar">
       <div className="topbar-title">
         {!props.sidebarOpen && (
           <button className="icon-button" onClick={props.onOpenSidebar} aria-label={t("topbar.openSidebar")}>
             <PanelLeftOpen size={18} />
           </button>
         )}
+        <FolderClosed className="topbar-project-icon" size={16} aria-hidden="true" />
+        <strong className="topbar-project-name" title={props.projectPath}>{props.projectName}</strong>
+        <span className="topbar-divider" aria-hidden="true" />
         <SessionTitleEditor title={props.sessionTitle || t("topbar.newThread")} onRename={props.onRenameSession} />
-        <span>/</span>
-        <small>{props.projectName}</small>
         <span
           className={`policy-indicator ${props.policy.contextFiles.length > 0 ? "loaded" : "missing"}`}
           title={props.policy.contextFiles.length > 0

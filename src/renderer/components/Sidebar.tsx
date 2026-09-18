@@ -37,13 +37,13 @@ export function Sidebar(props: SidebarProps) {
     if (isClosing && event.currentTarget === event.target) props.onCollapse();
   };
   return (
-    <aside className={`sidebar ${isClosing ? "closing" : ""}`} onAnimationEnd={finishClosing}>
+    <aside className={`sidebar ${isClosing ? "closing" : ""}`} data-region="sidebar" onAnimationEnd={finishClosing}>
       <div className="sidebar-project">
         <button className="project-button" onClick={props.onChooseProject} title={`${t("sidebar.chooseProject")}: ${props.projectPath}`}>
           <span className="project-mark"><img src={props.iconSrc} alt="" /></span>
           <span className="project-copy">
-            <strong>{props.projectName}</strong>
-            <small>{props.projectPath}</small>
+            <strong>PiECode</strong>
+            <small>{props.projectName}</small>
           </span>
           <FolderOpen size={15} aria-hidden="true" />
         </button>

@@ -14,6 +14,7 @@ describe("renderer style system", () => {
       '@import "./base.css";',
       '@import "./layout.css";',
       '@import "./components/legacy.css";',
+      '@import "./components/chrome.css";',
       "",
     ].join("\n"));
   });
