@@ -42,7 +42,7 @@
 .extension-question-actions button { border-color: var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface-subtle); }
 .extension-question-actions button.primary { border-color: var(--color-accent); color: white; background: var(--color-accent); }
 
-.git-push-error { z-index: var(--z-dropdown); border-color: var(--color-danger-border); border-radius: var(--radius-md); color: var(--color-danger); background: var(--color-danger-soft); box-shadow: var(--shadow-md); }
+.git-push-error { z-index: var(--z-dropdown); border-color: var(--color-danger-border); border-radius: var(--radius-md); color: var(--color-danger); background: var(--color-danger-soft); box-shadow: var(--shadow-md); animation: panel-enter var(--duration-standard) var(--ease-standard) both; }
 .error-banner, .notice-banner, .compaction-status-panel, .extension-question { animation-duration: var(--duration-standard); animation-timing-function: var(--ease-standard); }
 .select-menu { animation-duration: var(--duration-fast); animation-timing-function: var(--ease-standard); }
 .select-menu.leaving, .image-lightbox.closing, .pasted-text-dialog.closing { animation-duration: var(--duration-fast); animation-timing-function: var(--ease-exit); }

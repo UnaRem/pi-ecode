@@ -1,5 +1,5 @@
 import { FileText, X } from "lucide-react";
-import { useEffect, useState, type AnimationEvent } from "react";
+import { useEffect, useRef, useState, type AnimationEvent } from "react";
 import type { PastedTextAttachment } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { useAnimatedList } from "../hooks/use-animated-list";
@@ -21,6 +21,7 @@ export function PastedTextAttachments({ attachments, variant, onRemove }: Pasted
   // Keep the dialog mounted until its visual exit completes.
   const [active, setActive] = useState<PastedTextAttachment | null>(null);
   const [closing, setClosing] = useState(false);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -33,7 +34,8 @@ export function PastedTextAttachments({ attachments, variant, onRemove }: Pasted
 
   const dismiss = (): void => setClosing(true);
 
-  const open = (attachment: PastedTextAttachment): void => {
+  const open = (attachment: PastedTextAttachment, opener: HTMLButtonElement): void => {
+    openerRef.current = opener;
     setClosing(false);
     setActive(attachment);
   };
@@ -42,6 +44,7 @@ export function PastedTextAttachments({ attachments, variant, onRemove }: Pasted
     if (event.animationName !== "overlay-close") return;
     setActive(null);
     setClosing(false);
+    requestAnimationFrame(() => openerRef.current?.focus());
   };
 
   return (
@@ -57,7 +60,7 @@ export function PastedTextAttachments({ attachments, variant, onRemove }: Pasted
               inert={leaving ? true : undefined}
               onAnimationEnd={(event) => finishRemove(attachment.id, event)}
             >
-              <button onClick={() => open(attachment)} aria-label={t("pastedText.preview", { name })}>
+              <button onClick={(event) => open(attachment, event.currentTarget)} aria-label={t("pastedText.preview", { name })}>
                 <FileText size={16} />
                 <span><strong>{name}</strong><small>{t("pastedText.summary", { lines: attachment.lineCount, size: formatByteSize(attachment.byteSize) })}</small></span>
               </button>
@@ -72,11 +75,12 @@ export function PastedTextAttachments({ attachments, variant, onRemove }: Pasted
           role="dialog"
           aria-modal="true"
           aria-label={t("pastedText.preview", { name: t("pastedText.name", { index: attachments.indexOf(active) + 1 }) })}
+          inert={closing ? true : undefined}
           onClick={dismiss}
           onAnimationEnd={finishClose}
         >
           <div onClick={(event) => event.stopPropagation()}>
-            <button onClick={dismiss} aria-label={t("pastedText.close")}><X size={18} /></button>
+            <button autoFocus onClick={dismiss} aria-label={t("pastedText.close")}><X size={18} /></button>
             <pre>{active.content}</pre>
           </div>
         </div>

@@ -85,6 +85,7 @@ export default function App() {
         disabled={state.isStreaming}
         taskPlan={state.taskPlan}
         settingsActive={settingsOpen}
+        open={sidebarOpen}
         onChooseProject={() => { if (leaveSettings()) void actions.chooseProject(); }}
         onNewSession={() => { if (leaveSettings()) void actions.newSession(); }}
         onSwitchSession={(path) => { if (leaveSettings()) void actions.switchSession(path); }}

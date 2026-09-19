@@ -12,6 +12,7 @@ interface SidebarProps {
   disabled: boolean;
   taskPlan: TaskPlan | null;
   settingsActive: boolean;
+  open: boolean;
   onChooseProject: () => void;
   onNewSession: () => void;
   onSwitchSession: (path: string) => void;
@@ -32,7 +33,7 @@ function relativeTime(timestamp: number, locale: string): string {
 export function Sidebar(props: SidebarProps) {
   const { locale, t } = useI18n();
   return (
-    <aside className="sidebar" data-region="sidebar">
+    <aside className="sidebar" data-region="sidebar" aria-hidden={!props.open} inert={!props.open ? true : undefined}>
       <div className="sidebar-project">
         <button className="project-button" onClick={props.onChooseProject} title={`${t("sidebar.chooseProject")}: ${props.projectPath}`}>
           <span className="project-mark"><img src={props.iconSrc} alt="" /></span>

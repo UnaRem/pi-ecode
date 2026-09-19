@@ -75,6 +75,7 @@ function SelectMenu(props: SelectMenuProps) {
       className={`select-menu ${props.leaving ? "leaving" : ""}`}
       role="listbox"
       aria-label={props.label}
+      inert={props.leaving ? true : undefined}
       onAnimationEnd={props.onAnimationEnd}
     >
       {props.options.map((option, index) => (
@@ -86,7 +87,7 @@ function SelectMenu(props: SelectMenuProps) {
           role="option"
           aria-selected={option.value === props.value}
           title={option.label}
-          tabIndex={index === props.activeIndex ? 0 : -1}
+          tabIndex={!props.leaving && index === props.activeIndex ? 0 : -1}
           onClick={() => props.onSelect(index)}
           onKeyDown={(event) => props.onKeyDown(event, index)}
         >

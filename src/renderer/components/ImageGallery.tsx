@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type AnimationEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { ConversationImage } from "@shared/contracts";
@@ -54,6 +54,7 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
   // Keep the lightbox mounted until its visual exit completes.
   const [activeId, setActiveId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
   const active = useMemo(() => renderedItems.find((image) => image.id === activeId) ?? null, [activeId, renderedItems]);
   const activeSource = active ? sources.get(active.id) : undefined;
 
@@ -68,8 +69,9 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
 
   const dismiss = (): void => setClosing(true);
 
-  const reopen = (image: ConversationImage): void => {
+  const reopen = (image: ConversationImage, opener: HTMLButtonElement): void => {
     if (!sources.has(image.id)) return;
+    openerRef.current = opener;
     setClosing(false);
     setActiveId(image.id);
   };
@@ -78,6 +80,7 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
     if (event.animationName !== "overlay-close") return;
     setActiveId(null);
     setClosing(false);
+    requestAnimationFrame(() => openerRef.current?.focus());
   };
 
   return (
@@ -96,7 +99,7 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
               <button
                 className="image-preview-button"
                 disabled={!imageSource}
-                onClick={() => reopen(image)}
+                onClick={(event) => reopen(image, event.currentTarget)}
                 aria-label={t("image.preview", { name: image.fileName })}
               >
                 {imageSource ? <img src={imageSource} alt={image.fileName} /> : <span className="image-loading" aria-hidden="true" />}
@@ -117,10 +120,11 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
           role="dialog"
           aria-modal="true"
           aria-label={t("image.preview", { name: active.fileName })}
+          inert={closing ? true : undefined}
           onClick={dismiss}
           onAnimationEnd={finishClose}
         >
-          <button className="image-lightbox-close" onClick={dismiss} aria-label={t("image.close")}><X size={18} /></button>
+          <button autoFocus className="image-lightbox-close" onClick={dismiss} aria-label={t("image.close")}><X size={18} /></button>
           <img src={activeSource} alt={active.fileName} onClick={(event) => event.stopPropagation()} />
         </div>,
         document.body,

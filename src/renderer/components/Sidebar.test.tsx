@@ -23,6 +23,7 @@ describe("Sidebar", () => {
           disabled={false}
           taskPlan={null}
           settingsActive={false}
+          open
           onChooseProject={vi.fn()}
           onNewSession={vi.fn()}
           onSwitchSession={vi.fn()}
@@ -35,6 +36,8 @@ describe("Sidebar", () => {
 
     expect(markup.match(/aria-label="Delete conversation"/g)).toHaveLength(1);
     expect(markup).toContain('class="session-row active"');
+    expect(markup).toContain('aria-hidden="false"');
+    expect(markup).not.toContain("inert");
   });
 
   it("keeps the sidebar mounted and animates collapse through a reversible transition", () => {
