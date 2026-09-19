@@ -2,6 +2,7 @@ import { FileText, X } from "lucide-react";
 import { useEffect, useState, type AnimationEvent } from "react";
 import type { PastedTextAttachment } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
+import { useAnimatedList } from "../hooks/use-animated-list";
 
 interface PastedTextAttachmentsProps {
   attachments: PastedTextAttachment[];
@@ -16,6 +17,7 @@ function formatByteSize(byteSize: number): string {
 
 export function PastedTextAttachments({ attachments, variant, onRemove }: PastedTextAttachmentsProps) {
   const { t } = useI18n();
+  const { renderedItems, leavingIds, beginRemove, finishRemove } = useAnimatedList(attachments);
   // Keep the dialog mounted until its visual exit completes.
   const [active, setActive] = useState<PastedTextAttachment | null>(null);
   const [closing, setClosing] = useState(false);
@@ -45,15 +47,21 @@ export function PastedTextAttachments({ attachments, variant, onRemove }: Pasted
   return (
     <>
       <div className={`pasted-text-list pasted-text-list-${variant}`}>
-        {attachments.map((attachment, index) => {
+        {renderedItems.map((attachment, index) => {
           const name = t("pastedText.name", { index: index + 1 });
+          const leaving = leavingIds.has(attachment.id);
           return (
-            <div className="pasted-text-chip" key={attachment.id}>
+            <div
+              className={`pasted-text-chip attachment-item ${leaving ? "leaving" : ""}`}
+              key={attachment.id}
+              inert={leaving ? true : undefined}
+              onAnimationEnd={(event) => finishRemove(attachment.id, event)}
+            >
               <button onClick={() => open(attachment)} aria-label={t("pastedText.preview", { name })}>
                 <FileText size={16} />
                 <span><strong>{name}</strong><small>{t("pastedText.summary", { lines: attachment.lineCount, size: formatByteSize(attachment.byteSize) })}</small></span>
               </button>
-              {onRemove && <button className="pasted-text-remove" onClick={() => onRemove(attachment.id)} aria-label={t("pastedText.remove", { name })}><X size={12} /></button>}
+              {onRemove && <button className="pasted-text-remove" onClick={() => beginRemove(attachment.id, onRemove)} aria-label={t("pastedText.remove", { name })}><X size={12} /></button>}
             </div>
           );
         })}

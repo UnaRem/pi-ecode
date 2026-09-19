@@ -12,6 +12,10 @@
 .project-gate > button:hover { background: var(--color-accent-hover); }
 
 .image-chip, .message-image, .pasted-text-chip, .pdf-panel { border-color: var(--color-border); background: var(--color-surface-subtle); }
+.attachment-item { animation: attachment-enter var(--duration-standard) var(--ease-standard) both; }
+.attachment-item.leaving { pointer-events: none; animation: attachment-leave var(--duration-fast) var(--ease-exit) both; }
+@keyframes attachment-enter { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+@keyframes attachment-leave { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.98); } }
 .image-loading { background: var(--color-surface-muted); }
 .image-lightbox, .pasted-text-dialog { z-index: var(--z-overlay); background: var(--color-overlay-scrim); }
 .image-lightbox > img, .pasted-text-dialog > div { border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }

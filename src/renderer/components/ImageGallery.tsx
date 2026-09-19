@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { ConversationImage } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
+import { useAnimatedList } from "../hooks/use-animated-list";
 
 interface ImageGalleryProps {
   images: ConversationImage[];
@@ -48,11 +49,12 @@ function useImageSources(images: ConversationImage[]): ReadonlyMap<string, strin
 
 export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
   const { t } = useI18n();
-  const sources = useImageSources(images);
+  const { renderedItems, leavingIds, beginRemove, finishRemove } = useAnimatedList(images);
+  const sources = useImageSources(renderedItems);
   // Keep the lightbox mounted until its visual exit completes.
   const [activeId, setActiveId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
-  const active = useMemo(() => images.find((image) => image.id === activeId) ?? null, [activeId, images]);
+  const active = useMemo(() => renderedItems.find((image) => image.id === activeId) ?? null, [activeId, renderedItems]);
   const activeSource = active ? sources.get(active.id) : undefined;
 
   useEffect(() => {
@@ -81,10 +83,16 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
   return (
     <>
       <div className={variant === "composer" ? "image-strip" : "message-images"}>
-        {images.map((image) => {
+        {renderedItems.map((image) => {
           const imageSource = sources.get(image.id);
+          const leaving = leavingIds.has(image.id);
           return (
-            <div className={variant === "composer" ? "image-chip" : "message-image"} key={image.id}>
+            <div
+              className={`${variant === "composer" ? "image-chip" : "message-image"} attachment-item ${leaving ? "leaving" : ""}`}
+              key={image.id}
+              inert={leaving ? true : undefined}
+              onAnimationEnd={(event) => finishRemove(image.id, event)}
+            >
               <button
                 className="image-preview-button"
                 disabled={!imageSource}
@@ -95,7 +103,7 @@ export function ImageGallery({ images, variant, onRemove }: ImageGalleryProps) {
                 {variant === "composer" && <span>{image.fileName}</span>}
               </button>
               {onRemove && (
-                <button className="image-remove-button" onClick={() => onRemove(image.id)} aria-label={t("image.remove", { name: image.fileName })}>
+                <button className="image-remove-button" onClick={() => beginRemove(image.id, onRemove)} aria-label={t("image.remove", { name: image.fileName })}>
                   <X size={12} />
                 </button>
               )}
