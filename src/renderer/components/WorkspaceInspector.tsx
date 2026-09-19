@@ -1,5 +1,5 @@
 import { Check, CircleAlert, CircleDashed, FileCode2, LoaderCircle, Play, Square, TerminalSquare } from "lucide-react";
-import { useState } from "react";
+import { useState, type AnimationEvent } from "react";
 import type { CandidateState, ChangeReview, ToolActivity, ValidationState, ValidationStep } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
@@ -110,6 +110,20 @@ function ValidationControls(props: Pick<WorkspaceInspectorProps, "validation" | 
   );
 }
 
+function PatchDisclosure({ patch }: { patch: string }) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  if (!patch) return null;
+  return (
+    <div className={`inspector-patch ${expanded ? "open" : ""}`}>
+      <button type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{t("validation.viewPatch")}</button>
+      <div className="inspector-patch-reveal" aria-hidden={!expanded} inert={!expanded ? true : undefined}>
+        <pre>{patch}</pre>
+      </div>
+    </div>
+  );
+}
+
 function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFile">) {
   const { t } = useI18n();
   const files = [...props.review.files].sort((left, right) => (right.additions ?? -1) + (right.deletions ?? -1) - ((left.additions ?? -1) + (left.deletions ?? -1)));
@@ -131,26 +145,44 @@ function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFi
           </div>
         ))}
       </div>
-      {props.review.patch && <details><summary>{t("validation.viewPatch")}</summary><pre>{props.review.patch}</pre></details>}
+      <PatchDisclosure patch={props.review.patch} />
     </section>
   );
 }
 
+type InspectorTab = "tools" | "validation";
+
 export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"tools" | "validation">("tools");
+  const [tab, setTab] = useState<InspectorTab>("tools");
+  const [leavingTab, setLeavingTab] = useState<InspectorTab | null>(null);
+  const activeTab = props.validation.isSelfProject ? tab : "tools";
+  const selectTab = (nextTab: InspectorTab): void => {
+    if (nextTab === activeTab) return;
+    setLeavingTab(activeTab);
+    setTab(nextTab);
+  };
+  const renderTab = (target: InspectorTab) => target === "tools" ? <>
+    <ToolQueue {...props} onSelect={props.onSelectTool} />
+    <OutputPanel {...props} />
+    <ChangeFiles {...props} />
+  </> : <ValidationControls {...props} />;
+  const finishLeaving = (event: AnimationEvent<HTMLDivElement>): void => {
+    if (event.animationName === "inspector-tab-leave") setLeavingTab(null);
+  };
   return (
     <aside className="workspace-inspector" data-region="inspector" aria-label={t("tool.panelTitle")}>
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
-        <button type="button" role="tab" aria-selected={tab === "tools"} onClick={() => setTab("tools")}>{t("tool.panelTitle")}</button>
-        {props.validation.isSelfProject && <button type="button" role="tab" aria-selected={tab === "validation"} onClick={() => setTab("validation")}>{t("validation.tab")}</button>}
+        <button type="button" role="tab" aria-selected={activeTab === "tools"} onClick={() => selectTab("tools")}>{t("tool.panelTitle")}</button>
+        {props.validation.isSelfProject && <button type="button" role="tab" aria-selected={activeTab === "validation"} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
       </div>
       <div className="inspector-scroll">
-        {tab === "tools" || !props.validation.isSelfProject ? <>
-          <ToolQueue {...props} onSelect={props.onSelectTool} />
-          <OutputPanel {...props} />
-          <ChangeFiles {...props} />
-        </> : <ValidationControls {...props} />}
+        <div className="inspector-tab-stack">
+          {leavingTab && leavingTab !== activeTab && (
+            <div className="inspector-tab-panel leaving" inert onAnimationEnd={finishLeaving}>{renderTab(leavingTab)}</div>
+          )}
+          <div key={activeTab} className="inspector-tab-panel entering">{renderTab(activeTab)}</div>
+        </div>
       </div>
     </aside>
   );

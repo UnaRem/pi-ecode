@@ -12,6 +12,11 @@
 .inspector-tabs button[aria-selected="true"] { color: var(--color-accent); }
 .inspector-tabs button[aria-selected="true"]::after { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; border-radius: var(--radius-pill); content: ""; background: var(--color-accent); }
 .inspector-scroll { min-height: 0; flex: 1; overflow-y: auto; }
+.inspector-tab-stack { position: relative; min-height: 100%; }
+.inspector-tab-panel.entering { animation: inspector-tab-enter var(--duration-fast) var(--ease-standard) both; }
+.inspector-tab-panel.leaving { position: absolute; z-index: 1; inset: 0; pointer-events: none; animation: inspector-tab-leave var(--duration-fast) var(--ease-exit) both; }
+@keyframes inspector-tab-enter { from { opacity: 0; transform: translateX(4px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes inspector-tab-leave { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-3px); } }
 .inspector-section { padding: var(--space-4); border-bottom: 1px solid var(--color-border); background: var(--color-surface-subtle); }
 .inspector-section:focus-visible { outline-offset: -3px; }
 .inspector-section > header { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
@@ -53,6 +58,9 @@
 .inspector-file > span { color: var(--color-accent); font-size: 9px; font-weight: 700; }
 .inspector-file > button { padding: 3px 5px; border: 0; border-radius: var(--radius-sm); color: var(--color-text-faint); background: transparent; font-size: 9px; cursor: pointer; }
 .inspector-file > button:hover { color: var(--color-danger); background: var(--color-danger-soft); }
-.inspector-changes details { margin-top: var(--space-2); border-top: 1px solid var(--color-border); }
-.inspector-changes summary { padding: var(--space-2) 0; color: var(--color-accent); font-size: 10px; cursor: pointer; }
-.inspector-changes details pre { max-height: 220px; margin: 0; padding: var(--space-3); overflow: auto; border-radius: var(--radius-md); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre; }
+.inspector-patch { margin-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.inspector-patch > button { padding: var(--space-2) 0; border: 0; color: var(--color-accent); background: transparent; font-size: 10px; cursor: pointer; }
+.inspector-patch-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--duration-standard) var(--ease-standard), opacity var(--duration-fast) ease-in; }
+.inspector-patch.open .inspector-patch-reveal { grid-template-rows: 1fr; opacity: 1; }
+.inspector-patch-reveal pre { min-height: 0; max-height: 220px; margin: 0; padding: 0 var(--space-3); overflow: hidden; border-radius: var(--radius-md); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre; transition: padding var(--duration-standard) var(--ease-standard); }
+.inspector-patch.open .inspector-patch-reveal pre { padding-block: var(--space-3); overflow: auto; }

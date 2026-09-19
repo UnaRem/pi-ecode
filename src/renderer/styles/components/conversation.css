@@ -50,11 +50,13 @@
 .tool-batch-list { margin: var(--space-1) 0 0; padding: var(--space-1); overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: none; }
 .plaintext-tool-batch { margin: -2px 0 var(--space-4) var(--conversation-content-inset); }
 .tool-dropdown { color: var(--color-text-muted); }
-.tool-dropdown summary { width: fit-content; max-width: 100%; min-height: 28px; display: flex; align-items: center; gap: var(--space-2); padding: 3px 6px; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--color-text-muted); background: transparent; font-size: 11px; cursor: pointer; list-style: none; }
-.tool-dropdown summary:hover, .tool-dropdown summary:focus-visible, .tool-dropdown[open] summary { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface-muted); outline: none; }
-.tool-dropdown summary::-webkit-details-marker { display: none; }
+.tool-summary { width: fit-content; max-width: 100%; min-height: 28px; display: flex; align-items: center; gap: var(--space-2); padding: 3px 6px; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--color-text-muted); background: transparent; font-size: 11px; cursor: pointer; }
+.tool-summary:hover, .tool-summary:focus-visible, .tool-dropdown.open .tool-summary { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface-muted); outline: none; }
 .tool-inline-chevron { flex: 0 0 auto; color: var(--color-text-faint); transition: transform var(--duration-fast) ease; }
-.tool-dropdown[open] .tool-inline-chevron { transform: rotate(180deg); }
+.tool-dropdown.open .tool-inline-chevron { transform: rotate(180deg); }
+.tool-batch-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--duration-standard) var(--ease-standard), opacity var(--duration-fast) ease-in; }
+.tool-batch-reveal > .tool-batch-list { min-height: 0; }
+.tool-dropdown.open .tool-batch-reveal { grid-template-rows: 1fr; opacity: 1; transition-timing-function: var(--ease-standard), ease-out; }
 .tool-inline-count, .tool-inline-duration { color: var(--color-text-faint); font-size: 10px; }
 .tool-inline-count { white-space: nowrap; }
 .tool-inline-status { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--color-success); }

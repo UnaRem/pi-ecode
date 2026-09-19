@@ -43,7 +43,9 @@ describe("ToolBatch", () => {
     expect(markup).toContain('class="lucide lucide-chevron-down tool-inline-chevron"');
     expect(markup).toContain('class="tool-batch-list scrollable"');
     expect(markup).toContain('role="region"');
-    expect(markup).toContain('tabindex="0"');
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain('class="tool-batch-reveal" aria-hidden="true" inert=""');
+    expect(markup).not.toContain('tabindex="0"');
     expect(markup).toMatch(/class="tool-plaintext-row[^\"]*selected/);
     expect(markup).toContain("read · one");
     expect(markup).not.toContain('open="true"');

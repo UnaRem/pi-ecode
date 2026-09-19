@@ -44,6 +44,8 @@ describe("WorkspaceInspector", () => {
     expect(markup).toContain("npm test");
     expect(markup).toContain("203 passed");
     expect(markup).toContain("src/App.tsx");
+    expect(markup).toContain('class="inspector-patch-reveal" aria-hidden="true" inert=""');
+    expect(markup).toContain('class="inspector-tab-panel entering"');
     expect(markup).not.toContain('role="tab" aria-selected="false">Verification');
     expect(markup).not.toContain("PiECode project verification");
     expect(markup).not.toContain("Run checks");

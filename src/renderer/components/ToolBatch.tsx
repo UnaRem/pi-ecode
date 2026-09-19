@@ -59,6 +59,7 @@ export function ToolBatch({
     const latestTool = animateNewTools ? tools.at(-1) : undefined;
     return new Set(latestTool ? [latestTool.id] : []);
   });
+  const [expanded, setExpanded] = useState(false);
   const scrollable = tools.length > SCROLLABLE_TOOL_COUNT;
 
   useLayoutEffect(() => {
@@ -76,25 +77,27 @@ export function ToolBatch({
   const firstTool = tools[0];
   return (
     <section className="tool-batch plaintext-tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
-      <details className="tool-dropdown" open={false}>
-        <summary>
+      <div className={expanded ? "tool-dropdown open" : "tool-dropdown"}>
+        <button className="tool-summary" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
           <span className={`tool-inline-status ${firstTool?.status ?? "success"}`} />
           <span>{firstTool?.title ?? t("tool.panelTitle")}</span>
           <span className="tool-inline-count">{t("tool.batch", { count: tools.length })}</span>
           <ChevronDown className="tool-inline-chevron" size={13} aria-hidden="true" />
-        </summary>
-        <div ref={listRef} className={scrollable ? "tool-batch-list scrollable" : "tool-batch-list"} data-scroll-follow role={scrollable ? "region" : undefined} aria-label={scrollable ? t("tool.batch", { count: tools.length }) : undefined} tabIndex={scrollable ? 0 : undefined}>
-          <div ref={contentRef} className="tool-batch-content">
-            {tools.map((tool) => (
-              <button className={`tool-plaintext-row ${tool.id === selectedToolId ? "selected" : ""} ${animatedToolIds.has(tool.id) ? "entering" : ""}`} key={tool.id} type="button" onClick={() => onSelectTool(tool.id)}>
-                <span className={`tool-inline-status ${tool.status}`} />
-                <span>{tool.title}</span>
-                <span className="tool-inline-duration">{formatToolDuration(tool)}</span>
-              </button>
-            ))}
+        </button>
+        <div className="tool-batch-reveal" aria-hidden={!expanded} inert={!expanded ? true : undefined}>
+          <div ref={listRef} className={scrollable ? "tool-batch-list scrollable" : "tool-batch-list"} data-scroll-follow role={scrollable ? "region" : undefined} aria-label={scrollable ? t("tool.batch", { count: tools.length }) : undefined} tabIndex={expanded && scrollable ? 0 : undefined}>
+            <div ref={contentRef} className="tool-batch-content">
+              {tools.map((tool) => (
+                <button className={`tool-plaintext-row ${tool.id === selectedToolId ? "selected" : ""} ${animatedToolIds.has(tool.id) ? "entering" : ""}`} key={tool.id} type="button" onClick={() => onSelectTool(tool.id)}>
+                  <span className={`tool-inline-status ${tool.status}`} />
+                  <span>{tool.title}</span>
+                  <span className="tool-inline-duration">{formatToolDuration(tool)}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </details>
+      </div>
     </section>
   );
 }
