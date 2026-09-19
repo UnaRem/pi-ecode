@@ -49,6 +49,33 @@ describe("WorkspaceInspector", () => {
     expect(markup).not.toContain("Run checks");
   });
 
+  it("shows output from the selected non-command tool", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const command = { id: "bash-1", name: "bash", title: "npm test", input: "npm test", output: "command output", status: "success" as const };
+    const read = { id: "read-1", name: "read", title: "Read file", input: "src/App.tsx", output: "selected read output", status: "success" as const };
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <WorkspaceInspector
+          tools={[command, read]}
+          selectedTool={read}
+          validation={validation}
+          review={review}
+          candidate={candidate}
+          projectPath="C:/workspace"
+          isStreaming={false}
+          onSelectTool={vi.fn()}
+          onRunValidation={vi.fn()}
+          onStopValidation={vi.fn()}
+          onRejectFile={vi.fn()}
+          onPrepareCandidate={vi.fn()}
+          onActivateCandidate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(markup).toContain("selected read output");
+    expect(markup).not.toContain("command output</pre>");
+  });
+
   it("offers the verification tab only for the PiECode source project", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(

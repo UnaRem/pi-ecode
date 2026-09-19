@@ -55,10 +55,9 @@ function ToolQueue({ tools, selectedTool, onSelect }: Pick<WorkspaceInspectorPro
 function terminalOutput(props: Pick<WorkspaceInspectorProps, "tools" | "selectedTool" | "validation">): string {
   const validationOutput = props.validation.steps.find((step) => step.status === "running")?.output;
   if (props.validation.status === "running" && validationOutput) return validationOutput;
-  const selectedExecution = props.selectedTool && toolCategory(props.selectedTool.name, props.selectedTool.input) === "execute"
-    ? props.selectedTool : null;
+  if (props.selectedTool) return props.selectedTool.output;
   const latestExecution = [...props.tools].reverse().find((tool) => toolCategory(tool.name, tool.input) === "execute");
-  return selectedExecution?.output || latestExecution?.output || "";
+  return latestExecution?.output || "";
 }
 
 function OutputPanel(props: Pick<WorkspaceInspectorProps, "tools" | "selectedTool" | "validation">) {

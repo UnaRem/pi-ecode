@@ -55,8 +55,8 @@
 .tool-dropdown summary { width: fit-content; max-width: 100%; min-height: 28px; display: flex; align-items: center; gap: var(--space-2); padding: 3px 6px; border: 1px solid transparent; border-radius: var(--radius-md); color: var(--color-text-muted); background: transparent; font-size: 11px; cursor: pointer; list-style: none; }
 .tool-dropdown summary:hover, .tool-dropdown summary:focus-visible, .tool-dropdown[open] summary { border-color: var(--color-border); color: var(--color-text); background: var(--color-surface-muted); outline: none; }
 .tool-dropdown summary::-webkit-details-marker { display: none; }
-.tool-dropdown summary::after { color: var(--color-text-faint); content: "⌄"; }
-.tool-dropdown[open] summary::after { content: "⌃"; }
+.tool-inline-chevron { flex: 0 0 auto; color: var(--color-text-faint); transition: transform var(--duration-fast) ease; }
+.tool-dropdown[open] .tool-inline-chevron { transform: rotate(180deg); }
 .tool-inline-count, .tool-inline-duration { color: var(--color-text-faint); font-size: 10px; }
 .tool-inline-count { white-space: nowrap; }
 .tool-inline-status { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--color-success); }

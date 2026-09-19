@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { useScrollFollow } from "../hooks/use-scroll-follow";
@@ -80,6 +81,7 @@ export function ToolBatch({
           <span className={`tool-inline-status ${firstTool?.status ?? "success"}`} />
           <span>{firstTool?.title ?? t("tool.panelTitle")}</span>
           <span className="tool-inline-count">{t("tool.batch", { count: tools.length })}</span>
+          <ChevronDown className="tool-inline-chevron" size={13} aria-hidden="true" />
         </summary>
         <div ref={listRef} className={scrollable ? "tool-batch-list scrollable" : "tool-batch-list"} data-scroll-follow role={scrollable ? "region" : undefined} aria-label={scrollable ? t("tool.batch", { count: tools.length }) : undefined} tabIndex={scrollable ? 0 : undefined}>
           <div ref={contentRef} className="tool-batch-content">

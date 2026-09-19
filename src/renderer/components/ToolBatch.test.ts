@@ -39,6 +39,7 @@ describe("ToolBatch", () => {
     );
 
     expect(markup).toContain('class="tool-dropdown"');
+    expect(markup).toContain('class="lucide lucide-chevron-down tool-inline-chevron"');
     expect(markup).toContain('class="tool-batch-list scrollable"');
     expect(markup).toContain('role="region"');
     expect(markup).toContain('tabindex="0"');
