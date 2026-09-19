@@ -67,6 +67,10 @@
 .tool-plaintext-row:last-child { border-bottom: 0; }
 .tool-plaintext-row > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-inline-duration { margin-left: auto; }
+.changed-files-presence { animation: changed-files-enter var(--duration-standard) var(--ease-standard) both; }
+.changed-files-presence.leaving { pointer-events: none; animation: changed-files-leave var(--duration-fast) var(--ease-exit) both; }
+@keyframes changed-files-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes changed-files-leave { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(3px); } }
 .conversation-changed-files { margin: -1px 0 var(--space-5) var(--conversation-content-inset); padding: 8px 10px; border-top: 1px solid var(--color-border); }
 .conversation-changed-files > strong { display: block; margin-bottom: 4px; color: var(--color-text-muted); font-size: 10px; }
 .conversation-changed-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 24px; color: var(--color-text-muted); font-size: 10px; }

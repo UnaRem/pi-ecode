@@ -260,8 +260,11 @@
 .outline-marker { position: relative; width: 18px; height: 13px; min-height: 0; flex: 1 1 13px; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .outline-line { position: absolute; top: 50%; left: 5px; width: 8px; height: 2px; border-radius: 2px; background: #c4c4be; transform: translateY(-50%); transition: width .15s ease, background .15s ease; }
 .outline-marker:hover .outline-line, .outline-marker.active .outline-line { width: 14px; background: #4e6f65; }
-.conversation-latest { position: absolute; z-index: 6; right: max(28px, calc(50% - 380px)); bottom: 12px; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 1px solid #bdcec8; border-radius: 50%; color: #41695e; background: rgba(255, 255, 255, .96); box-shadow: 0 5px 16px rgba(39, 65, 57, .16); cursor: pointer; transition: color 150ms ease, background 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
+.conversation-latest { position: absolute; z-index: 6; right: max(28px, calc(50% - 380px)); bottom: 12px; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 1px solid #bdcec8; border-radius: 50%; color: #41695e; background: rgba(255, 255, 255, .96); box-shadow: 0 5px 16px rgba(39, 65, 57, .16); cursor: pointer; animation: latest-button-enter 160ms cubic-bezier(.2, .75, .25, 1) both; transition: color 150ms ease, background 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
+.conversation-latest.leaving { pointer-events: none; animation: latest-button-leave 120ms cubic-bezier(.55, 0, 1, .45) both; }
 .conversation-latest:hover { border-color: var(--accent); color: #fff; background: var(--accent); box-shadow: 0 7px 20px rgba(45, 91, 78, .24); }
+@keyframes latest-button-enter { from { opacity: 0; transform: translateY(4px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes latest-button-leave { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(3px) scale(.96); } }
 .outline-preview { position: absolute; z-index: 2; left: 30px; width: 260px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: #fff; box-shadow: 0 7px 24px rgba(40, 40, 35, .12); font-size: 10.5px; line-height: 1.45; text-align: left; pointer-events: none; transform: translateY(-50%); }
 .outline-preview strong { display: block; margin-bottom: 3px; color: var(--text); font-size: 10px; }
 .conversation-inner.empty { display: grid; place-items: center; padding-bottom: 12vh; }

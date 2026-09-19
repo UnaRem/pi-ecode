@@ -135,6 +135,65 @@ function ConversationNoticeBanner({ notice }: { notice: string | null }) {
   );
 }
 
+function ChangedFilesPresence({ review }: { review: ChangeReview | null }) {
+  const [visibleReview, setVisibleReview] = useState(review);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (review) {
+      setVisibleReview(review);
+      setLeaving(false);
+    } else if (visibleReview) {
+      setLeaving(true);
+    }
+  }, [review]);
+
+  if (!visibleReview) return null;
+  return (
+    <div
+      className={`changed-files-presence ${leaving ? "leaving" : ""}`}
+      inert={leaving ? true : undefined}
+      onAnimationEnd={(event: AnimationEvent<HTMLDivElement>) => {
+        if (leaving && event.animationName === "changed-files-leave") setVisibleReview(null);
+      }}
+    >
+      <ChangedFilesSummary review={visibleReview} />
+    </div>
+  );
+}
+
+function JumpLatestButton(props: { visible: boolean; label: string; onClick: () => void }) {
+  const [mounted, setMounted] = useState(props.visible);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (props.visible) {
+      setMounted(true);
+      setLeaving(false);
+    } else if (mounted) {
+      setLeaving(true);
+    }
+  }, [props.visible]);
+
+  if (!mounted) return null;
+  return (
+    <button
+      type="button"
+      className={`conversation-latest ${leaving ? "leaving" : ""}`}
+      onClick={props.onClick}
+      aria-label={props.label}
+      title={props.label}
+      aria-hidden={leaving}
+      inert={leaving ? true : undefined}
+      onAnimationEnd={(event: AnimationEvent<HTMLButtonElement>) => {
+        if (leaving && event.animationName === "latest-button-leave") setMounted(false);
+      }}
+    >
+      <ArrowDown size={24} aria-hidden="true" />
+    </button>
+  );
+}
+
 function isVisibleTimelineItem(item: ConversationItem): boolean {
   if (item.kind !== "message" || item.message.role !== "assistant") return true;
   return item.message.text.trim().length > 0
@@ -230,7 +289,7 @@ function ConversationBody(props: ConversationBodyProps) {
             selectedToolId={props.selectedToolId}
             onSelectTool={props.onSelectTool}
           />)}
-          {!props.isStreaming && props.review?.available && lastItem?.kind === "message" && lastItem.message.role === "assistant" && <ChangedFilesSummary review={props.review} />}
+          <ChangedFilesPresence review={!props.isStreaming && props.review?.available && lastItem?.kind === "message" && lastItem.message.role === "assistant" ? props.review : null} />
           {props.isStreaming && !hasAssistantInActiveTurn && (
             <article className="message assistant waiting">
               <MessageRoleLabel
@@ -344,7 +403,10 @@ export function Conversation(props: ConversationProps) {
     if (!element) return;
     setFollowing(false);
     setActiveUserId(id);
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
+    element.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
   };
 
   return (
@@ -373,17 +435,11 @@ export function Conversation(props: ConversationProps) {
           selectedToolId={props.selectedToolId ?? null}
         />
       </main>
-      {!isFollowing && (
-        <button
-          type="button"
-          className="conversation-latest"
-          onClick={() => scrollToBottom(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth")}
-          aria-label={t("conversation.jumpLatest")}
-          title={t("conversation.jumpLatest")}
-        >
-          <ArrowDown size={24} aria-hidden="true" />
-        </button>
-      )}
+      <JumpLatestButton
+        visible={!isFollowing}
+        label={t("conversation.jumpLatest")}
+        onClick={() => scrollToBottom(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth")}
+      />
     </div>
   );
 }
