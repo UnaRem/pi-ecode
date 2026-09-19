@@ -101,9 +101,9 @@ describe("AgentService prompt lifecycle", () => {
     const service = new AgentService();
     Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
 
-    expect(service.getConversationImage("0:1").data).toEqual(Uint8Array.from([104, 101, 108, 108, 111]));
-    expect(() => service.getConversationImage("../image.png")).toThrow("active session");
-    expect(() => service.getConversationImage("0:9")).toThrow("active session");
+    expect(service.getConversationImage("0:1")?.data).toEqual(Uint8Array.from([104, 101, 108, 108, 111]));
+    expect(() => service.getConversationImage("../image.png")).toThrow("Invalid conversation image id");
+    expect(service.getConversationImage("0:9")).toBeNull();
   });
 
   it("continues a transient provider failure with a hidden control message", async () => {
@@ -195,6 +195,31 @@ describe("AgentService prompt lifecycle", () => {
       expect.objectContaining({ item: expect.objectContaining({ message: expect.objectContaining({ text: "Hello world" }) }) }),
     ]);
     expect(events.filter((event) => event.type === "context")).toHaveLength(1);
+  });
+
+  it("clears the previous change review when a new agent run starts", () => {
+    const session = { sessionId: "session-1" } as unknown as AgentSession;
+    const service = new AgentService();
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const handleEvent = (service as unknown as {
+      handleSessionEvent: (activeSession: AgentSession, event: AgentSessionEvent) => void;
+    }).handleSessionEvent.bind(service);
+
+    handleEvent(session, { type: "agent_start" } as unknown as AgentSessionEvent);
+
+    expect(events).toContainEqual({
+      type: "review",
+      review: {
+        available: false,
+        baseCommit: null,
+        headCommit: null,
+        files: [],
+        patch: "",
+        truncated: false,
+        message: null,
+      },
+    });
   });
 
   it("records tool execution start and end times", () => {

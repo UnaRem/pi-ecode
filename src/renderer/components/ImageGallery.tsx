@@ -31,7 +31,7 @@ function useImageSources(images: ConversationImage[]): ReadonlyMap<string, strin
     for (const image of images) {
       if (!image.sourceId || initial.has(image.id)) continue;
       void window.piDesktop.getConversationImage(image.sourceId).then((payload) => {
-        if (disposed) return;
+        if (disposed || !payload) return;
         const bytes = Uint8Array.from(payload.data);
         const objectUrl = URL.createObjectURL(new Blob([bytes], { type: payload.mimeType }));
         objectUrls.push(objectUrl);

@@ -208,11 +208,9 @@ export class AgentService {
     return textFromContent(message.content);
   }
 
-  getConversationImage(sourceId: string): ConversationImagePayload {
-    if (!sourceId || sourceId.length > 80) throw new Error("Invalid conversation image id.");
-    const payload = conversationImagePayload(this.requireRuntime().session.messages, sourceId);
-    if (!payload) throw new Error("Conversation image is not available in the active session.");
-    return payload;
+  getConversationImage(sourceId: string): ConversationImagePayload | null {
+    if (!/^\d+:\d+$/u.test(sourceId)) throw new Error("Invalid conversation image id.");
+    return this.runtime ? conversationImagePayload(this.runtime.session.messages, sourceId) : null;
   }
 
   private timelinePage(session: AgentSession): AgentTimelinePage {
@@ -602,6 +600,7 @@ export class AgentService {
         this.liveAssistantText = "";
         this.validation.invalidate();
         this.candidate.invalidate();
+        this.emit({ type: "review", review: { ...EMPTY_AGENT_SNAPSHOT.review } });
         this.emit({ type: "state", patch: { isStreaming: true, error: null, canContinue: false } });
         break;
       case "agent_settled": {

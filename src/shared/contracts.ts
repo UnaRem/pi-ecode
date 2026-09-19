@@ -340,7 +340,7 @@ export interface DesktopApi {
   getSnapshot(): Promise<AgentSnapshot>;
   loadOlderTimeline(): Promise<AgentTimelinePage>;
   getToolOutput(toolCallId: string): Promise<string>;
-  getConversationImage(sourceId: string): Promise<ConversationImagePayload>;
+  getConversationImage(sourceId: string): Promise<ConversationImagePayload | null>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   deleteSession(path: string): Promise<void>;
