@@ -34,6 +34,7 @@
 .message-content { min-width: 0; margin-left: var(--conversation-content-inset); color: var(--color-text); font-size: 13.5px; line-height: 1.7; }
 .message.user .message-content { padding: var(--space-3) var(--space-4); border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .message.assistant .message-content { padding: var(--space-2) 0; }
+.message.assistant.continuation { margin-top: calc(0px - var(--space-2)); }
 .app-shell.has-custom-backdrop .message.assistant .message-content,
 .app-shell.has-custom-backdrop .message.user .message-content { border: 1px solid var(--color-backdrop-border); border-radius: var(--radius-lg); background: var(--color-backdrop-surface); box-shadow: var(--shadow-sm); backdrop-filter: blur(16px) saturate(1.05); }
 .markdown h1, .markdown h2, .markdown h3, .markdown h4 { color: var(--color-text); }

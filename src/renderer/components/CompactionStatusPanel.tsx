@@ -68,15 +68,20 @@ interface CompactionStatusPanelProps {
   onCancel: () => void;
 }
 
+export function isFreshCompactionResult(previous: CompactionStatus["status"], current: CompactionStatus["status"]): boolean {
+  return previous === "running" && current !== "running" && current !== "idle";
+}
+
 export function CompactionStatusPanel({ status, onCancel }: CompactionStatusPanelProps) {
   const { t } = useI18n();
   const [messageIndex, setMessageIndex] = useState(0);
-  const [visible, setVisible] = useState(status.status !== "idle");
-  const completionNotified = useRef(false);
+  const [visible, setVisible] = useState(status.status === "running");
+  const previousStatus = useRef(status.status);
 
   useEffect(() => {
-    setVisible(status.status !== "idle");
+    if (status.status === "idle") setVisible(false);
     if (status.status !== "running") return;
+    setVisible(true);
     setMessageIndex(0);
     const interval = window.setInterval(() => {
       setMessageIndex((current) => (current + 1) % ROTATING_MESSAGE_KEYS.length);
@@ -85,20 +90,27 @@ export function CompactionStatusPanel({ status, onCancel }: CompactionStatusPane
   }, [status.status]);
 
   useEffect(() => {
-    if (status.status !== "completed") {
-      completionNotified.current = false;
-      if (status.status !== "cancelled") return;
+    // Terminal results persist in snapshots, so only a live status transition may surface them.
+    const previous = previousStatus.current;
+    previousStatus.current = status.status;
+    if (status.status === "idle" || status.status === "running") return;
+    if (!isFreshCompactionResult(previous, status.status)) {
+      setVisible(false);
+      return;
+    }
+
+    setVisible(true);
+    if (status.status === "completed") {
+      const message = completionMessage(status, t);
+      void window.piDesktop.notifyCompactionComplete(t("compaction.notificationTitle"), message);
+      const timeout = window.setTimeout(() => setVisible(false), 5_000);
+      return () => window.clearTimeout(timeout);
+    }
+    if (status.status === "cancelled") {
       const timeout = window.setTimeout(() => setVisible(false), 3_000);
       return () => window.clearTimeout(timeout);
     }
-    const message = completionMessage(status, t);
-    if (!completionNotified.current) {
-      completionNotified.current = true;
-      void window.piDesktop.notifyCompactionComplete(t("compaction.notificationTitle"), message);
-    }
-    const timeout = window.setTimeout(() => setVisible(false), 5_000);
-    return () => window.clearTimeout(timeout);
-  }, [status, t]);
+  }, [status.status]);
 
   if (!visible || status.status === "idle") return null;
 

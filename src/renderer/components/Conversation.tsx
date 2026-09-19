@@ -5,7 +5,7 @@ import type { ConversationIdentity } from "@shared/app-config-contracts";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
-import { groupConsecutiveTools, ToolBatch } from "./ToolBatch";
+import { groupConsecutiveTools, ToolBatch, type ConversationRenderGroup } from "./ToolBatch";
 import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
 import { PastedTextAttachments } from "./PastedTextAttachments";
 import { useI18n } from "../i18n/i18n";
@@ -79,17 +79,42 @@ function ChangedFilesSummary({ review }: { review: ChangeReview }) {
   );
 }
 
+function isVisibleTimelineItem(item: ConversationItem): boolean {
+  if (item.kind !== "message" || item.message.role !== "assistant") return true;
+  return item.message.text.trim().length > 0
+    || Boolean(item.message.images?.length)
+    || Boolean(item.message.pastedTexts?.length);
+}
+
+function firstAssistantIdsByTurn(groups: ConversationRenderGroup[]): Set<string> {
+  const ids = new Set<string>();
+  let hasAssistant = false;
+  for (const group of groups) {
+    if (group.kind !== "message") continue;
+    if (group.item.message.role === "user") {
+      hasAssistant = false;
+    } else if (!hasAssistant) {
+      ids.add(group.id);
+      hasAssistant = true;
+    }
+  }
+  return ids;
+}
+
 function ConversationBody(props: ConversationBodyProps) {
   const { t } = useI18n();
-  const renderGroups = useMemo(() => groupConsecutiveTools(props.timeline), [props.timeline]);
+  const visibleTimeline = useMemo(() => props.timeline.filter(isVisibleTimelineItem), [props.timeline]);
+  const renderGroups = useMemo(() => groupConsecutiveTools(visibleTimeline), [visibleTimeline]);
+  const firstAssistantIds = useMemo(() => firstAssistantIdsByTurn(renderGroups), [renderGroups]);
   const firstUserId = renderGroups.find((group) => group.kind === "message" && group.item.message.role === "user")?.id;
-  const isEmpty = props.timeline.length === 0;
-  const lastItem = props.timeline.at(-1);
-  const latestAssistant = [...props.timeline].reverse().find((item) => item.kind === "message" && item.message.role === "assistant");
-  const latestRunningTool = [...props.timeline].reverse().find((item): item is Extract<ConversationItem, { kind: "tool" }> => item.kind === "tool" && item.tool.status === "running");
+  const isEmpty = visibleTimeline.length === 0;
+  const lastItem = visibleTimeline.at(-1);
+  const latestAssistantHeaderId = [...renderGroups].reverse().find((group) => group.kind === "message"
+    && group.item.message.role === "assistant" && firstAssistantIds.has(group.id))?.id;
+  const latestRunningTool = [...visibleTimeline].reverse().find((item): item is Extract<ConversationItem, { kind: "tool" }> => item.kind === "tool" && item.tool.status === "running");
   const assistantStatus = props.isStreaming
     ? latestRunningTool && /bash|shell|execute|command|run/i.test(latestRunningTool.tool.name) ? t("conversation.statusExecuting") : t("conversation.statusWorking")
-    : t("conversation.statusWaiting");
+    : null;
   const hasLiveAssistant = props.isStreaming && lastItem?.kind === "message" && lastItem.message.role === "assistant";
   return (
     <div ref={props.contentRef} className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
@@ -122,14 +147,15 @@ function ConversationBody(props: ConversationBodyProps) {
                 group.item.message.role,
                 group.item.message.isError ? "error" : null,
                 group.item.message.role === "user" && group.id !== firstUserId ? "turn-start" : null,
+                group.item.message.role === "assistant" && !firstAssistantIds.has(group.id) ? "continuation" : null,
               ].filter(Boolean).join(" ")}
             >
-              <MessageRoleLabel
+              {(group.item.message.role === "user" || firstAssistantIds.has(group.id)) && <MessageRoleLabel
                 role={group.item.message.role}
                 nickname={props.conversationIdentity?.[group.item.message.role]?.nickname ?? props.nicknames[group.item.message.role]}
                 avatarUrl={props.conversationIdentity?.[group.item.message.role]?.avatarUrl ?? null}
-                status={group.item.message.role === "assistant" && group.id === latestAssistant?.id ? assistantStatus : null}
-              />
+                status={group.item.message.role === "assistant" && group.id === latestAssistantHeaderId ? assistantStatus : null}
+              />}
               <div className="message-content">
                 {hasLiveAssistant && group.id === lastItem?.id && <div className="working-time"><span className="working-dot" /> {props.workingLabel}</div>}
                 {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}

@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { formatTokenCount } from "./CompactionStatusPanel";
+import { formatTokenCount, isFreshCompactionResult } from "./CompactionStatusPanel";
 
-describe("formatTokenCount", () => {
+describe("CompactionStatusPanel helpers", () => {
   it("keeps small token counts exact", () => {
     expect(formatTokenCount(842)).toBe("842");
+  });
+
+  it("surfaces only terminal results reached from a live compaction", () => {
+    expect(isFreshCompactionResult("running", "completed")).toBe(true);
+    expect(isFreshCompactionResult("running", "failed")).toBe(true);
+    expect(isFreshCompactionResult("running", "cancelled")).toBe(true);
+    expect(isFreshCompactionResult("completed", "completed")).toBe(false);
+    expect(isFreshCompactionResult("idle", "completed")).toBe(false);
+    expect(isFreshCompactionResult("running", "idle")).toBe(false);
   });
 
   it("formats larger contexts compactly", () => {
