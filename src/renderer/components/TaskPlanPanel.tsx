@@ -2,6 +2,33 @@ import { useEffect, useLayoutEffect, useRef, useState, type AnimationEvent } fro
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 
+const WORK_STATUS_FRAMES = [1, 2, 3] as const;
+
+function TaskWorkStatus({ active }: { active: boolean }) {
+  const { t } = useI18n();
+  const status = active ? "working" : "idle";
+
+  return (
+    <span
+      className={`sidebar-task-work-status ${status}`}
+      role="status"
+      aria-label={t(active ? "task.status.working" : "task.status.idle")}
+    >
+      {(["idle", "working"] as const).flatMap((frameStatus) =>
+        WORK_STATUS_FRAMES.map((frame) => (
+          <img
+            key={`${frameStatus}-${frame}`}
+            className={`sidebar-task-status-frame ${frameStatus} frame-${frame}`}
+            src={`./${frameStatus}_${frame}.png`}
+            alt=""
+            draggable={false}
+          />
+        )),
+      )}
+    </span>
+  );
+}
+
 export function TaskPlanPresence({ plan, active }: { plan: TaskPlan | null; active: boolean }) {
   const { t } = useI18n();
   const [visiblePlan, setVisiblePlan] = useState(plan);
@@ -25,7 +52,10 @@ export function TaskPlanPresence({ plan, active }: { plan: TaskPlan | null; acti
 
   return (
     <section className={isLeaving ? "sidebar-task-section leaving" : "sidebar-task-section"} onAnimationEnd={finishLeaving}>
-      <div className="sidebar-label">{t("task.section")}</div>
+      <div className="sidebar-task-heading">
+        <div className="sidebar-label">{t("task.section")}</div>
+        <TaskWorkStatus active={active} />
+      </div>
       <TaskPlanPanel plan={visiblePlan} active={active} />
     </section>
   );

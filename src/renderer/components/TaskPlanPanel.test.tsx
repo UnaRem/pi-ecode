@@ -46,6 +46,29 @@ describe("TaskPlanPanel", () => {
     expect(presenceMarkup).not.toContain("<button");
   });
 
+  it("switches the three-frame work status sequence with streaming activity", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const workingMarkup = renderToStaticMarkup(
+      <I18nProvider><TaskPlanPresence plan={plan} active /></I18nProvider>,
+    );
+    const idleMarkup = renderToStaticMarkup(
+      <I18nProvider><TaskPlanPresence plan={plan} active={false} /></I18nProvider>,
+    );
+
+    expect(workingMarkup).toContain('class="sidebar-task-work-status working"');
+    expect(workingMarkup).toContain('aria-label="Working"');
+    expect(idleMarkup).toContain('class="sidebar-task-work-status idle"');
+    expect(idleMarkup).toContain('aria-label="Idle"');
+    for (const status of ["idle", "working"]) {
+      for (const frame of [1, 2, 3]) expect(workingMarkup).toContain(`src="./${status}_${frame}.png"`);
+    }
+
+    const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
+    expect(stylesheet).toContain("animation: task-status-frame 1950ms steps(1, end) infinite;");
+    expect(stylesheet).toContain("animation: task-status-frame 660ms steps(1, end) infinite;");
+    expect(stylesheet).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.sidebar-task-status-frame \{ animation: none !important;/u);
+  });
+
   it("keeps the current task centered using coordinates relative to the scroll list", () => {
     expect(taskItemTopWithinList(546.5, 500, 0)).toBe(46.5);
     expect(taskItemTopWithinList(546.5, 500, 69)).toBe(115.5);

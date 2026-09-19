@@ -274,7 +274,17 @@
 @keyframes task-plan-enter { from { max-height: 0; opacity: 0; transform: scaleY(.08); } to { max-height: 300px; opacity: 1; transform: scaleY(1); } }
 @keyframes task-plan-leave { 0% { max-height: 180px; opacity: 1; transform: scaleY(1); } 72% { max-height: 3px; opacity: 1; transform: scaleY(.04); } 100% { max-height: 0; opacity: 0; transform: scaleY(0); } }
 @keyframes task-plan-flash { 0%, 45% { opacity: 0; transform: scaleX(.2); } 72% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(.35); } }
-.sidebar-task-section .sidebar-label { margin-top: 12px; }
+.sidebar-task-heading { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding-right: 4px; }
+.sidebar-task-section .sidebar-label { min-width: 0; flex: 1; margin-top: 12px; }
+.sidebar-task-work-status { position: relative; width: 48px; height: 48px; flex: 0 0 48px; pointer-events: none; user-select: none; }
+.sidebar-task-status-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; opacity: 0; }
+.sidebar-task-work-status.idle .sidebar-task-status-frame.idle { animation: task-status-frame 1950ms steps(1, end) infinite; }
+.sidebar-task-work-status.working .sidebar-task-status-frame.working { animation: task-status-frame 660ms steps(1, end) infinite; }
+.sidebar-task-work-status.idle .sidebar-task-status-frame.frame-2 { animation-delay: 650ms; }
+.sidebar-task-work-status.idle .sidebar-task-status-frame.frame-3 { animation-delay: 1300ms; }
+.sidebar-task-work-status.working .sidebar-task-status-frame.frame-2 { animation-delay: 220ms; }
+.sidebar-task-work-status.working .sidebar-task-status-frame.frame-3 { animation-delay: 440ms; }
+@keyframes task-status-frame { 0%, 33.333% { opacity: 1; } 33.334%, 100% { opacity: 0; } }
 .sidebar-task-plan { margin: 0 6px 10px; }
 .sidebar-task-items { max-height: 236px; margin: 0; padding: 1px 3px; overflow-y: auto; list-style: none; }
 .sidebar-task-items li { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: stretch; gap: 7px; min-height: 23px; color: #555550; font-size: 11.5px; line-height: 1.45; }
@@ -512,4 +522,7 @@
 @media (prefers-reduced-motion: reduce) {
   .tool-plaintext-row.entering { animation: none; }
   .tool-card.running::after { opacity: 1; animation: none; transform: translateX(125%); }
+  .sidebar-task-status-frame { animation: none !important; opacity: 0; }
+  .sidebar-task-work-status.idle .sidebar-task-status-frame.idle.frame-1,
+  .sidebar-task-work-status.working .sidebar-task-status-frame.working.frame-1 { opacity: 1; }
 }
