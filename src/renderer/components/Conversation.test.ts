@@ -7,7 +7,10 @@ import { Conversation, formatWorkingDuration } from "./Conversation";
 import { normalizeNickname } from "./MessageRoleLabel";
 
 describe("Conversation", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it("positions the latest button outside the outline at the composer edge", () => {
     const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
@@ -115,7 +118,65 @@ describe("Conversation", () => {
     ));
 
     expect(markup.match(/class="message-role-name">Builder<\/span>/g)).toHaveLength(1);
-    expect(markup).toContain('class="message-role-status">Working</span>');
+    expect(markup).toContain('class="message-role-status">Working ·');
+  });
+
+  it("keeps tool execution status and elapsed time on the existing assistant header", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    vi.spyOn(Date, "now").mockReturnValue(37_000);
+    const markup = renderToStaticMarkup(createElement(
+      I18nProvider,
+      null,
+      createElement(Conversation, {
+        timeline: [
+          { kind: "message", id: "user-1", message: { id: "user-1", role: "user", text: "Question", timestamp: 1 } },
+          { kind: "message", id: "assistant-1", message: { id: "assistant-1", role: "assistant", text: "I will inspect it", timestamp: 2 } },
+          { kind: "tool", id: "tool-1", tool: { id: "tool-1", name: "bash", title: "Run tests", input: "npm test", output: "", status: "running" } },
+        ],
+        isStreaming: true,
+        workingStartedAt: 1_000,
+        projectName: "demo",
+        error: null,
+        canContinue: false,
+        notice: null,
+        onContinue: vi.fn(),
+        conversationIdentity: {
+          assistant: { nickname: "Builder", avatarPath: null, avatarUrl: null },
+          user: { nickname: "Owner", avatarPath: null, avatarUrl: null },
+        },
+      }),
+    ));
+
+    expect(markup.match(/class="message-role-name">Builder<\/span>/g)).toHaveLength(1);
+    expect(markup).toContain('class="message-role-status">Executing command · 00:00:36</span>');
+    expect(markup).not.toContain('class="message assistant waiting"');
+    expect(markup).not.toContain("working-time");
+  });
+
+  it("keeps the waiting status on the current turn instead of the previous assistant", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    vi.spyOn(Date, "now").mockReturnValue(12_000);
+    const markup = renderToStaticMarkup(createElement(
+      I18nProvider,
+      null,
+      createElement(Conversation, {
+        timeline: [
+          { kind: "message", id: "user-1", message: { id: "user-1", role: "user", text: "First", timestamp: 1 } },
+          { kind: "message", id: "assistant-1", message: { id: "assistant-1", role: "assistant", text: "Done", timestamp: 2 } },
+          { kind: "message", id: "user-2", message: { id: "user-2", role: "user", text: "Second", timestamp: 3 } },
+        ],
+        isStreaming: true,
+        workingStartedAt: 2_000,
+        projectName: "demo",
+        error: null,
+        canContinue: false,
+        notice: null,
+        onContinue: vi.fn(),
+      }),
+    ));
+
+    expect(markup.match(/class="message-role-status">Working · 00:00:10<\/span>/g)).toHaveLength(1);
+    expect(markup).toContain('class="message assistant waiting"');
   });
 
   it("renders pasted text attachments separately from the user message", () => {

@@ -45,8 +45,6 @@
 .markdown a { color: var(--color-accent); }
 .markdown-table-wrap { border-color: var(--color-border); border-radius: var(--radius-md); }
 .markdown th { color: var(--color-text); background: var(--color-surface-muted); }
-.working-time, .message.waiting .message-content { color: var(--color-text-muted); }
-.working-dot { background: var(--color-accent); }
 .stream-caret { background: var(--color-accent); }
 
 .tool-batch-list { margin: var(--space-1) 0 0; padding: var(--space-1); overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-raised); box-shadow: none; }

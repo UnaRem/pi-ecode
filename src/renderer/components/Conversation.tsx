@@ -54,7 +54,7 @@ function useWorkingDuration(startedAt: number | null): string | null {
 interface ConversationBodyProps extends ConversationProps {
   contentRef: RefObject<HTMLDivElement | null>;
   userElements: { current: Map<string, HTMLElement> };
-  workingLabel: string;
+  workingDuration: string | null;
   nicknames: MessageNicknames;
   onNicknameChange: (role: MessageRole, nickname: string) => void;
   selectedToolId: string | null;
@@ -109,12 +109,16 @@ function ConversationBody(props: ConversationBodyProps) {
   const firstUserId = renderGroups.find((group) => group.kind === "message" && group.item.message.role === "user")?.id;
   const isEmpty = visibleTimeline.length === 0;
   const lastItem = visibleTimeline.at(-1);
-  const latestAssistantHeaderId = [...renderGroups].reverse().find((group) => group.kind === "message"
+  const latestUserGroupId = [...renderGroups].reverse().find((group) => group.kind === "message" && group.item.message.role === "user")?.id;
+  const latestUserGroupIndex = renderGroups.findIndex((group) => group.id === latestUserGroupId);
+  const activeAssistantHeaderId = renderGroups.slice(latestUserGroupIndex + 1).find((group) => group.kind === "message"
     && group.item.message.role === "assistant" && firstAssistantIds.has(group.id))?.id;
   const latestRunningTool = [...visibleTimeline].reverse().find((item): item is Extract<ConversationItem, { kind: "tool" }> => item.kind === "tool" && item.tool.status === "running");
   const assistantStatus = props.isStreaming
     ? latestRunningTool && /bash|shell|execute|command|run/i.test(latestRunningTool.tool.name) ? t("conversation.statusExecuting") : t("conversation.statusWorking")
     : null;
+  const activeStatus = assistantStatus && props.workingDuration ? `${assistantStatus} · ${props.workingDuration}` : assistantStatus;
+  const hasAssistantInActiveTurn = activeAssistantHeaderId !== undefined;
   const hasLiveAssistant = props.isStreaming && lastItem?.kind === "message" && lastItem.message.role === "assistant";
   return (
     <div ref={props.contentRef} className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
@@ -154,10 +158,9 @@ function ConversationBody(props: ConversationBodyProps) {
                 role={group.item.message.role}
                 nickname={props.conversationIdentity?.[group.item.message.role]?.nickname ?? props.nicknames[group.item.message.role]}
                 avatarUrl={props.conversationIdentity?.[group.item.message.role]?.avatarUrl ?? null}
-                status={group.item.message.role === "assistant" && group.id === latestAssistantHeaderId ? assistantStatus : null}
+                status={group.item.message.role === "assistant" && group.id === activeAssistantHeaderId ? activeStatus : null}
               />}
               <div className="message-content">
-                {hasLiveAssistant && group.id === lastItem?.id && <div className="working-time"><span className="working-dot" /> {props.workingLabel}</div>}
                 {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
                 {group.item.message.pastedTexts && group.item.message.pastedTexts.length > 0 && <PastedTextAttachments attachments={group.item.message.pastedTexts} variant="message" />}
                 {group.item.message.images && group.item.message.images.length > 0 && <ImageGallery images={group.item.message.images} variant="message" />}
@@ -172,15 +175,14 @@ function ConversationBody(props: ConversationBodyProps) {
             onSelectTool={props.onSelectTool}
           />)}
           {!props.isStreaming && props.review?.available && lastItem?.kind === "message" && lastItem.message.role === "assistant" && <ChangedFilesSummary review={props.review} />}
-          {props.isStreaming && !hasLiveAssistant && (
+          {props.isStreaming && !hasAssistantInActiveTurn && (
             <article className="message assistant waiting">
               <MessageRoleLabel
                 role="assistant"
                 nickname={props.conversationIdentity?.assistant.nickname ?? props.nicknames.assistant}
                 avatarUrl={props.conversationIdentity?.assistant.avatarUrl ?? null}
-                status={assistantStatus}
+                status={activeStatus}
               />
-              <div className="message-content"><span className="working-dot" /> {props.workingLabel}</div>
             </article>
           )}
         </>
@@ -241,9 +243,6 @@ export function Conversation(props: ConversationProps) {
   const [activeUserId, setActiveUserId] = useActiveUserTracking(containerRef, userElements, userMessages, latestUserId);
   const conversationKey = userMessages.at(0)?.id ?? "empty";
   const workingDuration = useWorkingDuration(props.isStreaming ? props.workingStartedAt : null);
-  const workingLabel = workingDuration
-    ? t("conversation.workingTime", { time: workingDuration })
-    : t("conversation.working");
 
   const setFollowing = useCallback((following: boolean): void => {
     followingRef.current = following;
@@ -316,7 +315,7 @@ export function Conversation(props: ConversationProps) {
           onLoadOlder={loadOlder}
           contentRef={contentRef}
           userElements={userElements}
-          workingLabel={workingLabel}
+          workingDuration={workingDuration}
           nicknames={nicknames}
           onNicknameChange={saveNickname}
           onSelectTool={props.onSelectTool ?? (() => undefined)}
