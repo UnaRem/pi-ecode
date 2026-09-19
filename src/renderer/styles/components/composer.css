@@ -9,6 +9,7 @@
 .composer-footer { min-height: 34px; }
 .composer-footer > span { color: var(--color-text-faint); }
 .composer-tools, .composer-actions { gap: var(--space-1); }
+.composer-actions { gap: 0; }
 .composer-tools { min-width: 0; flex-wrap: wrap; }
 .composer-model-controls { min-width: 0; display: inline-flex; align-items: center; gap: 2px; border-left: 1px solid var(--color-border); margin-left: 3px; padding-left: 3px; }
 .composer-model-controls .select-trigger { height: 28px; padding-inline: 7px; font-size: 10.5px; }
@@ -23,7 +24,8 @@
 .send-button { width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--color-accent); box-shadow: var(--shadow-accent-md); }
 .send-button:hover, .send-button.steer:hover { background: var(--color-accent-hover); }
 .send-button.steer { background: var(--color-accent); }
-.send-button.stop { color: var(--color-danger); background: var(--color-danger-soft); box-shadow: none; }
+.send-button.stop { width: 0; margin-left: 0; overflow: hidden; color: var(--color-danger); background: var(--color-danger-soft); box-shadow: none; opacity: 0; transform: scale(.85); pointer-events: none; transition: width var(--duration-fast) var(--ease-standard), margin-left var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) ease, transform var(--duration-fast) var(--ease-standard); }
+.send-button.stop.visible { width: 29px; margin-left: var(--space-1); opacity: 1; transform: scale(1); pointer-events: auto; }
 .send-button.stop:hover { color: var(--color-danger); background: var(--color-danger-soft); }
 .send-button:disabled { color: var(--color-text-faint); background: var(--color-surface-muted); box-shadow: none; }
 .composer-note { color: var(--color-text-faint); }
