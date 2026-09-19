@@ -1,4 +1,6 @@
 @keyframes panel-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes panel-leave { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(3px); } }
+.transient-panel.leaving { pointer-events: none; animation-name: panel-leave; animation-duration: var(--duration-fast); animation-timing-function: var(--ease-exit); animation-fill-mode: both; }
 
 .loading-screen, .project-gate, .startup-screen { color: var(--color-text); background: var(--color-app-bg); }
 .loading-screen { color: var(--color-text-muted); }

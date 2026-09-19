@@ -276,6 +276,7 @@ describe("Conversation", () => {
       }),
     ));
     expect(markup).toContain("502 Bad Gateway");
+    expect(markup).toContain("error-banner transient-panel recoverable");
     expect(markup).toContain(">Continue</button>");
   });
 });

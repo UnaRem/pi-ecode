@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type AnimationEvent, type RefObject } from "react";
 import { ArrowDown, Sparkles } from "lucide-react";
 import type { ChangeReview, ConversationItem } from "@shared/contracts";
 import type { ConversationIdentity } from "@shared/app-config-contracts";
@@ -76,6 +76,62 @@ function ChangedFilesSummary({ review }: { review: ChangeReview }) {
         <span><b>+{file.additions ?? "?"}</b> <em>−{file.deletions ?? "?"}</em></span>
       </div>)}
     </section>
+  );
+}
+
+function ConversationErrorBanner(props: Pick<ConversationBodyProps, "error" | "canContinue" | "isStreaming" | "onContinue">) {
+  const { t } = useI18n();
+  const [visibleError, setVisibleError] = useState(() => props.error ? { message: props.error, canContinue: props.canContinue } : null);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (props.error) {
+      setVisibleError({ message: props.error, canContinue: props.canContinue });
+      setLeaving(false);
+    } else if (visibleError) {
+      setLeaving(true);
+    }
+  }, [props.canContinue, props.error]);
+
+  if (!visibleError) return null;
+  return (
+    <div
+      className={`error-banner transient-panel ${visibleError.canContinue ? "recoverable" : ""} ${leaving ? "leaving" : ""}`}
+      role="alert"
+      inert={leaving ? true : undefined}
+      onAnimationEnd={(event: AnimationEvent<HTMLDivElement>) => {
+        if (leaving && event.animationName === "panel-leave") setVisibleError(null);
+      }}
+    >
+      <span>{visibleError.message}</span>
+      {visibleError.canContinue && <button onClick={props.onContinue} disabled={props.isStreaming}>{t("conversation.continue")}</button>}
+    </div>
+  );
+}
+
+function ConversationNoticeBanner({ notice }: { notice: string | null }) {
+  const [visibleNotice, setVisibleNotice] = useState(notice);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (notice) {
+      setVisibleNotice(notice);
+      setLeaving(false);
+    } else if (visibleNotice) {
+      setLeaving(true);
+    }
+  }, [notice]);
+
+  if (!visibleNotice) return null;
+  return (
+    <div
+      className={`notice-banner transient-panel ${leaving ? "leaving" : ""}`}
+      role="status"
+      inert={leaving ? true : undefined}
+      onAnimationEnd={(event: AnimationEvent<HTMLDivElement>) => {
+        if (leaving && event.animationName === "panel-leave") setVisibleNotice(null);
+      }}
+    >{visibleNotice}</div>
   );
 }
 
@@ -187,13 +243,8 @@ function ConversationBody(props: ConversationBodyProps) {
           )}
         </>
       )}
-      {props.error && (
-        <div className={`error-banner ${props.canContinue ? "recoverable" : ""}`} role="alert">
-          <span>{props.error}</span>
-          {props.canContinue && <button onClick={props.onContinue} disabled={props.isStreaming}>{t("conversation.continue")}</button>}
-        </div>
-      )}
-      {props.notice && <div className="notice-banner" role="status">{props.notice}</div>}
+      <ConversationErrorBanner {...props} />
+      <ConversationNoticeBanner notice={props.notice} />
     </div>
   );
 }
