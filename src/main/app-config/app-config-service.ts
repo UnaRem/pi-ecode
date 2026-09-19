@@ -2,21 +2,50 @@ import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { app, BrowserWindow, dialog } from "electron";
 import { dirname, extname, join, resolve } from "node:path";
-import type { AppConfigChangedEvent, AppConfigSnapshot, AppThemeColors } from "../../shared/app-config-contracts.js";
+import {
+  DEFAULT_CONVERSATION_NICKNAMES,
+  type AppConfigChangedEvent,
+  type AppConfigSnapshot,
+  type AppThemeColors,
+  type ConversationIdentityRole,
+  type ConversationNicknameUpdate,
+} from "../../shared/app-config-contracts.js";
 
 interface AppConfigServiceOptions {
   onChanged: (event: AppConfigChangedEvent) => void;
   onError: (message: string) => void;
 }
 
+interface StoredConversationIdentity {
+  assistantNickname: string;
+  userNickname: string;
+  assistantAvatarPath: string | null;
+  userAvatarPath: string | null;
+}
+
 interface AppConfigFile {
   iconPath: string | null;
   theme: AppThemeColors | null;
   backgroundImagePath: string | null;
+  conversationIdentity: StoredConversationIdentity;
 }
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
+const AVATAR_EXTENSIONS = ["png", "jpg", "jpeg", "webp"];
 const ICON_EXTENSIONS = ["png", "ico"];
+
+function defaultConversationIdentity(): StoredConversationIdentity {
+  return {
+    assistantNickname: DEFAULT_CONVERSATION_NICKNAMES.assistant,
+    userNickname: DEFAULT_CONVERSATION_NICKNAMES.user,
+    assistantAvatarPath: null,
+    userAvatarPath: null,
+  };
+}
+
+function emptyConfig(): AppConfigFile {
+  return { iconPath: null, theme: null, backgroundImagePath: null, conversationIdentity: defaultConversationIdentity() };
+}
 
 function revision(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -38,6 +67,22 @@ function normalizeTheme(value: unknown): AppThemeColors | null {
     background: normalizeColor(candidate.background),
   };
   return Object.values(colors).some(Boolean) ? colors : null;
+}
+
+function normalizeNickname(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  return value.trim().slice(0, 40) || fallback;
+}
+
+function normalizeConversationIdentity(value: unknown): StoredConversationIdentity {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return defaultConversationIdentity();
+  const candidate = value as Record<string, unknown>;
+  return {
+    assistantNickname: normalizeNickname(candidate.assistantNickname, DEFAULT_CONVERSATION_NICKNAMES.assistant),
+    userNickname: normalizeNickname(candidate.userNickname, DEFAULT_CONVERSATION_NICKNAMES.user),
+    assistantAvatarPath: typeof candidate.assistantAvatarPath === "string" ? candidate.assistantAvatarPath : null,
+    userAvatarPath: typeof candidate.userAvatarPath === "string" ? candidate.userAvatarPath : null,
+  };
 }
 
 function toFileUrl(absolutePath: string, seed: string): string {
@@ -70,6 +115,18 @@ export class AppConfigService {
       theme: value.theme ?? { accent: null, accentSoft: null, danger: null, background: null },
       backgroundImagePath: value.backgroundImagePath ?? null,
       backgroundImageUrl: null,
+      conversationIdentity: {
+        assistant: {
+          nickname: value.conversationIdentity.assistantNickname,
+          avatarPath: value.conversationIdentity.assistantAvatarPath,
+          avatarUrl: null,
+        },
+        user: {
+          nickname: value.conversationIdentity.userNickname,
+          avatarPath: value.conversationIdentity.userAvatarPath,
+          avatarUrl: null,
+        },
+      },
     };
     if (value.iconPath) {
       const absolute = resolve(app.getPath("userData"), value.iconPath);
@@ -78,6 +135,13 @@ export class AppConfigService {
     if (value.backgroundImagePath) {
       const absolute = resolve(app.getPath("userData"), value.backgroundImagePath);
       snapshot.backgroundImageUrl = toFileUrl(absolute, value.backgroundImagePath);
+    }
+    for (const role of ["assistant", "user"] as const) {
+      const avatarPath = snapshot.conversationIdentity[role].avatarPath;
+      if (avatarPath) {
+        const absolute = resolve(app.getPath("userData"), avatarPath);
+        snapshot.conversationIdentity[role].avatarUrl = toFileUrl(absolute, avatarPath);
+      }
     }
     return snapshot;
   }
@@ -97,18 +161,17 @@ export class AppConfigService {
     try {
       const content = await readFile(this.configFilePath, "utf8");
       const parsed: unknown = JSON.parse(content);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return { iconPath: null, theme: null, backgroundImagePath: null };
-      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return emptyConfig();
       const candidate = parsed as Partial<AppConfigFile>;
       return {
         iconPath: typeof candidate.iconPath === "string" ? candidate.iconPath : null,
         theme: normalizeTheme(candidate.theme),
         backgroundImagePath: typeof candidate.backgroundImagePath === "string" ? candidate.backgroundImagePath : null,
+        conversationIdentity: normalizeConversationIdentity(candidate.conversationIdentity),
       };
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? (error as NodeJS.ErrnoException).code : undefined;
-      if (code === "ENOENT") return { iconPath: null, theme: null, backgroundImagePath: null };
+      if (code === "ENOENT") return emptyConfig();
       throw error;
     }
   }
@@ -189,6 +252,47 @@ export class AppConfigService {
     config.iconPath = null;
     await this.writeConfig(config);
     await this.removeAsset(oldValue);
+
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  async chooseConversationAvatar(role: ConversationIdentityRole): Promise<AppConfigSnapshot> {
+    const source = await this.pickImage(AVATAR_EXTENSIONS, role === "assistant" ? "选择模型头像" : "选择用户头像");
+    if (!source) return this.getSnapshot();
+
+    const relative = await this.copyToAssets(source, `${role}-avatar`);
+    const config = await this.readConfig();
+    const field = role === "assistant" ? "assistantAvatarPath" : "userAvatarPath";
+    const oldValue = config.conversationIdentity[field];
+    config.conversationIdentity[field] = relative;
+    await this.writeConfig(config);
+    await this.removeAsset(oldValue && oldValue !== relative ? oldValue : null);
+
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  async clearConversationAvatar(role: ConversationIdentityRole): Promise<AppConfigSnapshot> {
+    const config = await this.readConfig();
+    const field = role === "assistant" ? "assistantAvatarPath" : "userAvatarPath";
+    const oldValue = config.conversationIdentity[field];
+    config.conversationIdentity[field] = null;
+    await this.writeConfig(config);
+    await this.removeAsset(oldValue);
+
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  async saveConversationNicknames(value: ConversationNicknameUpdate): Promise<AppConfigSnapshot> {
+    const config = await this.readConfig();
+    config.conversationIdentity.assistantNickname = normalizeNickname(value.assistant, DEFAULT_CONVERSATION_NICKNAMES.assistant);
+    config.conversationIdentity.userNickname = normalizeNickname(value.user, DEFAULT_CONVERSATION_NICKNAMES.user);
+    await this.writeConfig(config);
 
     const snapshot = this.toSnapshot(config);
     this.emit(snapshot);

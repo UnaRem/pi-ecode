@@ -44,6 +44,9 @@ export const IPC_CHANNELS = {
   getAppConfig: "app-config:get",
   chooseAppIcon: "app-config:choose-icon",
   clearAppIcon: "app-config:clear-icon",
+  chooseConversationAvatar: "app-config:choose-conversation-avatar",
+  clearConversationAvatar: "app-config:clear-conversation-avatar",
+  saveConversationNicknames: "app-config:save-conversation-nicknames",
   appConfigEvent: "app-config:event",
   saveTheme: "app-config:save-theme",
   chooseBackgroundImage: "app-config:choose-background",
@@ -381,6 +384,9 @@ export interface DesktopApi {
   getAppConfig(): Promise<AppConfigSnapshot>;
   chooseAppIcon(): Promise<AppConfigSnapshot>;
   clearAppIcon(): Promise<AppConfigSnapshot>;
+  chooseConversationAvatar(role: "assistant" | "user"): Promise<AppConfigSnapshot>;
+  clearConversationAvatar(role: "assistant" | "user"): Promise<AppConfigSnapshot>;
+  saveConversationNicknames(value: { assistant: string; user: string }): Promise<AppConfigSnapshot>;
   saveTheme(colors: AppThemeColors): Promise<AppConfigSnapshot>;
   chooseBackgroundImage(): Promise<AppConfigSnapshot>;
   clearBackgroundImage(): Promise<AppConfigSnapshot>;

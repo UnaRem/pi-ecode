@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ArrowDown, Sparkles } from "lucide-react";
-import type { ConversationItem } from "@shared/contracts";
+import type { ChangeReview, ConversationItem } from "@shared/contracts";
+import type { ConversationIdentity } from "@shared/app-config-contracts";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
@@ -24,6 +25,8 @@ interface ConversationProps {
   onContinue: () => void;
   selectedToolId?: string | null;
   onSelectTool?: (toolId: string) => void;
+  conversationIdentity?: ConversationIdentity | undefined;
+  review?: ChangeReview | undefined;
 }
 
 const BOTTOM_THRESHOLD = 48;
@@ -56,6 +59,38 @@ interface ConversationBodyProps extends ConversationProps {
   onNicknameChange: (role: MessageRole, nickname: string) => void;
   selectedToolId: string | null;
   onSelectTool: (toolId: string) => void;
+  conversationIdentity?: ConversationIdentity | undefined;
+  review?: ChangeReview | undefined;
+}
+
+function ThinkingBlock({ thinking }: { thinking: Extract<ConversationItem, { kind: "thinking" }>["thinking"] }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(thinking.status === "running");
+  useEffect(() => {
+    if (thinking.status === "completed") setOpen(false);
+  }, [thinking.status]);
+  return (
+    <details className={`thinking-block ${thinking.status}`} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary><span className="thinking-mark" />{t("conversation.thinking")}{thinking.status === "running" ? ` · ${t("conversation.statusWorking")}` : ""}</summary>
+      {thinking.redacted ? <p>{t("conversation.thinkingUnavailable")}</p> : <div className="thinking-content">{thinking.text}</div>}
+    </details>
+  );
+}
+
+function ChangedFilesSummary({ review }: { review: ChangeReview }) {
+  const { t } = useI18n();
+  const files = [...review.files]
+    .sort((left, right) => (right.additions ?? -1) + (right.deletions ?? -1) - ((left.additions ?? -1) + (left.deletions ?? -1)))
+    .slice(0, 5);
+  return (
+    <section className="conversation-changed-files" aria-label={t("conversation.changedFiles")}>
+      <strong>{t("conversation.changedFiles")}</strong>
+      {files.map((file) => <div className="conversation-changed-file" key={file.path}>
+        <code title={file.path}>{file.path}</code>
+        <span><b>+{file.additions ?? "?"}</b> <em>−{file.deletions ?? "?"}</em></span>
+      </div>)}
+    </section>
+  );
 }
 
 function ConversationBody(props: ConversationBodyProps) {
@@ -64,6 +99,11 @@ function ConversationBody(props: ConversationBodyProps) {
   const firstUserId = renderGroups.find((group) => group.kind === "message" && group.item.message.role === "user")?.id;
   const isEmpty = props.timeline.length === 0;
   const lastItem = props.timeline.at(-1);
+  const latestAssistant = [...props.timeline].reverse().find((item) => item.kind === "message" && item.message.role === "assistant");
+  const latestRunningTool = [...props.timeline].reverse().find((item): item is Extract<ConversationItem, { kind: "tool" }> => item.kind === "tool" && item.tool.status === "running");
+  const assistantStatus = props.isStreaming
+    ? latestRunningTool && /bash|shell|execute|command|run/i.test(latestRunningTool.tool.name) ? t("conversation.statusExecuting") : t("conversation.statusWorking")
+    : t("conversation.statusWaiting");
   const hasLiveAssistant = props.isStreaming && lastItem?.kind === "message" && lastItem.message.role === "assistant";
   return (
     <div ref={props.contentRef} className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
@@ -100,8 +140,9 @@ function ConversationBody(props: ConversationBodyProps) {
             >
               <MessageRoleLabel
                 role={group.item.message.role}
-                nickname={props.nicknames[group.item.message.role]}
-                onSave={props.onNicknameChange}
+                nickname={props.conversationIdentity?.[group.item.message.role]?.nickname ?? props.nicknames[group.item.message.role]}
+                avatarUrl={props.conversationIdentity?.[group.item.message.role]?.avatarUrl ?? null}
+                status={group.item.message.role === "assistant" && group.id === latestAssistant?.id ? assistantStatus : null}
               />
               <div className="message-content">
                 {hasLiveAssistant && group.id === lastItem?.id && <div className="working-time"><span className="working-dot" /> {props.workingLabel}</div>}
@@ -111,16 +152,22 @@ function ConversationBody(props: ConversationBodyProps) {
                 {hasLiveAssistant && group.id === lastItem?.id && <span className="stream-caret" aria-label={t("conversation.generating")} />}
               </div>
             </article>
-          ) : <ToolBatch
+          ) : group.kind === "tools" ? <ToolBatch
             key={group.id}
             tools={group.tools}
             animateNewTools={props.isStreaming && groupIndex === renderGroups.length - 1}
             selectedToolId={props.selectedToolId}
             onSelectTool={props.onSelectTool}
-          />)}
+          /> : <ThinkingBlock key={group.id} thinking={group.thinking} />)}
+          {!props.isStreaming && props.review?.available && lastItem?.kind === "message" && lastItem.message.role === "assistant" && <ChangedFilesSummary review={props.review} />}
           {props.isStreaming && !hasLiveAssistant && (
             <article className="message assistant waiting">
-              <MessageRoleLabel role="assistant" nickname={props.nicknames.assistant} onSave={props.onNicknameChange} />
+              <MessageRoleLabel
+                role="assistant"
+                nickname={props.conversationIdentity?.assistant.nickname ?? props.nicknames.assistant}
+                avatarUrl={props.conversationIdentity?.assistant.avatarUrl ?? null}
+                status={assistantStatus}
+              />
               <div className="message-content"><span className="working-dot" /> {props.workingLabel}</div>
             </article>
           )}
@@ -171,7 +218,10 @@ export function Conversation(props: ConversationProps) {
   const historyAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const followingRef = useRef(true);
   const [isFollowing, setIsFollowing] = useState(true);
-  const { nicknames, saveNickname } = useMessageNicknames();
+  const { nicknames, saveNickname } = useMessageNicknames({
+    assistant: props.conversationIdentity?.assistant.nickname ?? "PiECode",
+    user: props.conversationIdentity?.user.nickname ?? "你",
+  });
   const userMessages = useMemo(() => props.timeline.flatMap((item) => (
     item.kind === "message" && item.message.role === "user" ? [item.message] : []
   )), [props.timeline]);

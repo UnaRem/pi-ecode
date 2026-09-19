@@ -22,19 +22,12 @@ describe("Conversation", () => {
   });
 
   it("uses default nicknames when saved values are empty", () => {
-    expect(normalizeNickname("assistant", "   ")).toBe("pi");
+    expect(normalizeNickname("assistant", "   ")).toBe("PiECode");
     expect(normalizeNickname("user", "   ")).toBe("你");
   });
 
   it("renders locally saved nicknames for both message roles", () => {
-    vi.stubGlobal("localStorage", {
-      getItem: (key: string) => ({
-        "pi-ecode:language": "en",
-        "pi-ecode:assistant-nickname": "Builder",
-        "pi-ecode:user-nickname": "Owner",
-      })[key] ?? null,
-      setItem: vi.fn(),
-    });
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(createElement(
       I18nProvider,
       null,
@@ -50,11 +43,15 @@ describe("Conversation", () => {
         canContinue: false,
         notice: null,
         onContinue: vi.fn(),
+        conversationIdentity: {
+          assistant: { nickname: "Builder", avatarPath: null, avatarUrl: null },
+          user: { nickname: "Owner", avatarPath: null, avatarUrl: null },
+        },
       }),
     ));
 
-    expect(markup).toContain(">Owner</button>");
-    expect(markup).toContain(">Builder</button>");
+    expect(markup).toContain('class="message-role-name">Owner</span>');
+    expect(markup).toContain('class="message-role-name">Builder</span>');
   });
 
   it("renders pasted text attachments separately from the user message", () => {

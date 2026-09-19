@@ -1,11 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { Bot, UserRound } from "lucide-react";
 import { useI18n } from "../i18n/i18n";
 
-const NICKNAME_STORAGE_KEYS = {
-  assistant: "pi-ecode:assistant-nickname",
-  user: "pi-ecode:user-nickname",
-} as const;
-const DEFAULT_NICKNAMES = { assistant: "pi", user: "你" } as const;
+const DEFAULT_NICKNAMES = { assistant: "PiECode", user: "你" } as const;
 
 export type MessageRole = keyof typeof DEFAULT_NICKNAMES;
 export type MessageNicknames = Record<MessageRole, string>;
@@ -14,26 +11,14 @@ export function normalizeNickname(role: MessageRole, value: string): string {
   return value.trim() || DEFAULT_NICKNAMES[role];
 }
 
-function initialNickname(role: MessageRole): string {
-  return normalizeNickname(role, localStorage.getItem(NICKNAME_STORAGE_KEYS[role]) ?? "");
-}
-
-export function useMessageNicknames(): {
+export function useMessageNicknames(initial: MessageNicknames = DEFAULT_NICKNAMES): {
   nicknames: MessageNicknames;
   saveNickname: (role: MessageRole, nickname: string) => void;
 } {
-  const [nicknames, setNicknames] = useState<MessageNicknames>(() => ({
-    assistant: initialNickname("assistant"),
-    user: initialNickname("user"),
-  }));
+  const [nicknames, setNicknames] = useState<MessageNicknames>(initial);
   const saveNickname = (role: MessageRole, value: string): void => {
     const nickname = normalizeNickname(role, value);
     setNicknames((current) => ({ ...current, [role]: nickname }));
-    try {
-      localStorage.setItem(NICKNAME_STORAGE_KEYS[role], nickname);
-    } catch {
-      // Keep the nickname usable for this window when browser storage is unavailable.
-    }
   };
   return { nicknames, saveNickname };
 }
@@ -41,7 +26,9 @@ export function useMessageNicknames(): {
 export function MessageRoleLabel(props: {
   role: MessageRole;
   nickname: string;
-  onSave: (role: MessageRole, nickname: string) => void;
+  avatarUrl?: string | null;
+  status?: string | null;
+  onSave?: (role: MessageRole, nickname: string) => void;
 }) {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -58,10 +45,11 @@ export function MessageRoleLabel(props: {
   const finish = (): void => {
     const shouldSave = !cancelledRef.current;
     setEditing(false);
-    if (shouldSave) props.onSave(props.role, draft);
+    if (shouldSave) props.onSave?.(props.role, draft);
   };
 
   const startEditing = (): void => {
+    if (!props.onSave) return;
     cancelledRef.current = false;
     setDraft(props.nickname);
     setEditing(true);
@@ -89,13 +77,14 @@ export function MessageRoleLabel(props: {
   }
 
   return (
-    <button
-      className="message-role message-role-button"
-      onClick={startEditing}
-      title={t("conversation.editNickname")}
-      aria-label={`${t("conversation.editNickname")}: ${props.nickname}`}
-    >
-      {props.nickname}
-    </button>
+    <div className="message-role">
+      <span className={`message-avatar ${props.role}`} aria-hidden="true">
+        {props.avatarUrl ? <img src={props.avatarUrl} alt="" /> : props.role === "assistant" ? <Bot size={19} /> : <UserRound size={18} />}
+      </span>
+      <span className="message-role-meta">
+        <span className="message-role-name">{props.nickname}</span>
+        {props.status && <span className="message-role-status">{props.status}</span>}
+      </span>
+    </div>
   );
 }

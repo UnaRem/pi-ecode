@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { FolderClosed, LoaderCircle, PanelLeftOpen, Pencil, ShieldCheck } from "lucide-react";
+import { FolderClosed, PanelLeftOpen, Pencil } from "lucide-react";
 import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { GitPushButton } from "./GitPushButton";
@@ -21,7 +21,6 @@ interface TopbarProps {
   onRenameSession: (title: string) => void;
   onSetModel: (value: string) => void;
   onSetThinking: (value: ThinkingLevel) => void;
-  onToggleValidation: () => void;
 }
 
 export function normalizeSessionTitle(title: string): string {
@@ -109,20 +108,7 @@ export function Topbar(props: TopbarProps) {
         </span>
       </div>
       <div className="topbar-controls">
-        {showProjectReleaseControls(props.validation) && <>
-          <button
-            className={`validation-toggle ${props.validation.status}`}
-            onClick={props.onToggleValidation}
-            aria-label={t("topbar.openVerification")}
-            title={t("topbar.projectVerification")}
-          >
-            {props.validation.status === "running"
-              ? <LoaderCircle className="spin" size={15} />
-              : <ShieldCheck size={15} />}
-            <span>{props.validation.status === "passed" ? t("topbar.verified") : props.validation.status === "stale" ? t("topbar.stale") : t("topbar.verify")}</span>
-          </button>
-          <GitPushButton projectKey={props.projectPath} disabled={props.disabled} validationStatus={props.validation.status} />
-        </>}
+        {showProjectReleaseControls(props.validation) && <GitPushButton projectKey={props.projectPath} disabled={props.disabled} validationStatus={props.validation.status} />}
         <TopbarSelect
           className="provider-select"
           label={t("topbar.provider")}

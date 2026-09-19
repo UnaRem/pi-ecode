@@ -113,7 +113,6 @@ export default function App() {
           onRenameSession={(title) => void actions.renameSession(title)}
           onSetModel={(value) => void actions.setModel(value)}
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
-          onToggleValidation={() => document.querySelector<HTMLElement>(".inspector-validation")?.focus()}
         />
         <Conversation
           timeline={state.timeline}
@@ -123,6 +122,8 @@ export default function App() {
           error={state.error}
           canContinue={state.canContinue}
           notice={state.notice}
+          conversationIdentity={appConfig?.conversationIdentity}
+          review={state.review}
           hasOlderTimeline={state.timelineHasMore}
           isLoadingOlder={isLoadingOlder}
           onLoadOlder={() => void actions.loadOlderTimeline()}

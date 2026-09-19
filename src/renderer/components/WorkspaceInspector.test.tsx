@@ -42,6 +42,7 @@ describe("WorkspaceInspector", () => {
     expect(markup).toContain("npm test");
     expect(markup).toContain("203 passed");
     expect(markup).toContain("src/App.tsx");
-    expect(markup).toContain("Run checks");
+    expect(markup).toContain("Verification");
+    expect(markup).not.toContain("Run checks");
   });
 });

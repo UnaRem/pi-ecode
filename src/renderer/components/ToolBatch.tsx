@@ -6,6 +6,7 @@ import { useScrollFollow } from "../hooks/use-scroll-follow";
 
 export type ConversationRenderGroup =
   | { kind: "message"; id: string; item: Extract<ConversationItem, { kind: "message" }> }
+  | { kind: "thinking"; id: string; thinking: Extract<ConversationItem, { kind: "thinking" }>["thinking"] }
   | { kind: "tools"; id: string; tools: ToolActivity[] };
 
 export function groupConsecutiveTools(timeline: ConversationItem[]): ConversationRenderGroup[] {
@@ -15,7 +16,10 @@ export function groupConsecutiveTools(timeline: ConversationItem[]): Conversatio
       groups.push({ kind: "message", id: item.id, item });
       continue;
     }
-    if (item.kind === "thinking") continue;
+    if (item.kind === "thinking") {
+      groups.push({ kind: "thinking", id: item.id, thinking: item.thinking });
+      continue;
+    }
     const previous = groups.at(-1);
     if (previous?.kind === "tools") {
       previous.tools.push(item.tool);
@@ -27,7 +31,14 @@ export function groupConsecutiveTools(timeline: ConversationItem[]): Conversatio
 }
 
 const BOTTOM_THRESHOLD = 8;
-const SCROLLABLE_TOOL_COUNT = 3;
+const SCROLLABLE_TOOL_COUNT = 4;
+
+function formatToolDuration(tool: ToolActivity): string {
+  if (!tool.startedAt) return "";
+  const end = tool.endedAt ?? Date.now();
+  const elapsed = Math.max(0, end - tool.startedAt);
+  return elapsed < 1000 ? `${elapsed}ms` : `${(elapsed / 1000).toFixed(1)}s`;
+}
 
 export function isScrollAreaAtBottom(scrollTop: number, clientHeight: number, scrollHeight: number): boolean {
   return scrollHeight - scrollTop - clientHeight <= BOTTOM_THRESHOLD;
@@ -67,30 +78,27 @@ export function ToolBatch({
 
   useScrollFollow(listRef, contentRef, followingRef);
 
+  const firstTool = tools[0];
   return (
-    <section className="tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
-      <div
-        ref={listRef}
-        className={scrollable ? "tool-batch-list scrollable" : "tool-batch-list"}
-        data-scroll-follow
-        role={scrollable ? "region" : undefined}
-        aria-label={scrollable ? t("tool.batch", { count: tools.length }) : undefined}
-        tabIndex={scrollable ? 0 : undefined}
-      >
-        <div ref={contentRef} className="tool-batch-content">
-          {tools.map((tool) => (
-            <div className={animatedToolIds.has(tool.id) ? "timeline-tool entering" : "timeline-tool"} key={tool.id}>
-              <div className="tool-card-reveal">
-                <ToolCard
-                  tool={tool}
-                  selected={tool.id === selectedToolId}
-                  onSelect={() => onSelectTool(tool.id)}
-                />
-              </div>
-            </div>
-          ))}
+    <section className="tool-batch plaintext-tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
+      <details className="tool-dropdown" open={false}>
+        <summary>
+          <span className={`tool-inline-status ${firstTool?.status ?? "success"}`} />
+          <span>{firstTool?.title ?? t("tool.panelTitle")}</span>
+          <span className="tool-inline-count">{t("tool.batch", { count: tools.length })}</span>
+        </summary>
+        <div ref={listRef} className={scrollable ? "tool-batch-list scrollable" : "tool-batch-list"} data-scroll-follow role={scrollable ? "region" : undefined} aria-label={scrollable ? t("tool.batch", { count: tools.length }) : undefined} tabIndex={scrollable ? 0 : undefined}>
+          <div ref={contentRef} className="tool-batch-content">
+            {tools.map((tool) => (
+              <button className={`tool-plaintext-row ${tool.id === selectedToolId ? "selected" : ""} ${animatedToolIds.has(tool.id) ? "entering" : ""}`} key={tool.id} type="button" onClick={() => onSelectTool(tool.id)}>
+                <span className={`tool-inline-status ${tool.status}`} />
+                <span>{tool.title}</span>
+                <span className="tool-inline-duration">{formatToolDuration(tool)}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      </details>
     </section>
   );
 }

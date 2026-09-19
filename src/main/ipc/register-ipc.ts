@@ -1,5 +1,5 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
-import type { AppThemeColors } from "../../shared/app-config-contracts.js";
+import type { AppThemeColors, ConversationIdentityRole, ConversationNicknameUpdate } from "../../shared/app-config-contracts.js";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
@@ -7,6 +7,16 @@ import type { AgentService } from "../agent/agent-service.js";
 import type { AppConfigService } from "../app-config/app-config-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
 import { ProjectGitService } from "../project-git-service.js";
+
+function isConversationIdentityRole(value: unknown): value is ConversationIdentityRole {
+  return value === "assistant" || value === "user";
+}
+
+function isConversationNicknameUpdate(value: unknown): value is ConversationNicknameUpdate {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.assistant === "string" && typeof candidate.user === "string";
+}
 
 function isThemeColors(value: unknown): value is AppThemeColors {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -144,6 +154,18 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.getAppConfig, () => appConfig.getSnapshot());
   ipcMain.handle(IPC_CHANNELS.chooseAppIcon, () => appConfig.chooseIcon());
   ipcMain.handle(IPC_CHANNELS.clearAppIcon, () => appConfig.clearIcon());
+  ipcMain.handle(IPC_CHANNELS.chooseConversationAvatar, (_event, role: unknown) => {
+    if (!isConversationIdentityRole(role)) throw new Error("Invalid conversation identity role.");
+    return appConfig.chooseConversationAvatar(role);
+  });
+  ipcMain.handle(IPC_CHANNELS.clearConversationAvatar, (_event, role: unknown) => {
+    if (!isConversationIdentityRole(role)) throw new Error("Invalid conversation identity role.");
+    return appConfig.clearConversationAvatar(role);
+  });
+  ipcMain.handle(IPC_CHANNELS.saveConversationNicknames, (_event, value: unknown) => {
+    if (!isConversationNicknameUpdate(value)) throw new Error("Invalid conversation nicknames.");
+    return appConfig.saveConversationNicknames(value);
+  });
   ipcMain.handle(IPC_CHANNELS.saveTheme, (_event, colors: unknown) => {
     if (!isThemeColors(colors)) throw new Error("Invalid theme colors.");
     return appConfig.saveTheme(colors);

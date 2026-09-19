@@ -1,4 +1,5 @@
 import { Check, CircleAlert, CircleDashed, FileCode2, LoaderCircle, Play, Square, TerminalSquare } from "lucide-react";
+import { useState } from "react";
 import type { CandidateState, ChangeReview, ToolActivity, ValidationState, ValidationStep } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
@@ -24,6 +25,12 @@ function StepStatus({ step }: { step: ValidationStep }) {
   return <CircleDashed size={13} aria-hidden="true" />;
 }
 
+function formatToolDuration(tool: ToolActivity): string {
+  if (!tool.startedAt) return "";
+  const elapsed = Math.max(0, (tool.endedAt ?? Date.now()) - tool.startedAt);
+  return elapsed < 1000 ? `${elapsed}ms` : `${(elapsed / 1000).toFixed(1)}s`;
+}
+
 function ToolQueue({ tools, selectedTool, onSelect }: Pick<WorkspaceInspectorProps, "tools" | "selectedTool" | "onSelectTool"> & { onSelect: (id: string) => void }) {
   const { t } = useI18n();
   return (
@@ -34,6 +41,7 @@ function ToolQueue({ tools, selectedTool, onSelect }: Pick<WorkspaceInspectorPro
           <button key={tool.id} className={tool.id === selectedTool?.id ? "selected" : ""} onClick={() => onSelect(tool.id)} aria-pressed={tool.id === selectedTool?.id}>
             <span className={`inspector-tool-status ${tool.status}`}><StepStatus step={{ id: "build", label: tool.title, command: tool.name, status: tool.status === "success" ? "passed" : tool.status === "error" ? "failed" : "running", output: tool.output, exitCode: null, durationMs: null }} /></span>
             <strong>{tool.title}</strong>
+            <time>{formatToolDuration(tool)}</time>
           </button>
         ))}
       </div>
@@ -101,11 +109,12 @@ function ValidationControls(props: Pick<WorkspaceInspectorProps, "validation" | 
 
 function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFile">) {
   const { t } = useI18n();
+  const files = [...props.review.files].sort((left, right) => (right.additions ?? -1) + (right.deletions ?? -1) - ((left.additions ?? -1) + (left.deletions ?? -1)));
   return (
     <section className="inspector-section inspector-changes">
       <header><strong>{t("validation.review")}</strong><span>{props.review.files.length}</span></header>
       <div className="inspector-file-list">
-        {props.review.files.length === 0 ? <p>{props.review.message ?? t("validation.noChanges")}</p> : props.review.files.map((file) => (
+        {files.length === 0 ? <p>{props.review.message ?? t("validation.noChanges")}</p> : files.map((file) => (
           <div key={file.path} className="inspector-file">
             <FileCode2 size={13} aria-hidden="true" />
             <code title={file.path}>{file.path}</code>
@@ -126,16 +135,19 @@ function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFi
 
 export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const { t } = useI18n();
+  const [tab, setTab] = useState<"tools" | "validation">("tools");
   return (
     <aside className="workspace-inspector" data-region="inspector" aria-label={t("tool.panelTitle")}>
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
-        <span role="tab" aria-selected="true">{t("tool.panelTitle")}</span>
+        <button type="button" role="tab" aria-selected={tab === "tools"} onClick={() => setTab("tools")}>{t("tool.panelTitle")}</button>
+        <button type="button" role="tab" aria-selected={tab === "validation"} onClick={() => setTab("validation")}>{t("validation.title")}</button>
       </div>
       <div className="inspector-scroll">
-        <ToolQueue {...props} onSelect={props.onSelectTool} />
-        <OutputPanel {...props} />
-        <ValidationControls {...props} />
-        <ChangeFiles {...props} />
+        {tab === "tools" ? <>
+          <ToolQueue {...props} onSelect={props.onSelectTool} />
+          <OutputPanel {...props} />
+          <ChangeFiles {...props} />
+        </> : <ValidationControls {...props} />}
       </div>
     </aside>
   );

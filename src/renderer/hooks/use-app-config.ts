@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AppConfigSnapshot } from "@shared/app-config-contracts";
+import type { AppConfigSnapshot, ConversationIdentityRole } from "@shared/app-config-contracts";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -46,6 +46,42 @@ export function useAppConfig() {
     }
   }, []);
 
+  const chooseConversationAvatar = useCallback(async (role: ConversationIdentityRole) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await window.piDesktop.chooseConversationAvatar(role));
+    } catch (chooseError) {
+      setError(errorMessage(chooseError));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const clearConversationAvatar = useCallback(async (role: ConversationIdentityRole) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await window.piDesktop.clearConversationAvatar(role));
+    } catch (clearError) {
+      setError(errorMessage(clearError));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const saveConversationNicknames = useCallback(async (value: { assistant: string; user: string }) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await window.piDesktop.saveConversationNicknames(value));
+    } catch (saveError) {
+      setError(errorMessage(saveError));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const clearIcon = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -82,5 +118,16 @@ export function useAppConfig() {
     }
   }, []);
 
-  return { snapshot, loading, error, chooseIcon, clearIcon, chooseBackgroundImage, clearBackgroundImage };
+  return {
+    snapshot,
+    loading,
+    error,
+    chooseIcon,
+    clearIcon,
+    chooseConversationAvatar,
+    clearConversationAvatar,
+    saveConversationNicknames,
+    chooseBackgroundImage,
+    clearBackgroundImage,
+  };
 }

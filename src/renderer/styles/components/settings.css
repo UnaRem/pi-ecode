@@ -43,6 +43,13 @@
 .settings-error { border-color: var(--color-danger-border); color: var(--color-danger); background: var(--color-danger-soft); }
 .settings-pending { color: var(--color-warning-text); background: var(--color-warning-soft); }
 .app-icon-preview { border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.conversation-identity-settings { display: grid; gap: var(--space-3); }
+.identity-setting { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.identity-avatar-preview { width: 44px; height: 44px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--color-accent-border); border-radius: 50%; color: var(--color-accent); background: var(--color-accent-soft); font-weight: 700; }
+.identity-avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+.identity-setting label { display: grid; gap: 5px; }
+.identity-setting label > span { color: var(--color-text-muted); font-size: 11px; }
+.identity-setting input { min-height: 30px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
 .app-icon-hint { color: var(--color-text-muted); }
 .app-icon-custom { color: var(--color-accent); }
 .app-icon-default { color: var(--color-text-faint); }

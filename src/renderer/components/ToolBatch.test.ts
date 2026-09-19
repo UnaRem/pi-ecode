@@ -27,9 +27,9 @@ function message(id: string, role: "user" | "assistant" = "assistant"): Conversa
 describe("ToolBatch", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("renders every tool in a scrollable list when a batch exceeds three calls", () => {
+  it("renders a collapsed plaintext summary and a scrollable detail list", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
-    const activities = ["one", "two", "three", "four"].map(activity);
+    const activities = ["one", "two", "three", "four", "five"].map(activity);
     const markup = renderToStaticMarkup(
       createElement(I18nProvider, null, createElement(ToolBatch, {
         tools: activities,
@@ -38,15 +38,13 @@ describe("ToolBatch", () => {
       })),
     );
 
-    expect(markup.match(/class="tool-card category-/g)).toHaveLength(4);
+    expect(markup).toContain('class="tool-dropdown"');
     expect(markup).toContain('class="tool-batch-list scrollable"');
     expect(markup).toContain('role="region"');
     expect(markup).toContain('tabindex="0"');
-    expect(markup).toContain('class="tool-card category-inspect success"');
-    expect(markup).not.toContain("selected");
-    expect(markup).toContain('aria-pressed="true"');
-    expect(markup).not.toContain('aria-expanded=');
-    expect(markup).not.toContain("tool-batch-toggle");
+    expect(markup).toMatch(/class="tool-plaintext-row[^\"]*selected/);
+    expect(markup).toContain("read · one");
+    expect(markup).not.toContain('open="true"');
   });
 
   it("keeps short batches at their natural height", () => {
@@ -59,8 +57,8 @@ describe("ToolBatch", () => {
       })),
     );
 
-    expect(markup).toContain('class="tool-batch-list"');
-    expect(markup).not.toContain('tabindex="0"');
+    expect(markup).toContain('class="tool-dropdown"');
+    expect(markup).not.toContain('class="tool-batch-list scrollable"');
   });
 
   it("marks only a live new call for the zero-height reveal", () => {
@@ -75,9 +73,8 @@ describe("ToolBatch", () => {
       })),
     );
 
-    expect(markup.match(/class="timeline-tool"/g)).toHaveLength(1);
-    expect(markup).toContain('class="timeline-tool entering"');
-    expect(markup.match(/class="tool-card-reveal"/g)).toHaveLength(2);
+    expect(markup).toMatch(/class="tool-plaintext-row[^\"]*entering/);
+    expect(markup).toContain('class="tool-plaintext-row  "');
   });
 
   it("detects whether the scroll position is close enough to follow the latest tool", () => {
