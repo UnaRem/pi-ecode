@@ -77,6 +77,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
     tokens: null,
     contextWindow: null,
     percent: null,
+    canCompact: false,
     isCompacting: false,
     isEstimated: false,
     compactionMethod: null,

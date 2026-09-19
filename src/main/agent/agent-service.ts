@@ -410,6 +410,7 @@ export class AgentService {
     if (this.compactOperation) return this.compactOperation;
     const session = this.requireRuntime().session;
     if (session.isStreaming) return Promise.reject(new Error("Stop the active agent run before compacting context."));
+    if (!this.canCompact(session)) return Promise.resolve();
     const usage = session.getContextUsage();
     this.compactionStatus = {
       status: "running",
@@ -772,6 +773,10 @@ export class AgentService {
     return this.nativeCompaction.supports(session.model) ? "native" : "summary";
   }
 
+  private canCompact(session: AgentSession): boolean {
+    return session.sessionManager.getBranch().at(-1)?.type !== "compaction";
+  }
+
   private contextState(session: AgentSession, usage = session.getContextUsage()): import("../../shared/contracts.js").ContextState {
     const contextWindow = usage?.contextWindow ?? session.model?.contextWindow ?? null;
     if (usage?.tokens !== null && usage?.tokens !== undefined) this.contextEstimate = null;
@@ -780,6 +785,7 @@ export class AgentService {
       tokens,
       contextWindow,
       percent: usage?.percent ?? (tokens !== null && contextWindow ? tokens / contextWindow * 100 : null),
+      canCompact: this.canCompact(session),
       isCompacting: this.compactionStatus.status === "running" || session.isCompacting,
       isEstimated: usage?.tokens == null && tokens !== null,
       compactionMethod: this.compactionStatus.status === "running"

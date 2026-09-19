@@ -47,6 +47,31 @@ describe("AgentService prompt lifecycle", () => {
     await expect(service.deleteSession("C:/outside.jsonl")).rejects.toThrow("active project");
   });
 
+  it("does not compact a branch twice before a new conversation entry", async () => {
+    let branch = [{ type: "compaction" }];
+    const compact = vi.fn(async () => undefined);
+    const session = {
+      isStreaming: false,
+      isCompacting: false,
+      model: null,
+      compact,
+      getContextUsage: () => undefined,
+      sessionManager: { getBranch: () => branch },
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+    const contextState = (service as unknown as {
+      contextState: (activeSession: AgentSession) => { canCompact: boolean };
+    }).contextState.bind(service);
+
+    expect(contextState(session).canCompact).toBe(false);
+    await service.compact();
+    expect(compact).not.toHaveBeenCalled();
+
+    branch = [{ type: "message" }];
+    expect(contextState(session).canCompact).toBe(true);
+  });
+
   it("persists explicit model selections as the default for new sessions", async () => {
     const model = { provider: "provider", id: "last-selected" };
     const session = {
@@ -173,6 +198,7 @@ describe("AgentService prompt lifecycle", () => {
       model: null,
       isCompacting: false,
       getContextUsage: () => undefined,
+      sessionManager: { getBranch: () => [] },
     } as unknown as AgentSession;
     const service = new AgentService();
     const events: AgentEvent[] = [];

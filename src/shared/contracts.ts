@@ -160,6 +160,7 @@ export interface ContextState {
   tokens: number | null;
   contextWindow: number | null;
   percent: number | null;
+  canCompact: boolean;
   isCompacting: boolean;
   isEstimated: boolean;
   compactionMethod: CompactionMethod | null;

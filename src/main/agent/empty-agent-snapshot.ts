@@ -52,6 +52,7 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
     tokens: null,
     contextWindow: null,
     percent: null,
+    canCompact: false,
     isCompacting: false,
     isEstimated: false,
     compactionMethod: null,
