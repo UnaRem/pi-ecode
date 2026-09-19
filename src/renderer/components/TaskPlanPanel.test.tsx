@@ -57,6 +57,7 @@ describe("TaskPlanPanel", () => {
 
     expect(workingMarkup).toContain('class="sidebar-task-work-status working"');
     expect(workingMarkup).toContain('aria-label="Working"');
+    expect(workingMarkup.indexOf("sidebar-task-work-status")).toBeLessThan(workingMarkup.indexOf("sidebar-task-section"));
     expect(idleMarkup).toContain('class="sidebar-task-work-status idle"');
     expect(idleMarkup).toContain('aria-label="Idle"');
     for (const status of ["idle", "working"]) {
@@ -64,6 +65,7 @@ describe("TaskPlanPanel", () => {
     }
 
     const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
+    expect(stylesheet).toContain("width: 196px; height: 196px; flex: 0 0 196px;");
     expect(stylesheet).toContain("animation: task-status-frame 1950ms steps(1, end) infinite;");
     expect(stylesheet).toContain("animation: task-status-frame 660ms steps(1, end) infinite;");
     expect(stylesheet).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.sidebar-task-status-frame \{ animation: none !important;/u);

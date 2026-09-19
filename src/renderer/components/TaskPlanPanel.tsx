@@ -51,13 +51,13 @@ export function TaskPlanPresence({ plan, active }: { plan: TaskPlan | null; acti
   if (!visiblePlan) return null;
 
   return (
-    <section className={isLeaving ? "sidebar-task-section leaving" : "sidebar-task-section"} onAnimationEnd={finishLeaving}>
-      <div className="sidebar-task-heading">
+    <>
+      <TaskWorkStatus active={active} />
+      <section className={isLeaving ? "sidebar-task-section leaving" : "sidebar-task-section"} onAnimationEnd={finishLeaving}>
         <div className="sidebar-label">{t("task.section")}</div>
-        <TaskWorkStatus active={active} />
-      </div>
-      <TaskPlanPanel plan={visiblePlan} active={active} />
-    </section>
+        <TaskPlanPanel plan={visiblePlan} active={active} />
+      </section>
+    </>
   );
 }
 
