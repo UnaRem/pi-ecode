@@ -114,6 +114,15 @@ export interface ToolActivity {
   outputTruncated?: boolean;
   outputLength?: number;
   status: "running" | "success" | "error";
+  startedAt?: number;
+  endedAt?: number;
+}
+
+export interface ThinkingActivity {
+  id: string;
+  text: string;
+  status: "running" | "completed";
+  redacted?: boolean;
 }
 
 export type TaskPlanItemStatus = "pending" | "in_progress" | "completed";
@@ -132,6 +141,7 @@ export interface TaskPlan {
 
 export type ConversationItem =
   | { kind: "message"; id: string; message: ConversationMessage }
+  | { kind: "thinking"; id: string; thinking: ThinkingActivity }
   | { kind: "tool"; id: string; tool: ToolActivity };
 
 export type CompactionReason = "manual" | "threshold" | "overflow";

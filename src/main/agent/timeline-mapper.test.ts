@@ -10,6 +10,7 @@ describe("mapTimeline", () => {
       {
         role: "assistant",
         content: [
+          { type: "thinking", thinking: "I should inspect the source first." },
           { type: "text", text: "I will read the file." },
           { type: "toolCall", id: "call-1", name: "read", arguments: { path: "app.ts" } },
         ],
@@ -33,10 +34,20 @@ describe("mapTimeline", () => {
     ] as unknown as AgentMessage[];
 
     const timeline = mapTimeline(messages);
-    expect(timeline.map((item) => item.kind)).toEqual(["message", "message", "tool", "message"]);
-    expect(timeline[2]).toMatchObject({
+    expect(timeline.map((item) => item.kind)).toEqual(["message", "thinking", "message", "tool", "message"]);
+    expect(timeline[1]).toMatchObject({
+      kind: "thinking",
+      thinking: { text: "I should inspect the source first.", status: "completed" },
+    });
+    expect(timeline[3]).toMatchObject({
       kind: "tool",
-      tool: { id: "call-1", input: expect.stringContaining("app.ts"), output: "const value = 1;" },
+      tool: {
+        id: "call-1",
+        input: expect.stringContaining("app.ts"),
+        output: "const value = 1;",
+        startedAt: 2,
+        endedAt: 3,
+      },
     });
   });
 

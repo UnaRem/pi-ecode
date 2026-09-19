@@ -15,6 +15,7 @@ export function groupConsecutiveTools(timeline: ConversationItem[]): Conversatio
       groups.push({ kind: "message", id: item.id, item });
       continue;
     }
+    if (item.kind === "thinking") continue;
     const previous = groups.at(-1);
     if (previous?.kind === "tools") {
       previous.tools.push(item.tool);
