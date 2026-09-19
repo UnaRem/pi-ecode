@@ -36,7 +36,7 @@ import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { ConfirmationService } from "./confirmation.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
-import { conversationImagePayload, mapTimeline, messageItem, recentMessageWindow, thinkingItem, toolItem } from "./timeline-mapper.js";
+import { conversationImagePayload, mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
@@ -66,9 +66,6 @@ export class AgentService {
   private liveAssistantId: string | undefined;
   private liveAssistantText = "";
   private liveAssistantSequence = 0;
-  private liveThinkingId: string | undefined;
-  private liveThinkingText = "";
-  private liveThinkingSequence = 0;
   private readonly pendingStreamItems = new Map<string, ConversationItem>();
   private pendingStreamContext: AgentSession | undefined;
   private streamTimer: ReturnType<typeof setTimeout> | undefined;
@@ -593,8 +590,6 @@ export class AgentService {
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";
-    this.liveThinkingId = undefined;
-    this.liveThinkingText = "";
     const fallbackUi = session.extensionRunner.getUIContext();
     await session.bindExtensions({ mode: "rpc", uiContext: this.extensionUi.createContext(fallbackUi) });
     this.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session, event));
@@ -605,8 +600,6 @@ export class AgentService {
       case "agent_start":
         this.liveAssistantId = undefined;
         this.liveAssistantText = "";
-        this.liveThinkingId = undefined;
-        this.liveThinkingText = "";
         this.validation.invalidate();
         this.candidate.invalidate();
         this.emit({ type: "state", patch: { isStreaming: true, error: null, canContinue: false } });
@@ -645,8 +638,6 @@ export class AgentService {
         if (event.message.role === "assistant") {
           this.liveAssistantId = undefined;
           this.liveAssistantText = "";
-          this.liveThinkingId = undefined;
-          this.liveThinkingText = "";
         }
         break;
       case "message_update": {
@@ -665,30 +656,6 @@ export class AgentService {
           };
           this.pendingStreamContext = session;
           this.publishStreamItem(messageItem(message));
-        } else if (update.type === "thinking_start") {
-          this.liveThinkingId = `live-thinking-${session.sessionId}-${this.liveThinkingSequence++}`;
-          this.liveThinkingText = "";
-          this.emit({ type: "timeline-upsert", item: thinkingItem({ id: this.liveThinkingId, text: "", status: "running" }) });
-        } else if (update.type === "thinking_delta") {
-          if (!this.liveThinkingId) {
-            this.liveThinkingId = `live-thinking-${session.sessionId}-${this.liveThinkingSequence++}`;
-            this.liveThinkingText = "";
-          }
-          this.liveThinkingText += update.delta;
-          this.pendingStreamContext = session;
-          this.publishStreamItem(thinkingItem({ id: this.liveThinkingId, text: this.liveThinkingText, status: "running" }));
-        } else if (update.type === "thinking_end") {
-          this.flushStreamItems();
-          if (this.liveThinkingId) {
-            this.liveThinkingText = update.content || this.liveThinkingText;
-            this.emit({
-              type: "timeline-upsert",
-              item: thinkingItem({ id: this.liveThinkingId, text: this.liveThinkingText, status: "completed" }),
-            });
-          }
-          this.liveThinkingId = undefined;
-          this.liveThinkingText = "";
-          this.emitContext(session);
         } else {
           this.emitContext(session);
         }
@@ -722,8 +689,6 @@ export class AgentService {
         this.emit({ type: "timeline-upsert", item: toolItem(tool) });
         this.liveAssistantId = undefined;
         this.liveAssistantText = "";
-        this.liveThinkingId = undefined;
-        this.liveThinkingText = "";
         break;
       }
       case "tool_execution_update": {

@@ -6,7 +6,6 @@ import { useScrollFollow } from "../hooks/use-scroll-follow";
 
 export type ConversationRenderGroup =
   | { kind: "message"; id: string; item: Extract<ConversationItem, { kind: "message" }> }
-  | { kind: "thinking"; id: string; thinking: Extract<ConversationItem, { kind: "thinking" }>["thinking"] }
   | { kind: "tools"; id: string; tools: ToolActivity[] };
 
 export function groupConsecutiveTools(timeline: ConversationItem[]): ConversationRenderGroup[] {
@@ -14,10 +13,6 @@ export function groupConsecutiveTools(timeline: ConversationItem[]): Conversatio
   for (const item of timeline) {
     if (item.kind === "message") {
       groups.push({ kind: "message", id: item.id, item });
-      continue;
-    }
-    if (item.kind === "thinking") {
-      groups.push({ kind: "thinking", id: item.id, thinking: item.thinking });
       continue;
     }
     const previous = groups.at(-1);

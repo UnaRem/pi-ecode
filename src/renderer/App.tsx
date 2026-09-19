@@ -102,17 +102,9 @@ export default function App() {
           projectName={state.projectName}
           projectPath={state.projectPath}
           sessionTitle={sessionTitle}
-          models={state.models}
-          selectedModel={state.selectedModel}
-          thinkingLevel={state.thinkingLevel}
-          thinkingLevels={state.thinkingLevels}
-          disabled={state.isStreaming}
-          validation={state.validation}
           policy={state.policy}
           onOpenSidebar={() => setSidebarOpen(true)}
           onRenameSession={(title) => void actions.renameSession(title)}
-          onSetModel={(value) => void actions.setModel(value)}
-          onSetThinking={(level) => void actions.setThinkingLevel(level)}
         />
         <Conversation
           timeline={state.timeline}
@@ -136,6 +128,10 @@ export default function App() {
           pendingCount={state.pendingCount}
           modelReady={Boolean(state.selectedModel)}
           supportsImages={selectedModel?.supportsImages ?? false}
+          models={state.models}
+          selectedModel={state.selectedModel}
+          thinkingLevel={state.thinkingLevel}
+          thinkingLevels={state.thinkingLevels}
           restoredText={state.restoredEditorText}
           restoredImages={state.restoredEditorImages}
           restoreVersion={state.editorRestoreVersion}
@@ -151,6 +147,8 @@ export default function App() {
           onStop={() => void actions.stop()}
           onUndo={() => void actions.undo()}
           onRedo={() => void actions.redo()}
+          onSetModel={(value) => void actions.setModel(value)}
+          onSetThinking={(level) => void actions.setThinkingLevel(level)}
         />
           </>
         )}
@@ -161,6 +159,8 @@ export default function App() {
         validation={state.validation}
         review={state.review}
         candidate={state.candidate}
+        projectPath={state.projectPath}
+        isStreaming={state.isStreaming}
         onSelectTool={workspaceTools.selectTool}
         onRunValidation={() => void actions.runValidation()}
         onStopValidation={() => void actions.stopValidation()}

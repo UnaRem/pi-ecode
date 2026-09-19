@@ -3,6 +3,7 @@ import { ArrowUp, Paperclip, Redo2, Square, Undo2 } from "lucide-react";
 import type { ImageAttachment, PastedTextAttachment } from "@shared/contracts";
 import type { ComposerProps } from "./Composer";
 import { CompactionStatusPanel } from "./CompactionStatusPanel";
+import { ComposerModelControls } from "./ComposerModelControls";
 import { ExtensionQuestionPanel } from "./ExtensionQuestionPanel";
 import { ImageGallery } from "./ImageGallery";
 import { PastedTextAttachments } from "./PastedTextAttachments";
@@ -73,6 +74,15 @@ export function ComposerView(view: ComposerViewProps) {
             <button className={`context-button ${props.context.isCompacting ? "cancel" : ""}`} onClick={props.context.isCompacting ? props.onCancelCompact : props.onCompact} disabled={Boolean(props.extensionUi) || (!props.context.isCompacting && (props.isStreaming || !props.context.contextWindow))} title={props.context.isCompacting ? t("composer.cancelCompact") : t("composer.compact")}>
               {props.context.isCompacting ? t("composer.cancelCompact") : view.contextLabel}
             </button>
+            <ComposerModelControls
+              models={props.models}
+              selectedModel={props.selectedModel}
+              thinkingLevel={props.thinkingLevel}
+              thinkingLevels={props.thinkingLevels}
+              disabled={props.isStreaming || Boolean(props.extensionUi)}
+              onSetModel={props.onSetModel}
+              onSetThinking={props.onSetThinking}
+            />
           </div>
           <span>{props.extensionUi ? t("composer.waitingAnswer") : props.isStreaming ? (props.pendingCount ? t("composer.steeringCount", { count: props.pendingCount }) : t("composer.steerHint")) : t("composer.sendHint")}</span>
           <div className="composer-actions">

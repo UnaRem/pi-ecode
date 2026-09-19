@@ -197,44 +197,6 @@ describe("AgentService prompt lifecycle", () => {
     expect(events.filter((event) => event.type === "context")).toHaveLength(1);
   });
 
-  it("publishes live thinking and folds it into a completed timeline item", () => {
-    const session = {
-      sessionId: "session-1",
-      model: null,
-      isCompacting: false,
-      getContextUsage: () => undefined,
-    } as unknown as AgentSession;
-    const service = new AgentService();
-    const events: AgentEvent[] = [];
-    service.subscribe((event) => events.push(event));
-    const handleEvent = (service as unknown as {
-      handleSessionEvent: (activeSession: AgentSession, event: AgentSessionEvent) => void;
-    }).handleSessionEvent.bind(service);
-
-    handleEvent(session, {
-      type: "message_update",
-      message: { role: "assistant", content: [] },
-      assistantMessageEvent: { type: "thinking_start", contentIndex: 0 },
-    } as unknown as AgentSessionEvent);
-    for (const delta of ["Inspect ", "the source"]) {
-      handleEvent(session, {
-        type: "message_update",
-        message: { role: "assistant", content: [] },
-        assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta },
-      } as unknown as AgentSessionEvent);
-    }
-    handleEvent(session, {
-      type: "message_update",
-      message: { role: "assistant", content: [] },
-      assistantMessageEvent: { type: "thinking_end", contentIndex: 0, content: "Inspect the source" },
-    } as unknown as AgentSessionEvent);
-
-    const thinkingEvents = events.filter((event) => event.type === "timeline-upsert" && event.item.kind === "thinking");
-    expect(thinkingEvents.at(-1)).toMatchObject({
-      item: { thinking: { text: "Inspect the source", status: "completed" } },
-    });
-  });
-
   it("records tool execution start and end times", () => {
     const now = vi.spyOn(Date, "now").mockReturnValueOnce(1_000).mockReturnValueOnce(4_500);
     const session = { sessionId: "session-1" } as unknown as AgentSession;

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from "react";
-import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment, PastedTextAttachment, WorkspaceHistoryState } from "@shared/contracts";
+import type { ContextState, ExtensionUiRequest, ExtensionUiResponse, ImageAttachment, ModelOption, PastedTextAttachment, ThinkingLevel, WorkspaceHistoryState } from "@shared/contracts";
 import { createPastedTextAttachment, parsePastedTexts, serializePastedTexts, shouldAttachPastedText } from "@shared/pasted-text";
 import { ComposerView, MAX_ATTACHMENTS } from "./ComposerView";
 import { useI18n, type Translate } from "../i18n/i18n";
@@ -12,6 +12,10 @@ export interface ComposerProps {
   pendingCount: number;
   modelReady: boolean;
   supportsImages: boolean;
+  models: ModelOption[];
+  selectedModel: string | null;
+  thinkingLevel: ThinkingLevel;
+  thinkingLevels: ThinkingLevel[];
   restoredText: string | null;
   restoredImages: ImageAttachment[];
   restoreVersion: number;
@@ -27,6 +31,8 @@ export interface ComposerProps {
   onRedo: () => void;
   onCompact: () => void;
   onCancelCompact: () => void;
+  onSetModel: (value: string) => void;
+  onSetThinking: (value: ThinkingLevel) => void;
 }
 
 function readImage(file: File, t: Translate): Promise<ImageAttachment> {

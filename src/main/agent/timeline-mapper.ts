@@ -1,13 +1,11 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ConversationImagePayload, ConversationItem, ConversationMessage, ImageAttachment, ThinkingActivity, ToolActivity } from "../../shared/contracts.js";
+import type { ConversationImagePayload, ConversationItem, ConversationMessage, ImageAttachment, ToolActivity } from "../../shared/contracts.js";
 import { parsePastedTexts } from "../../shared/pasted-text.js";
 import { formatToolInput, textFromContent, toolOutputView, toolTitle } from "./message-mapper.js";
 
 interface ContentBlock {
   type?: string;
   text?: string;
-  thinking?: string;
-  redacted?: boolean;
   data?: string;
   mimeType?: string;
   id?: string;
@@ -52,10 +50,6 @@ export function conversationImagePayload(messages: AgentMessage[], sourceId: str
 
 export function messageItem(message: ConversationMessage): ConversationItem {
   return { kind: "message", id: message.id, message };
-}
-
-export function thinkingItem(thinking: ThinkingActivity): ConversationItem {
-  return { kind: "thinking", id: thinking.id, thinking };
 }
 
 export function toolItem(tool: ToolActivity): ConversationItem {
@@ -106,7 +100,6 @@ export function mapTimeline(messages: AgentMessage[], startIndex = 0): Conversat
     }
     if (message.role === "assistant") {
       let textPart = 0;
-      let thinkingPart = 0;
       for (const block of blocks(message.content)) {
         if (block.type === "text" && block.text) {
           timeline.push(messageItem({
@@ -115,14 +108,6 @@ export function mapTimeline(messages: AgentMessage[], startIndex = 0): Conversat
             text: block.text,
             timestamp,
             ...(message.stopReason === "error" ? { isError: true } : {}),
-          }));
-        } else if (block.type === "thinking" && (block.thinking || block.redacted)) {
-          const id = `thinking-${timestamp}-${messageIndex}-${thinkingPart++}`;
-          timeline.push(thinkingItem({
-            id,
-            text: block.redacted ? "" : block.thinking ?? "",
-            status: "completed",
-            ...(block.redacted ? { redacted: true } : {}),
           }));
         } else if (block.type === "toolCall" && block.id && block.name) {
           const tool: ToolActivity = {

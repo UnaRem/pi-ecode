@@ -9,6 +9,13 @@
 .composer-footer { min-height: 34px; }
 .composer-footer > span { color: var(--color-text-faint); }
 .composer-tools, .composer-actions { gap: var(--space-1); }
+.composer-tools { min-width: 0; flex-wrap: wrap; }
+.composer-model-controls { min-width: 0; display: inline-flex; align-items: center; gap: 2px; border-left: 1px solid var(--color-border); margin-left: 3px; padding-left: 3px; }
+.composer-model-controls .select-trigger { height: 28px; padding-inline: 7px; font-size: 10.5px; }
+.composer-model-controls .provider-select .select-trigger { max-width: 92px; }
+.composer-model-controls .model-select .select-trigger { max-width: 128px; }
+.composer-model-controls .thinking-select .select-trigger { min-width: 58px; max-width: 76px; }
+.composer-model-controls .select-menu { top: auto; right: auto; bottom: calc(100% + 6px); left: 0; }
 .composer-tool-button, .context-button { color: var(--color-text-muted); border-radius: var(--radius-md); }
 .composer-tool-button { width: 30px; height: 30px; }
 .composer-tool-button:hover, .context-button:hover { color: var(--color-accent); background: var(--color-accent-soft); }
@@ -45,4 +52,7 @@
 @media (max-width: 900px) {
   .composer-area { padding-inline: var(--space-3); }
   .composer { min-height: 100px; }
+  .composer-model-controls .thinking-select { display: inline-flex; }
+  .composer-model-controls .provider-select .select-trigger { max-width: 72px; }
+  .composer-model-controls .model-select .select-trigger { max-width: 100px; }
 }

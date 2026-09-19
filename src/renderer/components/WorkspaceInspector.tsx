@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { CandidateState, ChangeReview, ToolActivity, ValidationState, ValidationStep } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
+import { GitPushButton } from "./GitPushButton";
 
 interface WorkspaceInspectorProps {
   tools: ToolActivity[];
@@ -10,6 +11,8 @@ interface WorkspaceInspectorProps {
   validation: ValidationState;
   review: ChangeReview;
   candidate: CandidateState;
+  projectPath: string;
+  isStreaming: boolean;
   onSelectTool: (toolId: string) => void;
   onRunValidation: () => void;
   onStopValidation: () => void;
@@ -69,19 +72,20 @@ function OutputPanel(props: Pick<WorkspaceInspectorProps, "tools" | "selectedToo
   );
 }
 
-function ValidationControls(props: Pick<WorkspaceInspectorProps, "validation" | "candidate" | "onRunValidation" | "onStopValidation" | "onPrepareCandidate" | "onActivateCandidate">) {
+function ValidationControls(props: Pick<WorkspaceInspectorProps, "validation" | "candidate" | "projectPath" | "isStreaming" | "onRunValidation" | "onStopValidation" | "onPrepareCandidate" | "onActivateCandidate">) {
   const { t } = useI18n();
   const running = props.validation.status === "running";
   return (
     <section className="inspector-section inspector-validation" tabIndex={-1}>
       <header>
-        <strong>{t("validation.title")}</strong>
+        <strong>{t("validation.piECodeTitle")}</strong>
         {running ? (
           <button onClick={props.onStopValidation}><Square size={10} fill="currentColor" />{t("validation.stop")}</button>
         ) : (
           <button onClick={props.onRunValidation} disabled={!props.validation.supported}><Play size={11} fill="currentColor" />{t("validation.run")}</button>
         )}
       </header>
+      <GitPushButton projectKey={props.projectPath} disabled={props.isStreaming} validationStatus={props.validation.status} />
       <div className="inspector-validation-steps">
         {props.validation.steps.map((step) => (
           <div key={step.id} className={step.status}><StepStatus step={step} /><span>{step.label}</span></div>
@@ -140,10 +144,10 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     <aside className="workspace-inspector" data-region="inspector" aria-label={t("tool.panelTitle")}>
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
         <button type="button" role="tab" aria-selected={tab === "tools"} onClick={() => setTab("tools")}>{t("tool.panelTitle")}</button>
-        <button type="button" role="tab" aria-selected={tab === "validation"} onClick={() => setTab("validation")}>{t("validation.title")}</button>
+        {props.validation.isSelfProject && <button type="button" role="tab" aria-selected={tab === "validation"} onClick={() => setTab("validation")}>{t("validation.tab")}</button>}
       </div>
       <div className="inspector-scroll">
-        {tab === "tools" ? <>
+        {tab === "tools" || !props.validation.isSelfProject ? <>
           <ToolQueue {...props} onSelect={props.onSelectTool} />
           <OutputPanel {...props} />
           <ChangeFiles {...props} />

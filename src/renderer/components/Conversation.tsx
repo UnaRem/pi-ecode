@@ -63,20 +63,6 @@ interface ConversationBodyProps extends ConversationProps {
   review?: ChangeReview | undefined;
 }
 
-function ThinkingBlock({ thinking }: { thinking: Extract<ConversationItem, { kind: "thinking" }>["thinking"] }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(thinking.status === "running");
-  useEffect(() => {
-    if (thinking.status === "completed") setOpen(false);
-  }, [thinking.status]);
-  return (
-    <details className={`thinking-block ${thinking.status}`} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary><span className="thinking-mark" />{t("conversation.thinking")}{thinking.status === "running" ? ` · ${t("conversation.statusWorking")}` : ""}</summary>
-      {thinking.redacted ? <p>{t("conversation.thinkingUnavailable")}</p> : <div className="thinking-content">{thinking.text}</div>}
-    </details>
-  );
-}
-
 function ChangedFilesSummary({ review }: { review: ChangeReview }) {
   const { t } = useI18n();
   const files = [...review.files]
@@ -152,13 +138,13 @@ function ConversationBody(props: ConversationBodyProps) {
                 {hasLiveAssistant && group.id === lastItem?.id && <span className="stream-caret" aria-label={t("conversation.generating")} />}
               </div>
             </article>
-          ) : group.kind === "tools" ? <ToolBatch
+          ) : <ToolBatch
             key={group.id}
             tools={group.tools}
             animateNewTools={props.isStreaming && groupIndex === renderGroups.length - 1}
             selectedToolId={props.selectedToolId}
             onSelectTool={props.onSelectTool}
-          /> : <ThinkingBlock key={group.id} thinking={group.thinking} />)}
+          />)}
           {!props.isStreaming && props.review?.available && lastItem?.kind === "message" && lastItem.message.role === "assistant" && <ChangedFilesSummary review={props.review} />}
           {props.isStreaming && !hasLiveAssistant && (
             <article className="message assistant waiting">

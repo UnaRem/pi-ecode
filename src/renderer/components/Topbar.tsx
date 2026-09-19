@@ -1,38 +1,20 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { FolderClosed, PanelLeftOpen, Pencil } from "lucide-react";
-import type { ModelOption, RuntimePolicy, ThinkingLevel, ValidationState } from "@shared/contracts";
+import type { RuntimePolicy } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
-import { GitPushButton } from "./GitPushButton";
-import { TopbarSelect, type TopbarSelectOption } from "./TopbarSelect";
 
 interface TopbarProps {
   sidebarOpen: boolean;
   projectName: string;
   projectPath: string;
   sessionTitle: string | null;
-  models: ModelOption[];
-  selectedModel: string | null;
-  thinkingLevel: ThinkingLevel;
-  thinkingLevels: ThinkingLevel[];
-  disabled: boolean;
-  validation: ValidationState;
   policy: RuntimePolicy;
   onOpenSidebar: () => void;
   onRenameSession: (title: string) => void;
-  onSetModel: (value: string) => void;
-  onSetThinking: (value: ThinkingLevel) => void;
 }
 
 export function normalizeSessionTitle(title: string): string {
   return title.replace(/\s+/gu, " ").trim().slice(0, 80);
-}
-
-export function thinkingSelectOptions(levels: ThinkingLevel[]): TopbarSelectOption[] {
-  return levels.map((level) => ({ value: level, label: level }));
-}
-
-export function showProjectReleaseControls(validation: Pick<ValidationState, "isSelfProject">): boolean {
-  return validation.isSelfProject;
 }
 
 function SessionTitleEditor(props: { title: string; onRename: (title: string) => void }) {
@@ -75,17 +57,6 @@ function SessionTitleEditor(props: { title: string; onRename: (title: string) =>
 
 export function Topbar(props: TopbarProps) {
   const { t } = useI18n();
-  const modelSeparator = props.selectedModel?.indexOf("/") ?? -1;
-  const selectedProvider = modelSeparator > 0 ? props.selectedModel?.slice(0, modelSeparator) ?? "" : props.models[0]?.provider ?? "";
-  const providers = [...new Set(props.models.map((model) => model.provider))];
-  const providerModels = props.models.filter((model) => model.provider === selectedProvider);
-  const providerOptions = providers.map((provider) => ({ value: provider, label: provider }));
-  const modelOptions = providerModels.map((model) => ({ value: `${model.provider}/${model.id}`, label: model.name }));
-  const thinkingOptions = thinkingSelectOptions(props.thinkingLevels);
-  const selectProvider = (provider: string): void => {
-    const model = props.models.find((option) => option.provider === provider);
-    if (model) props.onSetModel(`${model.provider}/${model.id}`);
-  };
   return (
     <header className="topbar" data-region="topbar">
       <div className="topbar-title">
@@ -107,35 +78,7 @@ export function Topbar(props: TopbarProps) {
           {props.policy.contextFiles.length > 0 ? t("topbar.contextLoaded") : t("topbar.noPrompt")}
         </span>
       </div>
-      <div className="topbar-controls">
-        {showProjectReleaseControls(props.validation) && <GitPushButton projectKey={props.projectPath} disabled={props.disabled} validationStatus={props.validation.status} />}
-        <TopbarSelect
-          className="provider-select"
-          label={t("topbar.provider")}
-          value={selectedProvider}
-          options={providerOptions}
-          disabled={props.disabled || providerOptions.length === 0}
-          placeholder={t("topbar.noModel")}
-          onChange={selectProvider}
-        />
-        <TopbarSelect
-          className="model-select"
-          label={t("topbar.model")}
-          value={props.selectedModel ?? ""}
-          options={modelOptions}
-          disabled={props.disabled || modelOptions.length === 0}
-          placeholder={t("topbar.noModel")}
-          onChange={props.onSetModel}
-        />
-        <TopbarSelect
-          className="thinking-select"
-          label={t("topbar.thinking")}
-          value={props.thinkingLevel}
-          options={thinkingOptions}
-          disabled={props.disabled || thinkingOptions.length <= 1}
-          onChange={(value) => props.onSetThinking(value as ThinkingLevel)}
-        />
-      </div>
+
     </header>
   );
 }

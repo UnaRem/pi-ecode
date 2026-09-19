@@ -19,7 +19,7 @@ const candidate: CandidateState = { status: "idle", candidateId: null, candidate
 describe("WorkspaceInspector", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("combines current-turn tools, output, validation and changed files", () => {
+  it("keeps validation hidden for non-PiECode projects", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const tool = { id: "bash-1", name: "bash", title: "npm test", input: "npm test", output: "203 passed", status: "success" as const };
     const markup = renderToStaticMarkup(
@@ -30,6 +30,8 @@ describe("WorkspaceInspector", () => {
           validation={validation}
           review={review}
           candidate={candidate}
+          projectPath="C:/workspace"
+          isStreaming={false}
           onSelectTool={vi.fn()}
           onRunValidation={vi.fn()}
           onStopValidation={vi.fn()}
@@ -42,7 +44,32 @@ describe("WorkspaceInspector", () => {
     expect(markup).toContain("npm test");
     expect(markup).toContain("203 passed");
     expect(markup).toContain("src/App.tsx");
-    expect(markup).toContain("Verification");
+    expect(markup).not.toContain('role="tab" aria-selected="false">Verification');
+    expect(markup).not.toContain("PiECode project verification");
     expect(markup).not.toContain("Run checks");
+  });
+
+  it("offers the verification tab only for the PiECode source project", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <WorkspaceInspector
+          tools={[]}
+          selectedTool={null}
+          validation={{ ...validation, isSelfProject: true }}
+          review={review}
+          candidate={candidate}
+          projectPath="C:/Files/Projects/pi-ecode"
+          isStreaming={false}
+          onSelectTool={vi.fn()}
+          onRunValidation={vi.fn()}
+          onStopValidation={vi.fn()}
+          onRejectFile={vi.fn()}
+          onPrepareCandidate={vi.fn()}
+          onActivateCandidate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(markup).toContain('role="tab" aria-selected="false">Verification');
   });
 });

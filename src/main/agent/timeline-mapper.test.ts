@@ -34,12 +34,8 @@ describe("mapTimeline", () => {
     ] as unknown as AgentMessage[];
 
     const timeline = mapTimeline(messages);
-    expect(timeline.map((item) => item.kind)).toEqual(["message", "thinking", "message", "tool", "message"]);
-    expect(timeline[1]).toMatchObject({
-      kind: "thinking",
-      thinking: { text: "I should inspect the source first.", status: "completed" },
-    });
-    expect(timeline[3]).toMatchObject({
+    expect(timeline.map((item) => item.kind)).toEqual(["message", "message", "tool", "message"]);
+    expect(timeline[2]).toMatchObject({
       kind: "tool",
       tool: {
         id: "call-1",
