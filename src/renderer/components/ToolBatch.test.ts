@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
@@ -76,6 +77,12 @@ describe("ToolBatch", () => {
 
     expect(markup).toMatch(/class="tool-plaintext-row[^\"]*entering/);
     expect(markup).toContain('class="tool-plaintext-row  "');
+  });
+
+  it("connects the entering class to the tool row animation", () => {
+    const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
+    expect(stylesheet).toContain(".tool-plaintext-row.entering");
+    expect(stylesheet).not.toContain(".timeline-tool.entering");
   });
 
   it("detects whether the scroll position is close enough to follow the latest tool", () => {

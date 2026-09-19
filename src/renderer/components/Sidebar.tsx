@@ -1,4 +1,3 @@
-import { useState, type AnimationEvent } from "react";
 import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings, Trash2 } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
 import { TaskPlanPresence } from "./TaskPlanPanel";
@@ -32,12 +31,8 @@ function relativeTime(timestamp: number, locale: string): string {
 
 export function Sidebar(props: SidebarProps) {
   const { locale, t } = useI18n();
-  const [isClosing, setIsClosing] = useState(false);
-  const finishClosing = (event: AnimationEvent<HTMLElement>): void => {
-    if (isClosing && event.currentTarget === event.target) props.onCollapse();
-  };
   return (
-    <aside className={`sidebar ${isClosing ? "closing" : ""}`} data-region="sidebar" onAnimationEnd={finishClosing}>
+    <aside className="sidebar" data-region="sidebar">
       <div className="sidebar-project">
         <button className="project-button" onClick={props.onChooseProject} title={`${t("sidebar.chooseProject")}: ${props.projectPath}`}>
           <span className="project-mark"><img src={props.iconSrc} alt="" /></span>
@@ -47,7 +42,7 @@ export function Sidebar(props: SidebarProps) {
           </span>
           <FolderOpen size={15} aria-hidden="true" />
         </button>
-        <button className="icon-button sidebar-collapse" onClick={() => setIsClosing(true)} disabled={isClosing} aria-label={t("sidebar.collapse")}>
+        <button className="icon-button sidebar-collapse" onClick={props.onCollapse} aria-label={t("sidebar.collapse")}>
           <PanelLeftClose size={17} />
         </button>
       </div>
