@@ -1,11 +1,13 @@
 import { Check, Circle, X } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type AnimationEvent, type FormEvent, type KeyboardEvent } from "react";
 import type { ExtensionUiRequest, ExtensionUiResponse } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 
 interface ExtensionQuestionPanelProps {
   request: ExtensionUiRequest;
+  leaving?: boolean;
   onRespond: (response: ExtensionUiResponse) => void;
+  onLeaveEnd?: () => void;
 }
 
 export function multiSelectResponse(selected: string[], customAnswer: string): string[] | string {
@@ -13,7 +15,7 @@ export function multiSelectResponse(selected: string[], customAnswer: string): s
   return custom ? custom : selected;
 }
 
-export function ExtensionQuestionPanel({ request, onRespond }: ExtensionQuestionPanelProps) {
+export function ExtensionQuestionPanel({ request, leaving = false, onRespond, onLeaveEnd }: ExtensionQuestionPanelProps) {
   const { t } = useI18n();
   const [text, setText] = useState(request.prefill ?? "");
   const [selected, setSelected] = useState<string[]>([]);
@@ -52,7 +54,16 @@ export function ExtensionQuestionPanel({ request, onRespond }: ExtensionQuestion
   };
 
   return (
-    <section className="extension-question" role="dialog" aria-label={t("question.dialog")} onKeyDown={onKeyDown}>
+    <section
+      className={`extension-question transient-panel ${leaving ? "leaving" : ""}`}
+      role="dialog"
+      aria-label={t("question.dialog")}
+      inert={leaving ? true : undefined}
+      onKeyDown={onKeyDown}
+      onAnimationEnd={(event: AnimationEvent<HTMLElement>) => {
+        if (leaving && event.animationName === "panel-leave") onLeaveEnd?.();
+      }}
+    >
       <header className="extension-question-header">
         <div>
           <span>{t("question.needsInput")}</span>

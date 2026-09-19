@@ -1,5 +1,5 @@
 import { Check, CircleAlert, LoaderCircle, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type AnimationEvent } from "react";
 import type { CompactionReason, CompactionStatus } from "@shared/contracts";
 import { useI18n, type Translate } from "../i18n/i18n";
 import type { MessageKey } from "../i18n/messages";
@@ -76,12 +76,14 @@ export function CompactionStatusPanel({ status, onCancel }: CompactionStatusPane
   const { t } = useI18n();
   const [messageIndex, setMessageIndex] = useState(0);
   const [visible, setVisible] = useState(status.status === "running");
+  const [leaving, setLeaving] = useState(false);
   const previousStatus = useRef(status.status);
 
   useEffect(() => {
     if (status.status === "idle") setVisible(false);
     if (status.status !== "running") return;
     setVisible(true);
+    setLeaving(false);
     setMessageIndex(0);
     const interval = window.setInterval(() => {
       setMessageIndex((current) => (current + 1) % ROTATING_MESSAGE_KEYS.length);
@@ -100,14 +102,15 @@ export function CompactionStatusPanel({ status, onCancel }: CompactionStatusPane
     }
 
     setVisible(true);
+    setLeaving(false);
     if (status.status === "completed") {
       const message = completionMessage(status, t);
       void window.piDesktop.notifyCompactionComplete(t("compaction.notificationTitle"), message);
-      const timeout = window.setTimeout(() => setVisible(false), 5_000);
+      const timeout = window.setTimeout(() => setLeaving(true), 5_000);
       return () => window.clearTimeout(timeout);
     }
     if (status.status === "cancelled") {
-      const timeout = window.setTimeout(() => setVisible(false), 3_000);
+      const timeout = window.setTimeout(() => setLeaving(true), 3_000);
       return () => window.clearTimeout(timeout);
     }
   }, [status.status]);
@@ -117,7 +120,15 @@ export function CompactionStatusPanel({ status, onCancel }: CompactionStatusPane
   const isRunning = status.status === "running";
 
   return (
-    <section className={`compaction-status-panel ${status.status}`} role="status" aria-live="polite">
+    <section
+      className={`compaction-status-panel transient-panel ${status.status} ${leaving ? "leaving" : ""}`}
+      role="status"
+      aria-live="polite"
+      inert={leaving ? true : undefined}
+      onAnimationEnd={(event: AnimationEvent<HTMLElement>) => {
+        if (leaving && event.animationName === "panel-leave") setVisible(false);
+      }}
+    >
       <div className="compaction-status-icon" aria-hidden="true">
         <StatusIcon status={status.status} />
       </div>
@@ -132,7 +143,7 @@ export function CompactionStatusPanel({ status, onCancel }: CompactionStatusPane
       {isRunning ? (
         <button onClick={onCancel}>{t("compaction.cancel")}</button>
       ) : (
-        <button className="icon-button" onClick={() => setVisible(false)} aria-label={t("compaction.dismiss")}>
+        <button className="icon-button" onClick={() => setLeaving(true)} aria-label={t("compaction.dismiss")}>
           <X size={14} />
         </button>
       )}

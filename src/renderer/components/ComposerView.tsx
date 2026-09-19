@@ -1,6 +1,6 @@
-import type { ChangeEventHandler, ClipboardEventHandler, KeyboardEventHandler, RefObject } from "react";
+import { useEffect, useState, type ChangeEventHandler, type ClipboardEventHandler, type KeyboardEventHandler, type RefObject } from "react";
 import { ArrowUp, Paperclip, Redo2, Square, Undo2 } from "lucide-react";
-import type { ImageAttachment, PastedTextAttachment } from "@shared/contracts";
+import type { ExtensionUiRequest, ExtensionUiResponse, ImageAttachment, PastedTextAttachment } from "@shared/contracts";
 import type { ComposerProps } from "./Composer";
 import { CompactionStatusPanel } from "./CompactionStatusPanel";
 import { ComposerModelControls } from "./ComposerModelControls";
@@ -33,13 +33,46 @@ interface ComposerViewProps {
 
 export const MAX_ATTACHMENTS = 8;
 
+function ExtensionQuestionPresence(props: {
+  request: ExtensionUiRequest | null;
+  onRespond: (response: ExtensionUiResponse) => void;
+}) {
+  const [visibleRequest, setVisibleRequest] = useState(props.request);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (props.request) {
+      setVisibleRequest(props.request);
+      setLeaving(false);
+    } else if (visibleRequest) {
+      setLeaving(true);
+    }
+  }, [props.request]);
+
+  if (!visibleRequest) return null;
+  return (
+    <ExtensionQuestionPanel
+      request={visibleRequest}
+      leaving={leaving}
+      onRespond={(response) => {
+        setLeaving(true);
+        props.onRespond(response);
+      }}
+      onLeaveEnd={() => {
+        setVisibleRequest(null);
+        setLeaving(false);
+      }}
+    />
+  );
+}
+
 export function ComposerView(view: ComposerViewProps) {
   const { t } = useI18n();
   const props = view.agent;
   return (
     <footer className="composer-area">
       <CompactionStatusPanel status={props.context.compaction} onCancel={props.onCancelCompact} />
-      {props.extensionUi && <ExtensionQuestionPanel request={props.extensionUi} onRespond={props.onRespondExtensionUi} />}
+      <ExtensionQuestionPresence request={props.extensionUi} onRespond={props.onRespondExtensionUi} />
       <div className={`composer ${props.isStreaming ? "working" : ""} ${props.extensionUi ? "blocked" : ""}`}>
         {view.pastedTexts.length > 0 && <PastedTextAttachments attachments={view.pastedTexts} variant="composer" onRemove={view.onRemovePastedText} />}
         {view.images.length > 0 && <ImageGallery images={view.images} variant="composer" onRemove={view.onRemoveImage} />}

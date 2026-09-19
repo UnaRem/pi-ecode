@@ -23,6 +23,22 @@ describe("multiSelectResponse", () => {
     expect(markup).not.toContain(">Yes</button>");
   });
 
+  it("makes a leaving question inert until its exit animation completes", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(createElement(
+      I18nProvider,
+      null,
+      createElement(ExtensionQuestionPanel, {
+        request: { id: "confirm-1", method: "confirm", title: "Apply changes?" },
+        leaving: true,
+        onRespond: vi.fn(),
+      }),
+    ));
+
+    expect(markup).toContain("extension-question transient-panel leaving");
+    expect(markup).toContain("inert=\"\"");
+  });
+
   it("returns selected option values when no custom answer is entered", () => {
     expect(multiSelectResponse(["one", "three"], "  ")).toEqual(["one", "three"]);
   });
