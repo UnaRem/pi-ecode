@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ConversationItem, ToolActivity } from "@shared/contracts";
-import { ToolCard } from "./ToolCard";
 import { useI18n } from "../i18n/i18n";
 import { useScrollFollow } from "../hooks/use-scroll-follow";
 
