@@ -26,7 +26,8 @@ afterEach(async () => {
 describe("AppConfigService work animator", () => {
   it("migrates missing config to shiro and persists independent preset durations", async () => {
     const service = await harness();
-    expect((await service.getSnapshot()).workAnimator.working.frames).toHaveLength(3);
+    expect((await service.getSnapshot()).workAnimator.working.frames).toHaveLength(6);
+    expect((await service.getSnapshot()).workAnimator.display).toEqual({ scalePercent: 100, offsetX: 0, offsetY: 0 });
     const idle = presetFrames("idle", "silence_wang");
     const changed = await service.saveWorkAnimator("idle", {
       preset: "silence_wang",
@@ -37,6 +38,35 @@ describe("AppConfigService work animator", () => {
     expect((await new AppConfigService({ onChanged: () => undefined, onError: () => undefined }).load()).workAnimator.idle.frames).toHaveLength(4);
     const stored = JSON.parse(await readFile(join(mock.root, "app-config.json"), "utf8")) as { workAnimator: { idle: { frames: Array<Record<string, unknown>> } } };
     expect(stored.workAnimator.idle.frames[0]).toEqual({ id: idle[0]?.id, durationMs: 350 });
+  });
+
+  it("upgrades only the untouched legacy three-frame Shiro preset", async () => {
+    const service = await harness();
+    const legacyFrames = [1, 2, 3].map((frame) => ({ id: `work_animator/shiro/idle_${frame}.png`, durationMs: 650 }));
+    await writeFile(service.configFilePath, JSON.stringify({
+      iconPath: null,
+      theme: null,
+      backgroundImagePath: null,
+      conversationIdentity: null,
+      workAnimator: {
+        idle: { preset: "shiro", frames: legacyFrames },
+        working: { preset: "shiro", frames: legacyFrames.map((frame) => ({ ...frame, id: frame.id.replace("idle", "working"), durationMs: 220 })) },
+      },
+    }));
+    expect((await service.load()).workAnimator.idle.frames).toHaveLength(6);
+    legacyFrames[0]!.durationMs = 700;
+    await writeFile(service.configFilePath, JSON.stringify({
+      workAnimator: { idle: { preset: "shiro", frames: legacyFrames } },
+    }));
+    expect((await service.load()).workAnimator.idle.frames).toHaveLength(3);
+  });
+
+  it("persists bounded shared display positioning", async () => {
+    const service = await harness();
+    const changed = await service.saveWorkAnimatorDisplay({ scalePercent: 135, offsetX: -40, offsetY: 8 });
+    expect(changed.workAnimator.display).toEqual({ scalePercent: 135, offsetX: -40, offsetY: 8 });
+    await expect(service.saveWorkAnimatorDisplay({ scalePercent: 251, offsetX: 0, offsetY: 0 })).rejects.toThrow();
+    expect((await service.getSnapshot()).workAnimator.display.scalePercent).toBe(135);
   });
 
   it("copies uploaded files, validates renderer-supplied paths and deletes a removed frame", async () => {

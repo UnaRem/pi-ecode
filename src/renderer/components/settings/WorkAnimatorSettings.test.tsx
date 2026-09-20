@@ -10,13 +10,15 @@ describe("WorkAnimatorSettings", () => {
     const settings = defaultWorkAnimator();
     settings.working = { preset: "silence_wang", frames: presetFrames("working", "silence_wang") };
     const markup = renderToStaticMarkup(<I18nProvider>
-      <WorkAnimatorSettings settings={settings} loading={false} onSave={async () => undefined} onAdd={async () => undefined} />
+      <WorkAnimatorSettings settings={settings} loading={false} onSave={async () => undefined} onSaveDisplay={async () => undefined} onAdd={async () => undefined} />
     </I18nProvider>);
     expect(markup).toContain('id="work-animator-idle"');
     expect(markup).toContain('id="work-animator-working"');
     expect(markup).toContain('value="220"');
     expect(markup).toContain('value="650"');
     expect(markup).toContain('working_12.png');
-    expect(markup.match(/aria-label="Move up"/gu)).toHaveLength(15);
+    expect(markup.match(/aria-label="Move up"/gu)).toHaveLength(18);
+    expect(markup).toContain('aria-label="Character positioning preview"');
+    expect(markup).toContain('value="100"');
   });
 });

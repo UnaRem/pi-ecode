@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AppConfigSnapshot, ConversationIdentityRole } from "@shared/app-config-contracts";
-import type { WorkAnimatorStatus, WorkAnimatorUpdate } from "@shared/work-animator";
+import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "@shared/work-animator";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -119,6 +119,18 @@ export function useAppConfig() {
     }
   }, []);
 
+  const saveWorkAnimatorDisplay = useCallback(async (display: WorkAnimatorDisplay) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSnapshot(await window.piDesktop.saveWorkAnimatorDisplay(display));
+    } catch (saveError) {
+      setError(errorMessage(saveError));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const saveWorkAnimator = useCallback(async (status: WorkAnimatorStatus, update: WorkAnimatorUpdate) => {
     setLoading(true);
     setError(null);
@@ -146,6 +158,7 @@ export function useAppConfig() {
   return {
     snapshot,
     saveWorkAnimator,
+    saveWorkAnimatorDisplay,
     addWorkAnimatorImages,
     loading,
     error,

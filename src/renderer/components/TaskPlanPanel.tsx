@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type AnimationEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type AnimationEvent, type CSSProperties } from "react";
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { defaultWorkAnimator, type WorkAnimatorFrame, type WorkAnimatorSettings } from "../../shared/work-animator";
@@ -40,9 +40,15 @@ export function TaskWorkStatus({ active, workAnimator = FALLBACK_ANIMATOR }: { a
   }, [frames, reducedMotion]);
 
   const frame = frames[reducedMotion || playback.frames !== frames ? 0 : playback.index] ?? frames[0];
+  const { scalePercent, offsetX, offsetY } = workAnimator.display;
+  const frameStyle = {
+    "--work-animator-scale": scalePercent / 100,
+    "--work-animator-x": `${offsetX}px`,
+    "--work-animator-y": `${offsetY}px`,
+  } as CSSProperties;
   return (
     <span className={`sidebar-task-work-status ${status}`} role="status" aria-label={t(active ? "task.status.working" : "task.status.idle")}>
-      {frame && <img className="sidebar-task-status-frame" src={frame.url} alt="" draggable={false} />}
+      {frame && <img className="sidebar-task-status-frame" style={frameStyle} src={frame.url} alt="" draggable={false} />}
     </span>
   );
 }

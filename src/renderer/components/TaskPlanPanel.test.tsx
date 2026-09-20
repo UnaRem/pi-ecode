@@ -61,6 +61,8 @@ describe("TaskPlanPanel", () => {
     expect(idleMarkup).toContain('aria-label="Idle"');
     expect(workingMarkup).toContain('src="./work_animator/shiro/working_1.png"');
     expect(idleMarkup).toContain('src="./work_animator/shiro/idle_1.png"');
+    expect(workingMarkup).toContain('--work-animator-scale:1');
+    expect(workingMarkup).toContain('--work-animator-x:0px');
     expect(workingMarkup.match(/<img /gu)).toHaveLength(1);
     const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     expect(stylesheet).toContain("width: 196px; height: 196px; flex: 0 0 196px;");

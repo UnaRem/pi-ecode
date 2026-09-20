@@ -276,7 +276,7 @@
 @keyframes task-plan-flash { 0%, 45% { opacity: 0; transform: scaleX(.2); } 72% { opacity: 1; transform: scaleX(1); } 100% { opacity: 0; transform: scaleX(.35); } }
 .sidebar-task-section .sidebar-label { margin-top: 12px; }
 .sidebar-task-work-status { position: relative; width: 196px; height: 196px; flex: 0 0 196px; align-self: flex-end; margin: 0 8px 14px 0; pointer-events: none; user-select: none; }
-.sidebar-task-status-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; }
+.sidebar-task-status-frame { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; transform: translate(var(--work-animator-x, 0), var(--work-animator-y, 0)) scale(var(--work-animator-scale, 1)); transform-origin: left bottom; }
 .sidebar-task-plan { margin: 0 6px 10px; }
 .sidebar-task-items { max-height: 236px; margin: 0; padding: 1px 3px; overflow-y: auto; list-style: none; }
 .sidebar-task-items li { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: stretch; gap: 7px; min-height: 23px; color: #555550; font-size: 11.5px; line-height: 1.45; }

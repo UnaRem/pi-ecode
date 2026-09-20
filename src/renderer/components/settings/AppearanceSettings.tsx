@@ -21,6 +21,7 @@ export function AppearanceSettings() {
     chooseBackgroundImage,
     clearBackgroundImage,
     saveWorkAnimator,
+    saveWorkAnimatorDisplay,
     addWorkAnimatorImages,
   } = useAppConfig();
   const iconUrl = snapshot?.iconUrl ?? null;
@@ -33,7 +34,7 @@ export function AppearanceSettings() {
       {loading && <div className="settings-pending"><LoaderCircle className="spin" size={12} />{t("settings.loading")}</div>}
       <div className="appearance-settings">
         {snapshot?.workAnimator && <WorkAnimatorSettings settings={snapshot.workAnimator} loading={loading}
-          onSave={saveWorkAnimator} onAdd={addWorkAnimatorImages} />}
+          onSave={saveWorkAnimator} onSaveDisplay={saveWorkAnimatorDisplay} onAdd={addWorkAnimatorImages} />}
         <section className="appearance-card">
           <h3>{t("settings.app.icon.title")}</h3>
           <div className="app-icon-settings">

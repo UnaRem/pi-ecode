@@ -1,6 +1,6 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { AppThemeColors, ConversationIdentityRole, ConversationNicknameUpdate } from "../../shared/app-config-contracts.js";
-import type { WorkAnimatorStatus, WorkAnimatorUpdate } from "../../shared/work-animator.js";
+import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "../../shared/work-animator.js";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
@@ -21,6 +21,12 @@ function isConversationNicknameUpdate(value: unknown): value is ConversationNick
 
 function isWorkAnimatorStatus(value: unknown): value is WorkAnimatorStatus {
   return value === "idle" || value === "working";
+}
+
+function isWorkAnimatorDisplay(value: unknown): value is WorkAnimatorDisplay {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const display = value as Record<string, unknown>;
+  return typeof display.scalePercent === "number" && typeof display.offsetX === "number" && typeof display.offsetY === "number";
 }
 
 function isWorkAnimatorUpdate(value: unknown): value is WorkAnimatorUpdate {
@@ -171,6 +177,10 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.getProjectGitStatus, () => projectGit.getStatus());
   ipcMain.handle(IPC_CHANNELS.pushProject, () => projectGit.push());
   ipcMain.handle(IPC_CHANNELS.getAppConfig, () => appConfig.getSnapshot());
+  ipcMain.handle(IPC_CHANNELS.saveWorkAnimatorDisplay, (_event, display: unknown) => {
+    if (!isWorkAnimatorDisplay(display)) throw new Error("Invalid animator display configuration.");
+    return appConfig.saveWorkAnimatorDisplay(display);
+  });
   ipcMain.handle(IPC_CHANNELS.saveWorkAnimator, (_event, status: unknown, update: unknown) => {
     if (!isWorkAnimatorStatus(status) || !isWorkAnimatorUpdate(update)) throw new Error("Invalid animator configuration.");
     return appConfig.saveWorkAnimator(status, update);

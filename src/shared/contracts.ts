@@ -1,5 +1,5 @@
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
-import type { WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
+import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
 
 export const IPC_CHANNELS = {
   chooseProject: "desktop:choose-project",
@@ -53,6 +53,7 @@ export const IPC_CHANNELS = {
   chooseBackgroundImage: "app-config:choose-background",
   clearBackgroundImage: "app-config:clear-background",
   saveWorkAnimator: "app-config:save-work-animator",
+  saveWorkAnimatorDisplay: "app-config:save-work-animator-display",
   addWorkAnimatorImages: "app-config:add-work-animator-images",
 } as const;
 
@@ -379,6 +380,7 @@ export interface DesktopApi {
   pushProject(): Promise<ProjectGitStatus>;
   getAppConfig(): Promise<AppConfigSnapshot>;
   saveWorkAnimator(status: WorkAnimatorStatus, update: WorkAnimatorUpdate): Promise<AppConfigSnapshot>;
+  saveWorkAnimatorDisplay(display: WorkAnimatorDisplay): Promise<AppConfigSnapshot>;
   addWorkAnimatorImages(status: WorkAnimatorStatus): Promise<AppConfigSnapshot>;
   chooseAppIcon(): Promise<AppConfigSnapshot>;
   clearAppIcon(): Promise<AppConfigSnapshot>;

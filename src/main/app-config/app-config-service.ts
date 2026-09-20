@@ -14,6 +14,7 @@ import {
   defaultWorkAnimator,
   isPresetFrame,
   WORK_ANIMATOR_DEFAULT_DURATION,
+  type WorkAnimatorDisplay,
   type WorkAnimatorFrame,
   type WorkAnimatorPreset,
   type WorkAnimatorStatus,
@@ -32,10 +33,12 @@ interface StoredConversationIdentity {
   userAvatarPath: string | null;
 }
 
-type StoredWorkAnimator = Record<WorkAnimatorStatus, {
+interface StoredWorkAnimator extends Record<WorkAnimatorStatus, {
   preset: WorkAnimatorPreset;
   frames: Array<Pick<WorkAnimatorFrame, "id" | "durationMs">>;
-}>;
+}> {
+  display: WorkAnimatorDisplay;
+}
 
 interface AppConfigFile {
   iconPath: string | null;
@@ -63,6 +66,7 @@ function defaultStoredWorkAnimator(): StoredWorkAnimator {
   return {
     idle: { preset: "shiro", frames: defaults.idle.frames.map(({ id, durationMs }) => ({ id, durationMs })) },
     working: { preset: "shiro", frames: defaults.working.frames.map(({ id, durationMs }) => ({ id, durationMs })) },
+    display: { ...defaults.display },
   };
 }
 
@@ -120,10 +124,30 @@ function validDuration(value: unknown): value is number {
   return Number.isInteger(value) && typeof value === "number" && value >= 50 && value <= 10_000;
 }
 
+function validWorkAnimatorDisplay(value: unknown): value is WorkAnimatorDisplay {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const display = value as Partial<WorkAnimatorDisplay>;
+  return Number.isInteger(display.scalePercent) && Number.isInteger(display.offsetX) && Number.isInteger(display.offsetY)
+    && display.scalePercent! >= 50 && display.scalePercent! <= 250
+    && display.offsetX! >= -120 && display.offsetX! <= 120
+    && display.offsetY! >= -120 && display.offsetY! <= 120;
+}
+
+function migrateLegacyShiroFrames(status: WorkAnimatorStatus, frames: StoredWorkAnimator[WorkAnimatorStatus]["frames"]): StoredWorkAnimator[WorkAnimatorStatus]["frames"] {
+  const legacyIds = [1, 2, 3].map((frame) => `work_animator/shiro/${status}_${frame}.png`);
+  const isLegacyDefault = frames.length === legacyIds.length && frames.every((frame, index) =>
+    frame.id === legacyIds[index] && frame.durationMs === WORK_ANIMATOR_DEFAULT_DURATION[status],
+  );
+  return isLegacyDefault
+    ? defaultStoredWorkAnimator()[status].frames
+    : frames;
+}
+
 function normalizeWorkAnimator(value: unknown): StoredWorkAnimator {
   const defaults = defaultStoredWorkAnimator();
   if (!value || typeof value !== "object" || Array.isArray(value)) return defaults;
   const states = value as Record<string, unknown>;
+  if (validWorkAnimatorDisplay(states.display)) defaults.display = { ...states.display };
   for (const status of ["idle", "working"] as const) {
     const candidate = states[status];
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
@@ -139,7 +163,12 @@ function normalizeWorkAnimator(value: unknown): StoredWorkAnimator {
       if (frames.some((entry) => entry.id === frame.id)) break;
       frames.push({ id: frame.id, durationMs: frame.durationMs });
     }
-    if (frames.length === state.frames.length) defaults[status] = { preset: state.preset, frames };
+    if (frames.length === state.frames.length) {
+      defaults[status] = {
+        preset: state.preset,
+        frames: state.preset === "shiro" ? migrateLegacyShiroFrames(status, frames) : frames,
+      };
+    }
   }
   return defaults;
 }
@@ -174,7 +203,11 @@ export class AppConfigService {
       theme: value.theme ?? { accent: null, accentSoft: null, danger: null, background: null },
       backgroundImagePath: value.backgroundImagePath ?? null,
       backgroundImageUrl: null,
-      workAnimator: { idle: { preset: value.workAnimator.idle.preset, frames: [] }, working: { preset: value.workAnimator.working.preset, frames: [] } },
+      workAnimator: {
+        idle: { preset: value.workAnimator.idle.preset, frames: [] },
+        working: { preset: value.workAnimator.working.preset, frames: [] },
+        display: { ...value.workAnimator.display },
+      },
       conversationIdentity: {
         assistant: {
           nickname: value.conversationIdentity.assistantNickname,
@@ -403,6 +436,16 @@ export class AppConfigService {
     await this.writeConfig(config);
     await this.removeAsset(oldValue);
 
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  async saveWorkAnimatorDisplay(display: WorkAnimatorDisplay): Promise<AppConfigSnapshot> {
+    if (!validWorkAnimatorDisplay(display)) throw new Error("Invalid animator display values.");
+    const config = await this.readConfig();
+    config.workAnimator.display = { ...display };
+    await this.writeConfig(config);
     const snapshot = this.toSnapshot(config);
     this.emit(snapshot);
     return snapshot;

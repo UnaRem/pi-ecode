@@ -45,6 +45,7 @@ const api: DesktopApi = {
   pushProject: () => ipcRenderer.invoke(IPC_CHANNELS.pushProject),
   getAppConfig: () => ipcRenderer.invoke(IPC_CHANNELS.getAppConfig),
   saveWorkAnimator: (status, update) => ipcRenderer.invoke(IPC_CHANNELS.saveWorkAnimator, status, update),
+  saveWorkAnimatorDisplay: (display) => ipcRenderer.invoke(IPC_CHANNELS.saveWorkAnimatorDisplay, display),
   addWorkAnimatorImages: (status) => ipcRenderer.invoke(IPC_CHANNELS.addWorkAnimatorImages, status),
   chooseAppIcon: () => ipcRenderer.invoke(IPC_CHANNELS.chooseAppIcon),
   clearAppIcon: () => ipcRenderer.invoke(IPC_CHANNELS.clearAppIcon),

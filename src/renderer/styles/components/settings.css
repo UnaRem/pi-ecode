@@ -61,7 +61,16 @@
 .instruction-file-tabs button.active { border-color: var(--color-accent-border); color: var(--color-accent); background: var(--color-accent-soft); }
 .instruction-file-card > header > span.exists { color: var(--color-success); background: var(--color-success-soft); }
 .settings-actions { border-top-color: var(--color-border); background: var(--color-surface-raised); }
-.work-animator-states { display: grid; gap: var(--space-5); margin-top: var(--space-4); }
+.work-animator-display { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: var(--space-4); margin-top: var(--space-4); }
+.work-animator-preview { position: relative; width: 196px; height: 196px; overflow: hidden; border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.work-animator-preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transform-origin: left bottom; }
+.work-animator-display-controls { display: grid; align-content: center; gap: var(--space-3); }
+.work-animator-display-controls > label { display: grid; grid-template-columns: 72px minmax(80px, 1fr) 58px 20px; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: 11px; }
+.work-animator-display-controls input[type="number"] { width: 58px; height: 30px; padding-inline: 4px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
+.work-animator-display-actions { display: flex; gap: var(--space-2); }
+.work-animator-display-actions button { min-height: 30px; display: inline-flex; align-items: center; gap: 5px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
+.work-animator-display-actions button:first-child { border-color: var(--color-accent); color: white; background: var(--color-accent); }
+.work-animator-states { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
 .work-animator-heading { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
 .work-animator-heading label { min-width: 70px; font-weight: 600; font-size: 12px; }
 .work-animator-heading select, .work-animator-duration input { height: 30px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
@@ -77,6 +86,10 @@
 .work-animator-add { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; margin-top: var(--space-3); padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
 .work-animator-add:hover { border-color: var(--color-accent); color: var(--color-accent); }
 @media (max-width: 900px) {
+  .work-animator-display { grid-template-columns: 148px minmax(0, 1fr); }
+  .work-animator-preview { width: 148px; height: 148px; }
+  .work-animator-display-controls > label { grid-template-columns: 1fr 46px 20px; }
+  .work-animator-display-controls > label > span:first-child { grid-column: 1 / -1; }
   .work-animator-frames li { flex-wrap: wrap; }
   .work-animator-frame-label { flex-basis: calc(100% - 44px); }
   .work-animator-duration { margin-left: 44px; }
