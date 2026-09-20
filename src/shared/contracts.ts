@@ -1,4 +1,5 @@
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
+import type { WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
 
 export const IPC_CHANNELS = {
   chooseProject: "desktop:choose-project",
@@ -51,6 +52,8 @@ export const IPC_CHANNELS = {
   saveTheme: "app-config:save-theme",
   chooseBackgroundImage: "app-config:choose-background",
   clearBackgroundImage: "app-config:clear-background",
+  saveWorkAnimator: "app-config:save-work-animator",
+  addWorkAnimatorImages: "app-config:add-work-animator-images",
 } as const;
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -375,6 +378,8 @@ export interface DesktopApi {
   getProjectGitStatus(): Promise<ProjectGitStatus>;
   pushProject(): Promise<ProjectGitStatus>;
   getAppConfig(): Promise<AppConfigSnapshot>;
+  saveWorkAnimator(status: WorkAnimatorStatus, update: WorkAnimatorUpdate): Promise<AppConfigSnapshot>;
+  addWorkAnimatorImages(status: WorkAnimatorStatus): Promise<AppConfigSnapshot>;
   chooseAppIcon(): Promise<AppConfigSnapshot>;
   clearAppIcon(): Promise<AppConfigSnapshot>;
   chooseConversationAvatar(role: "assistant" | "user"): Promise<AppConfigSnapshot>;

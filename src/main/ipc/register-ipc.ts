@@ -1,5 +1,6 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { AppThemeColors, ConversationIdentityRole, ConversationNicknameUpdate } from "../../shared/app-config-contracts.js";
+import type { WorkAnimatorStatus, WorkAnimatorUpdate } from "../../shared/work-animator.js";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
@@ -16,6 +17,24 @@ function isConversationNicknameUpdate(value: unknown): value is ConversationNick
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   return typeof candidate.assistant === "string" && typeof candidate.user === "string";
+}
+
+function isWorkAnimatorStatus(value: unknown): value is WorkAnimatorStatus {
+  return value === "idle" || value === "working";
+}
+
+function isWorkAnimatorUpdate(value: unknown): value is WorkAnimatorUpdate {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const update = value as Record<string, unknown>;
+  return (update.preset === "shiro" || update.preset === "silence_wang" || update.preset === "custom")
+    && Array.isArray(update.frames)
+    && update.frames.length > 0
+    && update.frames.length <= 100
+    && update.frames.every((item: unknown) => {
+      if (!item || typeof item !== "object") return false;
+      const frame = item as Record<string, unknown>;
+      return typeof frame.id === "string" && typeof frame.durationMs === "number";
+    });
 }
 
 function isThemeColors(value: unknown): value is AppThemeColors {
@@ -152,6 +171,14 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.getProjectGitStatus, () => projectGit.getStatus());
   ipcMain.handle(IPC_CHANNELS.pushProject, () => projectGit.push());
   ipcMain.handle(IPC_CHANNELS.getAppConfig, () => appConfig.getSnapshot());
+  ipcMain.handle(IPC_CHANNELS.saveWorkAnimator, (_event, status: unknown, update: unknown) => {
+    if (!isWorkAnimatorStatus(status) || !isWorkAnimatorUpdate(update)) throw new Error("Invalid animator configuration.");
+    return appConfig.saveWorkAnimator(status, update);
+  });
+  ipcMain.handle(IPC_CHANNELS.addWorkAnimatorImages, (_event, status: unknown) => {
+    if (!isWorkAnimatorStatus(status)) throw new Error("Invalid animator status.");
+    return appConfig.addWorkAnimatorImages(status);
+  });
   ipcMain.handle(IPC_CHANNELS.chooseAppIcon, () => appConfig.chooseIcon());
   ipcMain.handle(IPC_CHANNELS.clearAppIcon, () => appConfig.clearIcon());
   ipcMain.handle(IPC_CHANNELS.chooseConversationAvatar, (_event, role: unknown) => {

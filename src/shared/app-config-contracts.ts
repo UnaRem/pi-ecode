@@ -1,5 +1,7 @@
+import type { WorkAnimatorSettings } from "./work-animator.js";
+
 // pi-ecode 应用级配置契约（与 pi agent 的 settings.json 解耦）。
-// 承载应用图标、会话身份与背景图；文件路径均为相对 userData 的路径，null 表示使用默认。
+// 承载应用图标、会话身份、侧栏人物与背景图；自定义文件路径相对 userData，null 表示使用默认。
 
 export interface AppThemeColors {
   /** 主强调色（默认 #3f6f62）。 */
@@ -47,6 +49,7 @@ export interface AppConfigSnapshot {
   backgroundImageUrl: string | null;
   /** 会话中模型与用户的全局身份设置。 */
   conversationIdentity: ConversationIdentity;
+  workAnimator: WorkAnimatorSettings;
 }
 
 export interface AppConfigChangedEvent {
