@@ -11,13 +11,18 @@ import {
   type ConversationNicknameUpdate,
 } from "../../shared/app-config-contracts.js";
 import {
+  calculateFrameDurations,
   defaultWorkAnimator,
+  defaultWorkAnimatorTiming,
   isPresetFrame,
   WORK_ANIMATOR_DEFAULT_DURATION,
+  WORK_ANIMATOR_MAX_CYCLE_MS,
+  WORK_ANIMATOR_MIN_FRAME_MS,
   type WorkAnimatorDisplay,
   type WorkAnimatorFrame,
   type WorkAnimatorPreset,
   type WorkAnimatorStatus,
+  type WorkAnimatorTiming,
   type WorkAnimatorUpdate,
 } from "../../shared/work-animator.js";
 
@@ -36,6 +41,7 @@ interface StoredConversationIdentity {
 interface StoredWorkAnimator extends Record<WorkAnimatorStatus, {
   preset: WorkAnimatorPreset;
   frames: Array<Pick<WorkAnimatorFrame, "id" | "durationMs">>;
+  timing: WorkAnimatorTiming;
 }> {
   display: WorkAnimatorDisplay;
 }
@@ -64,8 +70,8 @@ function defaultConversationIdentity(): StoredConversationIdentity {
 function defaultStoredWorkAnimator(): StoredWorkAnimator {
   const defaults = defaultWorkAnimator();
   return {
-    idle: { preset: "shiro", frames: defaults.idle.frames.map(({ id, durationMs }) => ({ id, durationMs })) },
-    working: { preset: "shiro", frames: defaults.working.frames.map(({ id, durationMs }) => ({ id, durationMs })) },
+    idle: { preset: "shiro", frames: defaults.idle.frames.map(({ id, durationMs }) => ({ id, durationMs })), timing: defaults.idle.timing },
+    working: { preset: "shiro", frames: defaults.working.frames.map(({ id, durationMs }) => ({ id, durationMs })), timing: defaults.working.timing },
     display: { ...defaults.display },
   };
 }
@@ -121,7 +127,19 @@ function isBuiltInFrame(status: WorkAnimatorStatus, id: string): boolean {
 }
 
 function validDuration(value: unknown): value is number {
-  return Number.isInteger(value) && typeof value === "number" && value >= 50 && value <= 10_000;
+  return Number.isInteger(value) && typeof value === "number" && value >= WORK_ANIMATOR_MIN_FRAME_MS && value <= WORK_ANIMATOR_MAX_CYCLE_MS;
+}
+
+function validWorkAnimatorTiming(value: unknown, frameCount: number): value is WorkAnimatorTiming {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const timing = value as Partial<WorkAnimatorTiming>;
+  const curve = timing.curve;
+  if (!curve || typeof curve !== "object") return false;
+  const points = [curve.x1, curve.y1, curve.x2, curve.y2];
+  return Number.isInteger(timing.cycleDurationMs)
+    && timing.cycleDurationMs! >= frameCount * WORK_ANIMATOR_MIN_FRAME_MS
+    && timing.cycleDurationMs! <= WORK_ANIMATOR_MAX_CYCLE_MS
+    && points.every((point) => typeof point === "number" && Number.isFinite(point) && point >= 0 && point <= 1);
 }
 
 function validWorkAnimatorDisplay(value: unknown): value is WorkAnimatorDisplay {
@@ -131,6 +149,11 @@ function validWorkAnimatorDisplay(value: unknown): value is WorkAnimatorDisplay 
     && display.scalePercent! >= 50 && display.scalePercent! <= 250
     && display.offsetX! >= -120 && display.offsetX! <= 120
     && display.offsetY! >= -120 && display.offsetY! <= 120;
+}
+
+function applyStoredTiming(frames: StoredWorkAnimator[WorkAnimatorStatus]["frames"], timing: WorkAnimatorTiming): StoredWorkAnimator[WorkAnimatorStatus]["frames"] {
+  const durations = calculateFrameDurations(frames.length, timing);
+  return frames.map((frame, index) => ({ id: frame.id, durationMs: durations[index]! }));
 }
 
 function migrateLegacyShiroFrames(status: WorkAnimatorStatus, frames: StoredWorkAnimator[WorkAnimatorStatus]["frames"]): StoredWorkAnimator[WorkAnimatorStatus]["frames"] {
@@ -164,10 +187,11 @@ function normalizeWorkAnimator(value: unknown): StoredWorkAnimator {
       frames.push({ id: frame.id, durationMs: frame.durationMs });
     }
     if (frames.length === state.frames.length) {
-      defaults[status] = {
-        preset: state.preset,
-        frames: state.preset === "shiro" ? migrateLegacyShiroFrames(status, frames) : frames,
-      };
+      const migratedFrames = state.preset === "shiro" ? migrateLegacyShiroFrames(status, frames) : frames;
+      const timing = validWorkAnimatorTiming(state.timing, migratedFrames.length)
+        ? { cycleDurationMs: state.timing.cycleDurationMs, curve: { ...state.timing.curve } }
+        : { ...defaultWorkAnimatorTiming(status, migratedFrames.length), cycleDurationMs: migratedFrames.reduce((sum, frame) => sum + frame.durationMs, 0) };
+      defaults[status] = { preset: state.preset, frames: applyStoredTiming(migratedFrames, timing), timing };
     }
   }
   return defaults;
@@ -204,8 +228,8 @@ export class AppConfigService {
       backgroundImagePath: value.backgroundImagePath ?? null,
       backgroundImageUrl: null,
       workAnimator: {
-        idle: { preset: value.workAnimator.idle.preset, frames: [] },
-        working: { preset: value.workAnimator.working.preset, frames: [] },
+        idle: { preset: value.workAnimator.idle.preset, frames: [], timing: { ...value.workAnimator.idle.timing, curve: { ...value.workAnimator.idle.timing.curve } } },
+        working: { preset: value.workAnimator.working.preset, frames: [], timing: { ...value.workAnimator.working.timing, curve: { ...value.workAnimator.working.timing.curve } } },
         display: { ...value.workAnimator.display },
       },
       conversationIdentity: {
@@ -454,13 +478,15 @@ export class AppConfigService {
   async saveWorkAnimator(status: WorkAnimatorStatus, update: WorkAnimatorUpdate): Promise<AppConfigSnapshot> {
     const config = await this.readConfig();
     const previous = config.workAnimator[status];
-    const { preset, frames } = update;
+    const { preset, frames, timing } = update;
     if (preset !== "shiro" && preset !== "silence_wang" && preset !== "custom") throw new Error("Invalid animator preset.");
-    if (!Array.isArray(frames) || !frames.length || frames.length > 100) throw new Error("Invalid animator frames.");
+    if (!Array.isArray(frames) || !frames.length || frames.length > 100 || !validWorkAnimatorTiming(timing, frames.length)) {
+      throw new Error("Invalid animator frames or timing.");
+    }
     const seen = new Set<string>();
     for (const frame of frames) {
-      if (!frame || typeof frame.id !== "string" || !validDuration(frame.durationMs) || seen.has(frame.id)) {
-        throw new Error("Invalid animator frame or duration (50–10000 ms).");
+      if (!frame || typeof frame.id !== "string" || seen.has(frame.id)) {
+        throw new Error("Invalid animator frame.");
       }
       seen.add(frame.id);
       const allowed = preset === "custom"
@@ -468,7 +494,12 @@ export class AppConfigService {
         : isPresetFrame(status, preset, frame.id);
       if (!allowed) throw new Error("Animator frame does not belong to this state.");
     }
-    config.workAnimator[status] = { preset, frames: frames.map(({ id, durationMs }) => ({ id, durationMs })) };
+    const calculatedDurations = calculateFrameDurations(frames.length, timing);
+    config.workAnimator[status] = {
+      preset,
+      timing: { cycleDurationMs: timing.cycleDurationMs, curve: { ...timing.curve } },
+      frames: frames.map(({ id }, index) => ({ id, durationMs: calculatedDurations[index]! })),
+    };
     await this.writeConfig(config);
     // Only delete files after the new configuration is durable; built-in frames are never removed.
     const snapshot = this.toSnapshot(config);
@@ -505,8 +536,18 @@ export class AppConfigService {
         const id = await this.copyToAssets(source, `work-${status}-${randomUUID()}`);
         added.push(id);
       }
-      const frames = added.map((id) => ({ id, durationMs: WORK_ANIMATOR_DEFAULT_DURATION[status] }));
-      config.workAnimator[status] = { preset: "custom", frames: [...previous.frames, ...frames] };
+      const nextFrames = [...previous.frames.map(({ id }) => ({ id })), ...added.map((id) => ({ id }))];
+      const timing = {
+        cycleDurationMs: previous.timing.cycleDurationMs + result.filePaths.length * WORK_ANIMATOR_DEFAULT_DURATION[status],
+        curve: { ...previous.timing.curve },
+      };
+      if (!validWorkAnimatorTiming(timing, nextFrames.length)) throw new Error("The animator cycle is too long.");
+      const calculatedDurations = calculateFrameDurations(nextFrames.length, timing);
+      config.workAnimator[status] = {
+        preset: "custom",
+        timing,
+        frames: nextFrames.map(({ id }, index) => ({ id, durationMs: calculatedDurations[index]! })),
+      };
       await this.writeConfig(config);
     } catch (error) {
       await Promise.all(added.map((id) => this.removeAsset(id)));

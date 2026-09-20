@@ -73,14 +73,32 @@
 .work-animator-states { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
 .work-animator-heading { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
 .work-animator-heading label { min-width: 70px; font-weight: 600; font-size: 12px; }
-.work-animator-heading select, .work-animator-duration input { height: 30px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
-.work-animator-heading select { min-width: 160px; padding-inline: var(--space-2); }
+.work-animator-heading select { min-width: 160px; height: 30px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
 .work-animator-frames { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
 .work-animator-frames li { min-width: 0; display: flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 3px 0; }
 .work-animator-frames img { width: 36px; height: 36px; flex: none; object-fit: contain; }
 .work-animator-frame-label { flex: 1 1 auto; min-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.work-animator-duration { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: var(--color-text-muted); font-size: 11px; }
-.work-animator-duration input { width: 72px; padding: 0 4px; }
+.work-animator-duration { min-width: 54px; white-space: nowrap; color: var(--color-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.work-animator-curve-editor { margin: var(--space-2) 0 var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface); }
+.work-animator-curve-presets { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-3); }
+.work-animator-curve-presets button, .work-animator-curve-apply { min-height: 28px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface); }
+.work-animator-curve-presets button:hover { color: var(--color-accent); border-color: var(--color-accent-border-strong); }
+.work-animator-curve-body { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: var(--space-4); }
+.work-animator-curve-graph { width: 160px; height: 160px; overflow: visible; touch-action: none; background: linear-gradient(var(--color-border) 1px, transparent 1px), linear-gradient(90deg, var(--color-border) 1px, transparent 1px); background-size: 33px 33px; background-position: 14px 14px; border-radius: var(--radius-sm); }
+.work-animator-curve-graph line { stroke: var(--color-border-strong); stroke-width: 1; }
+.work-animator-curve-graph path { fill: none; stroke: var(--color-accent); stroke-width: 2.5; }
+.work-animator-curve-graph circle { fill: var(--color-surface); stroke: var(--color-accent); stroke-width: 2; cursor: grab; }
+.work-animator-curve-graph circle:focus { outline: none; stroke-width: 4; }
+.work-animator-curve-fields { min-width: 0; display: grid; align-content: start; gap: var(--space-2); }
+.work-animator-curve-preview { width: 52px; height: 52px; overflow: hidden; border-radius: var(--radius-sm); background: var(--color-surface-muted); }
+.work-animator-curve-preview img { width: 100%; height: 100%; object-fit: contain; }
+.work-animator-curve-fields > label { display: grid; grid-template-columns: 72px minmax(70px, 1fr) 24px; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: 11px; }
+.work-animator-curve-fields input { min-width: 0; height: 28px; padding-inline: 5px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); }
+.work-animator-curve-points { display: grid; grid-template-columns: repeat(4, minmax(54px, 1fr)); gap: var(--space-1); }
+.work-animator-curve-points label { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; color: var(--color-text-muted); font-size: 10px; }
+.work-animator-curve-fields code { overflow: hidden; color: var(--color-text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.work-animator-calculated { display: flex; flex-wrap: wrap; gap: 3px 8px; color: var(--color-text-faint); font-size: 10px; }
+.work-animator-curve-apply { justify-self: start; color: white; border-color: var(--color-accent); background: var(--color-accent); }
 .work-animator-frame-actions { display: flex; gap: 2px; }
 .work-animator-frame-actions button { width: 27px; height: 27px; padding: 0; }
 .work-animator-add { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; margin-top: var(--space-3); padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
@@ -90,6 +108,8 @@
   .work-animator-preview { width: 148px; height: 148px; }
   .work-animator-display-controls > label { grid-template-columns: 1fr 46px 20px; }
   .work-animator-display-controls > label > span:first-child { grid-column: 1 / -1; }
+  .work-animator-curve-body { grid-template-columns: 1fr; }
+  .work-animator-curve-graph { justify-self: center; }
   .work-animator-frames li { flex-wrap: wrap; }
   .work-animator-frame-label { flex-basis: calc(100% - 44px); }
   .work-animator-duration { margin-left: 44px; }

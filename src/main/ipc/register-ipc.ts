@@ -32,15 +32,16 @@ function isWorkAnimatorDisplay(value: unknown): value is WorkAnimatorDisplay {
 function isWorkAnimatorUpdate(value: unknown): value is WorkAnimatorUpdate {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const update = value as Record<string, unknown>;
+  const timing = update.timing as Record<string, unknown> | undefined;
+  const curve = timing?.curve as Record<string, unknown> | undefined;
   return (update.preset === "shiro" || update.preset === "silence_wang" || update.preset === "custom")
     && Array.isArray(update.frames)
     && update.frames.length > 0
     && update.frames.length <= 100
-    && update.frames.every((item: unknown) => {
-      if (!item || typeof item !== "object") return false;
-      const frame = item as Record<string, unknown>;
-      return typeof frame.id === "string" && typeof frame.durationMs === "number";
-    });
+    && update.frames.every((item: unknown) => Boolean(item) && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string")
+    && typeof timing?.cycleDurationMs === "number"
+    && Boolean(curve)
+    && [curve?.x1, curve?.y1, curve?.x2, curve?.y2].every((point) => typeof point === "number");
 }
 
 function isThemeColors(value: unknown): value is AppThemeColors {

@@ -1,7 +1,8 @@
 import { ArrowDown, ArrowUp, RotateCcw, Upload, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { presetFrames, WORK_ANIMATOR_DEFAULT_DISPLAY, type WorkAnimatorDisplay, type WorkAnimatorFrame, type WorkAnimatorPreset, type WorkAnimatorSettings as AnimatorSettings, type WorkAnimatorStatus, type WorkAnimatorUpdate } from "../../../shared/work-animator";
+import { defaultWorkAnimatorTiming, presetFrames, WORK_ANIMATOR_DEFAULT_DISPLAY, type WorkAnimatorDisplay, type WorkAnimatorFrame, type WorkAnimatorPreset, type WorkAnimatorSettings as AnimatorSettings, type WorkAnimatorStatus, type WorkAnimatorUpdate } from "../../../shared/work-animator";
 import { useI18n } from "../../i18n/i18n";
+import { WorkAnimatorCurveEditor } from "./WorkAnimatorCurveEditor";
 
 interface Props {
   settings: AnimatorSettings;
@@ -46,13 +47,17 @@ function WorkAnimatorDisplayEditor(props: Pick<Props, "loading" | "onSaveDisplay
 
 export function WorkAnimatorSettings({ settings, loading, onSave, onSaveDisplay, onAdd }: Props) {
   const { t } = useI18n();
-  const saveFrames = (status: WorkAnimatorStatus, frames: WorkAnimatorFrame[], preset: WorkAnimatorPreset = "custom"): void => {
-    void onSave(status, { preset, frames: frames.map(({ id, durationMs }) => ({ id, durationMs })) });
+  const saveFrames = (status: WorkAnimatorStatus, frames: WorkAnimatorFrame[], preset: WorkAnimatorPreset = "custom", timing = settings[status].timing): void => {
+    void onSave(status, { preset, timing, frames: frames.map(({ id }) => ({ id })) });
   };
   const choosePreset = (status: WorkAnimatorStatus, preset: "shiro" | "silence_wang"): void => {
     const current = settings[status];
     if (current.preset === "custom" && !window.confirm(t("settings.app.animator.replace"))) return;
-    saveFrames(status, presetFrames(status, preset), preset);
+    const frames = presetFrames(status, preset);
+    saveFrames(status, frames, preset, defaultWorkAnimatorTiming(status, frames.length));
+  };
+  const saveTiming = (status: WorkAnimatorStatus, timing: AnimatorSettings[WorkAnimatorStatus]["timing"]): void => {
+    saveFrames(status, settings[status].frames, settings[status].preset, timing);
   };
   const moveFrame = (status: WorkAnimatorStatus, from: number, to: number): void => {
     const frames = [...settings[status].frames];
@@ -84,24 +89,13 @@ export function WorkAnimatorSettings({ settings, loading, onSave, onSaveDisplay,
                   {state.preset === "custom" && <option value="custom">{t("settings.app.animator.custom")}</option>}
                 </select>
               </div>
+              <WorkAnimatorCurveEditor frames={state.frames} timing={state.timing} loading={loading} onApply={(timing) => saveTiming(status, timing)} />
               <ol className="work-animator-frames">
                 {state.frames.map((frame, index) => (
                   <li key={frame.id}>
                     <img src={frame.url} alt="" />
                     <span className="work-animator-frame-label" title={frame.id}>{index + 1}. {frame.id.split("/").at(-1)}</span>
-                    <label className="work-animator-duration">
-                      <span>{t("settings.app.animator.duration")}</span>
-                      <input type="number" min={50} max={10000} step={1} key={`${frame.id}-${frame.durationMs}`}
-                        defaultValue={frame.durationMs} disabled={loading}
-                        onBlur={(event) => {
-                          const input = event.currentTarget;
-                          if (!input.reportValidity()) return;
-                          const durationMs = Number(input.value);
-                          if (!Number.isInteger(durationMs) || durationMs === frame.durationMs) return;
-                          saveFrames(status, state.frames.map((item, position) => position === index ? { ...item, durationMs } : item), state.preset);
-                        }} />
-                      <span>ms</span>
-                    </label>
+                    <span className="work-animator-duration">{frame.durationMs}ms</span>
                     <div className="work-animator-frame-actions">
                       <button className="icon-button" aria-label={t("settings.app.animator.up")} title={t("settings.app.animator.up")}
                         disabled={loading || index === 0} onClick={() => moveFrame(status, index, index - 1)}><ArrowUp size={14} /></button>
