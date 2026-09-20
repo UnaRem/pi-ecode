@@ -8,7 +8,7 @@ function stylesheet(name: string): string {
 
 describe("renderer style system", () => {
   it("loads style layers in dependency order", () => {
-    const entry = stylesheet("./index.css");
+    const entry = stylesheet("./index.css").replaceAll("\r\n", "\n");
     expect(entry).toBe([
       '@import "./tokens.css";',
       '@import "./base.css";',
