@@ -38,6 +38,9 @@ describe("Sidebar", () => {
     expect(markup).toContain('class="session-row active"');
     expect(markup).toContain('aria-hidden="false"');
     expect(markup).not.toContain("inert");
+    expect(markup).toContain('class="sidebar-task-work-status idle"');
+    expect(markup).toContain('aria-label="Idle"');
+    expect(markup).not.toContain("sidebar-task-section");
   });
 
   it("keeps the sidebar mounted and animates collapse through a reversible transition", () => {

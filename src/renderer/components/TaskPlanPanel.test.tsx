@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskPlan } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
-import { centeredTaskScrollTop, taskItemTopWithinList, TaskPlanPanel, TaskPlanPresence } from "./TaskPlanPanel";
+import { centeredTaskScrollTop, taskItemTopWithinList, TaskPlanPanel, TaskPlanPresence, TaskWorkStatus } from "./TaskPlanPanel";
 
 const plan: TaskPlan = {
   title: "Ship feature",
@@ -46,18 +46,17 @@ describe("TaskPlanPanel", () => {
     expect(presenceMarkup).not.toContain("<button");
   });
 
-  it("switches the three-frame work status sequence with streaming activity", () => {
+  it("switches the independent three-frame work status with streaming activity", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const workingMarkup = renderToStaticMarkup(
-      <I18nProvider><TaskPlanPresence plan={plan} active /></I18nProvider>,
+      <I18nProvider><TaskWorkStatus active /></I18nProvider>,
     );
     const idleMarkup = renderToStaticMarkup(
-      <I18nProvider><TaskPlanPresence plan={plan} active={false} /></I18nProvider>,
+      <I18nProvider><TaskWorkStatus active={false} /></I18nProvider>,
     );
 
     expect(workingMarkup).toContain('class="sidebar-task-work-status working"');
     expect(workingMarkup).toContain('aria-label="Working"');
-    expect(workingMarkup.indexOf("sidebar-task-work-status")).toBeLessThan(workingMarkup.indexOf("sidebar-task-section"));
     expect(idleMarkup).toContain('class="sidebar-task-work-status idle"');
     expect(idleMarkup).toContain('aria-label="Idle"');
     for (const status of ["idle", "working"]) {

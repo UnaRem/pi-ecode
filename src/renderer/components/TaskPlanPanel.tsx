@@ -4,7 +4,7 @@ import { useI18n } from "../i18n/i18n";
 
 const WORK_STATUS_FRAMES = [1, 2, 3] as const;
 
-function TaskWorkStatus({ active }: { active: boolean }) {
+export function TaskWorkStatus({ active }: { active: boolean }) {
   const { t } = useI18n();
   const status = active ? "working" : "idle";
 
@@ -51,13 +51,10 @@ export function TaskPlanPresence({ plan, active }: { plan: TaskPlan | null; acti
   if (!visiblePlan) return null;
 
   return (
-    <>
-      <TaskWorkStatus active={active} />
-      <section className={isLeaving ? "sidebar-task-section leaving" : "sidebar-task-section"} onAnimationEnd={finishLeaving}>
-        <div className="sidebar-label">{t("task.section")}</div>
-        <TaskPlanPanel plan={visiblePlan} active={active} />
-      </section>
-    </>
+    <section className={isLeaving ? "sidebar-task-section leaving" : "sidebar-task-section"} onAnimationEnd={finishLeaving}>
+      <div className="sidebar-label">{t("task.section")}</div>
+      <TaskPlanPanel plan={visiblePlan} active={active} />
+    </section>
   );
 }
 
