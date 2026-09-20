@@ -61,6 +61,26 @@
 .instruction-file-tabs button.active { border-color: var(--color-accent-border); color: var(--color-accent); background: var(--color-accent-soft); }
 .instruction-file-card > header > span.exists { color: var(--color-success); background: var(--color-success-soft); }
 .settings-actions { border-top-color: var(--color-border); background: var(--color-surface-raised); }
+.work-animator-states { display: grid; gap: var(--space-5); margin-top: var(--space-4); }
+.work-animator-heading { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
+.work-animator-heading label { min-width: 70px; font-weight: 600; font-size: 12px; }
+.work-animator-heading select, .work-animator-duration input { height: 30px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
+.work-animator-heading select { min-width: 160px; padding-inline: var(--space-2); }
+.work-animator-frames { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.work-animator-frames li { min-width: 0; display: flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 3px 0; }
+.work-animator-frames img { width: 36px; height: 36px; flex: none; object-fit: contain; }
+.work-animator-frame-label { flex: 1 1 auto; min-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.work-animator-duration { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: var(--color-text-muted); font-size: 11px; }
+.work-animator-duration input { width: 72px; padding: 0 4px; }
+.work-animator-frame-actions { display: flex; gap: 2px; }
+.work-animator-frame-actions button { width: 27px; height: 27px; padding: 0; }
+.work-animator-add { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; margin-top: var(--space-3); padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); }
+.work-animator-add:hover { border-color: var(--color-accent); color: var(--color-accent); }
+@media (max-width: 900px) {
+  .work-animator-frames li { flex-wrap: wrap; }
+  .work-animator-frame-label { flex-basis: calc(100% - 44px); }
+  .work-animator-duration { margin-left: 44px; }
+}
 
 @media (max-width: 900px) {
   .settings-layout { grid-template-columns: 138px minmax(0, 1fr); }

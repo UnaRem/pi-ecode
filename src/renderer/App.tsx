@@ -84,6 +84,7 @@ export default function App() {
         activeSessionFile={state.sessionFile}
         disabled={state.isStreaming}
         taskPlan={state.taskPlan}
+        workAnimator={appConfig?.workAnimator}
         settingsActive={settingsOpen}
         open={sidebarOpen}
         onChooseProject={() => { if (leaveSettings()) void actions.chooseProject(); }}

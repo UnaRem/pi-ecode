@@ -1,5 +1,6 @@
 import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings, Trash2 } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
+import type { WorkAnimatorSettings } from "@shared/work-animator";
 import { TaskPlanPresence, TaskWorkStatus } from "./TaskPlanPanel";
 import { useI18n } from "../i18n/i18n";
 
@@ -11,6 +12,7 @@ interface SidebarProps {
   activeSessionFile: string | null;
   disabled: boolean;
   taskPlan: TaskPlan | null;
+  workAnimator?: WorkAnimatorSettings | undefined;
   settingsActive: boolean;
   open: boolean;
   onChooseProject: () => void;
@@ -89,7 +91,7 @@ export function Sidebar(props: SidebarProps) {
           })
         )}
       </nav>
-      <TaskWorkStatus active={props.disabled} />
+      <TaskWorkStatus active={props.disabled} workAnimator={props.workAnimator} />
       <TaskPlanPresence plan={props.taskPlan} active={props.disabled} />
       <button className={`sidebar-settings ${props.settingsActive ? "active" : ""}`} onClick={props.onOpenSettings}>
         <Settings size={15} />

@@ -59,15 +59,12 @@ describe("TaskPlanPanel", () => {
     expect(workingMarkup).toContain('aria-label="Working"');
     expect(idleMarkup).toContain('class="sidebar-task-work-status idle"');
     expect(idleMarkup).toContain('aria-label="Idle"');
-    for (const status of ["idle", "working"]) {
-      for (const frame of [1, 2, 3]) expect(workingMarkup).toContain(`src="./${status}_${frame}.png"`);
-    }
-
+    expect(workingMarkup).toContain('src="./work_animator/shiro/working_1.png"');
+    expect(idleMarkup).toContain('src="./work_animator/shiro/idle_1.png"');
+    expect(workingMarkup.match(/<img /gu)).toHaveLength(1);
     const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     expect(stylesheet).toContain("width: 196px; height: 196px; flex: 0 0 196px;");
-    expect(stylesheet).toContain("animation: task-status-frame 1950ms steps(1, end) infinite;");
-    expect(stylesheet).toContain("animation: task-status-frame 660ms steps(1, end) infinite;");
-    expect(stylesheet).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.sidebar-task-status-frame \{ animation: none !important;/u);
+    expect(stylesheet).not.toContain("task-status-frame 660ms");
   });
 
   it("keeps the current task centered using coordinates relative to the scroll list", () => {

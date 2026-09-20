@@ -1,30 +1,48 @@
 import { useEffect, useLayoutEffect, useRef, useState, type AnimationEvent } from "react";
 import type { TaskPlan } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
+import { defaultWorkAnimator, type WorkAnimatorFrame, type WorkAnimatorSettings } from "../../shared/work-animator";
 
-const WORK_STATUS_FRAMES = [1, 2, 3] as const;
+const FALLBACK_ANIMATOR = defaultWorkAnimator();
 
-export function TaskWorkStatus({ active }: { active: boolean }) {
+export function TaskWorkStatus({ active, workAnimator = FALLBACK_ANIMATOR }: { active: boolean; workAnimator?: WorkAnimatorSettings | undefined }) {
   const { t } = useI18n();
   const status = active ? "working" : "idle";
+  const frames = workAnimator[status].frames;
+  const [playback, setPlayback] = useState<{ frames: WorkAnimatorFrame[]; index: number }>({ frames, index: 0 });
+  const [reducedMotion, setReducedMotion] = useState(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false,
+  );
 
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = (): void => setReducedMotion(preference.matches);
+    preference.addEventListener("change", sync);
+    return () => preference.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    setPlayback({ frames, index: 0 });
+    if (reducedMotion || frames.length < 2) return;
+    let index = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    // Schedule after each frame's own duration; cleanup cancels the previous state on a fast switch.
+    const advance = (): void => {
+      timer = setTimeout(() => {
+        index = (index + 1) % frames.length;
+        setPlayback({ frames, index });
+        advance();
+      }, frames[index]!.durationMs);
+    };
+    advance();
+    return () => clearTimeout(timer);
+  }, [frames, reducedMotion]);
+
+  const frame = frames[reducedMotion || playback.frames !== frames ? 0 : playback.index] ?? frames[0];
   return (
-    <span
-      className={`sidebar-task-work-status ${status}`}
-      role="status"
-      aria-label={t(active ? "task.status.working" : "task.status.idle")}
-    >
-      {(["idle", "working"] as const).flatMap((frameStatus) =>
-        WORK_STATUS_FRAMES.map((frame) => (
-          <img
-            key={`${frameStatus}-${frame}`}
-            className={`sidebar-task-status-frame ${frameStatus} frame-${frame}`}
-            src={`./${frameStatus}_${frame}.png`}
-            alt=""
-            draggable={false}
-          />
-        )),
-      )}
+    <span className={`sidebar-task-work-status ${status}`} role="status" aria-label={t(active ? "task.status.working" : "task.status.idle")}>
+      {frame && <img className="sidebar-task-status-frame" src={frame.url} alt="" draggable={false} />}
     </span>
   );
 }
