@@ -1,4 +1,47 @@
-import type { ReactNode } from "react";
+import { Check, Copy, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useI18n } from "../i18n/i18n";
+
+type CopyStatus = "idle" | "copied" | "failed";
+type ClipboardWriter = (text: string) => Promise<void>;
+
+export async function copyText(text: string, writeText: ClipboardWriter): Promise<boolean> {
+  try {
+    await writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function MarkdownCodeBlock({ code, language }: { code: string; language: string }) {
+  const { t } = useI18n();
+  const [status, setStatus] = useState<CopyStatus>("idle");
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+  }, []);
+
+  const copy = async (): Promise<void> => {
+    const copied = await copyText(code, (value) => navigator.clipboard.writeText(value));
+    setStatus(copied ? "copied" : "failed");
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setStatus("idle"), 1_500);
+  };
+  const label = t(status === "copied" ? "markdown.copied" : status === "failed" ? "markdown.copyFailed" : "markdown.copy");
+  const Icon = status === "copied" ? Check : status === "failed" ? TriangleAlert : Copy;
+
+  return (
+    <div className="markdown-code-block">
+      <button type="button" className={`markdown-copy-button ${status}`} onClick={() => void copy()} aria-label={label} title={label}>
+        <Icon size={13} aria-hidden="true" />
+        <span aria-live="polite">{label}</span>
+      </button>
+      <pre><code data-language={language || undefined}>{code}</code></pre>
+    </div>
+  );
+}
 
 function inlineMarkdown(text: string): ReactNode[] {
   const tokens = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\(https?:\/\/[^)]+\))/gu);
@@ -51,7 +94,8 @@ export function Markdown({ children }: { children: string }) {
       index += 1;
       while (index < lines.length && !(lines[index] ?? "").startsWith("```")) code.push(lines[index++] ?? "");
       index += 1;
-      nodes.push(<pre key={`code-${index}`}><code data-language={language || undefined}>{code.join("\n")}</code></pre>);
+      const codeText = code.join("\n");
+      nodes.push(<MarkdownCodeBlock key={`code-${index}`} code={codeText} language={language} />);
       continue;
     }
     const nextLine = lines[index + 1] ?? "";

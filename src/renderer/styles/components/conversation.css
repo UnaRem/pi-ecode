@@ -40,8 +40,14 @@
 .markdown h1, .markdown h2, .markdown h3, .markdown h4 { color: var(--color-text); }
 .markdown blockquote { border-left-color: var(--color-accent-border-hover); color: var(--color-text-muted); }
 .markdown code { color: var(--slate-700); background: var(--color-surface-muted); }
-.markdown pre { border-color: var(--color-border); color: var(--color-code-text); background: var(--color-code-bg); }
+.markdown-code-block { position: relative; margin: 10px 0 14px; }
+.markdown-code-block pre { margin: 0; padding-top: 38px; border-color: var(--color-border); color: var(--color-code-text); background: var(--color-code-bg); }
 .markdown pre code { color: inherit; }
+.markdown-copy-button { position: absolute; z-index: 1; top: 7px; right: 7px; min-height: 25px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface-raised); font: inherit; font-size: 10.5px; line-height: 1.2; cursor: pointer; opacity: .68; transition: opacity var(--duration-fast) ease, color var(--duration-fast) ease, border-color var(--duration-fast) ease, background var(--duration-fast) ease, transform var(--duration-fast) ease; }
+.markdown-code-block:hover .markdown-copy-button, .markdown-copy-button:focus-visible { border-color: var(--color-accent-border-strong); color: var(--color-accent); background: var(--color-accent-soft); opacity: 1; outline: none; }
+.markdown-copy-button:active { transform: scale(.96); }
+.markdown-copy-button.copied { border-color: var(--color-success-border); color: var(--color-success); background: var(--color-success-soft); opacity: 1; }
+.markdown-copy-button.failed { border-color: var(--color-danger-border); color: var(--color-danger); background: var(--color-danger-soft); opacity: 1; }
 .markdown a { color: var(--color-accent); }
 .markdown-table-wrap { border-color: var(--color-border); border-radius: var(--radius-md); }
 .markdown th { color: var(--color-text); background: var(--color-surface-muted); }
