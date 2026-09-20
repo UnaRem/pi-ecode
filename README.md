@@ -53,15 +53,16 @@ npm run build
 
 ## 发布
 
-每次向 `main` 推送提交时，GitHub Actions 都会安装依赖、运行测试并构建 Windows x64 免安装程序。全部成功后，工作流会自动移动 `continuous` 标签，并更新仓库中的 **Continuous build** 滚动 Latest Release：
+每次向 `main` 推送提交时，GitHub Actions 都会安装依赖、运行测试并构建 Windows x64 免安装程序。全部成功后，以 `package.json` 的主、次版本和本次 Actions 运行编号创建**独立 Release**，例如基础版本为 `0.1.0`、运行编号为 `42` 时：
 
 ```text
-PiECode-continuous-win-x64.exe
+Release / 标签：v0.1.42
+下载文件：PiECode-v0.1.42-win-x64.exe
 ```
 
-因此日常开发只需提交并推送，无需修改版本号或手动创建标签。Release 更新内容会列出上一次成功构建至本次成功构建之间的 Commit；测试或构建失败时不会移动 `continuous` 标签，也不会覆盖上一次成功的 Release 产物。`continuous` 是会移动的滚动标签，不用于永久版本归档。
+CI 只在构建工作区临时更新包版本，应用内部版本与文件名相同，不向 `main` 提交版本变更。失败的运行不会发布，编号可能跳号；重新运行同一次工作流仍使用原编号，若同名标签已存在则会拒绝覆盖。为确保连续推送各自构建，不再取消先前运行。原有 **Continuous build** Release 和 `continuous` 标签保留作为历史记录，不再移动或更新；新 Release 会由 GitHub 自动生成更新说明。
 
-需要保留永久正式版本时，将 `package.json` 的版本提交到 `main`，然后推送同版本的 `v*` 标签：
+如需手动发布指定版本，将 `package.json` 的版本提交到 `main`，然后推送同版本的 `v*` 标签：
 
 ```bash
 npm version 0.2.0
@@ -69,7 +70,7 @@ git push origin main
 git push origin v0.2.0
 ```
 
-正式 Release 的产物名称包含版本号，例如 `PiECode-0.2.0-win-x64.exe`。所有发布产物当前均不含 Windows 代码签名，首次下载运行时可能出现 Microsoft Defender SmartScreen 提示。
+手动标签 Release 的产物名称沿用 `PiECode-0.2.0-win-x64.exe`。所有发布产物当前均不含 Windows 代码签名，首次下载运行时可能出现 Microsoft Defender SmartScreen 提示。
 
 拒绝某个已审查文件时，只会将该路径恢复到任务开始前的状态，然后为结果创建检查点，并使之前的验证结果和候选版本失效。默认行为是保留文件；准备候选版本时会采用其余已审查的变更。
 
