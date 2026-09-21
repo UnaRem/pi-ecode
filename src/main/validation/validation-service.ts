@@ -34,6 +34,11 @@ interface PackageManifest {
   scripts?: Record<string, string>;
 }
 
+export interface ValidationRunOptions {
+  sourceRevision?: string;
+  readSourceRevision?: () => Promise<string>;
+}
+
 function emptySteps(): ValidationStep[] {
   return STEP_DEFINITIONS.map(({ id, label }) => ({
     id,
@@ -54,6 +59,7 @@ function emptyState(): ValidationState {
     runId: null,
     activeStep: null,
     steps: emptySteps(),
+    sourceRevision: null,
     verifiedAt: null,
     message: null,
   };
@@ -69,6 +75,7 @@ export class ValidationService {
   private state = emptyState();
   private activeProcess: ChildProcessWithoutNullStreams | undefined;
   private cancellationRequested = false;
+  private changedDuringRun = false;
   private watcher: FSWatcher | undefined;
 
   constructor(private readonly onChange: (state: ValidationState) => void) {}
@@ -78,6 +85,7 @@ export class ValidationService {
     this.watcher?.close();
     this.watcher = undefined;
     this.cwd = cwd;
+    this.changedDuringRun = false;
     let manifest: PackageManifest = {};
     try {
       manifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8")) as PackageManifest;
@@ -106,22 +114,28 @@ export class ValidationService {
   }
 
   invalidate(message = "Source changed after the last verification."): void {
-    if (this.state.status === "running" || this.state.status === "idle" || this.state.status === "stale") return;
-    this.state = { ...this.state, status: "stale", verifiedAt: null, message };
+    if (this.state.status === "running") {
+      this.changedDuringRun = true;
+      return;
+    }
+    if (this.state.status === "idle" || this.state.status === "stale") return;
+    this.state = { ...this.state, status: "stale", sourceRevision: null, verifiedAt: null, message };
     this.publish();
   }
 
-  async run(): Promise<ValidationState> {
+  async run(options: ValidationRunOptions = {}): Promise<ValidationState> {
     if (!this.cwd) throw new Error("Choose a project before running validation.");
     if (!this.state.supported) throw new Error("This project has no typecheck, test, or build scripts.");
     if (this.state.status === "running") throw new Error("Validation is already running.");
 
     this.cancellationRequested = false;
+    this.changedDuringRun = false;
     this.state = {
       ...this.state,
       status: "running",
       runId: randomUUID(),
       activeStep: null,
+      sourceRevision: null,
       verifiedAt: null,
       message: null,
       steps: emptySteps().map((step) => (
@@ -150,22 +164,37 @@ export class ValidationService {
     }
 
     const failedStep = this.state.steps.find((step) => step.status === "failed");
-    const status = this.cancellationRequested ? "cancelled" : failedStep || infrastructureError ? "failed" : "passed";
+    let status: ValidationState["status"] = this.cancellationRequested
+      ? "cancelled"
+      : failedStep || infrastructureError ? "failed" : "passed";
+    let currentRevision: string | undefined;
     if (status === "passed") {
       await this.watcher?.close();
       this.watcher = undefined;
       await this.startWatcher(this.cwd);
+      try {
+        currentRevision = await options.readSourceRevision?.();
+        if (this.changedDuringRun || (options.sourceRevision !== undefined && currentRevision !== options.sourceRevision)) {
+          status = "stale";
+        }
+      } catch (error) {
+        infrastructureError = error instanceof Error ? error.message : String(error);
+        status = "failed";
+      }
     }
     this.state = {
       ...this.state,
       status,
       activeStep: null,
+      sourceRevision: status === "passed" ? options.sourceRevision ?? currentRevision ?? null : null,
       verifiedAt: status === "passed" ? Date.now() : null,
       message: status === "passed"
         ? "All configured checks passed."
-        : status === "cancelled"
-          ? "Validation stopped."
-          : infrastructureError ?? `${failedStep?.label ?? "Validation"} failed.`,
+        : status === "stale"
+          ? "Project files changed during validation."
+          : status === "cancelled"
+            ? "Validation stopped."
+            : infrastructureError ?? `${failedStep?.label ?? "Validation"} failed.`,
     };
     this.publish();
     return this.getState();
@@ -178,9 +207,10 @@ export class ValidationService {
   }
 
   async stop(): Promise<void> {
-    if (!this.activeProcess) return;
+    if (this.state.status !== "running") return;
     this.cancellationRequested = true;
     const processToStop = this.activeProcess;
+    if (!processToStop) return;
     const closed = new Promise<void>((resolve) => processToStop.once("close", () => resolve()));
     if (process.platform === "win32" && processToStop.pid) {
       const killer = spawn("taskkill", ["/pid", String(processToStop.pid), "/t", "/f"], {
@@ -207,7 +237,9 @@ export class ValidationService {
     });
     this.watcher = watcher;
     watcher.on("all", () => {
-      if (this.state.status === "passed") {
+      if (this.state.status === "running") {
+        this.changedDuringRun = true;
+      } else if (this.state.status === "passed") {
         this.invalidate("Project files changed after the last verification.");
       }
     });

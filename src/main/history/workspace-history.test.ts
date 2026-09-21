@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -88,6 +88,25 @@ describe("WorkspaceHistory", () => {
     expect(results.every((result) => result.message === "Checkpoint saved: rapid click")).toBe(true);
     expect(captured).toHaveLength(1);
     expect((await history.getState(session)).isBusy).toBe(false);
+  });
+
+  it("captures a stable source tree revision while ignoring build output", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-revision-workspace-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-revision-history-"));
+    temporaryPaths.push(workspace, storage);
+    const history = new WorkspaceHistory(storage);
+    const session = fakeSession(workspace, [], []);
+    await writeFile(join(workspace, "app.txt"), "one\n", "utf8");
+
+    const first = await history.captureSourceRevision(session);
+    await writeFile(join(workspace, "app.txt"), "two\n", "utf8");
+    const changed = await history.captureSourceRevision(session);
+    await mkdir(join(workspace, "out"), { recursive: true });
+    await writeFile(join(workspace, "out", "bundle.js"), "generated\n", "utf8");
+    const ignored = await history.captureSourceRevision(session);
+
+    expect(changed).not.toBe(first);
+    expect(ignored).toBe(changed);
   });
 
   it("binds history after the current user message reaches the session branch", async () => {

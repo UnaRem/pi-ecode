@@ -268,6 +268,15 @@ export class WorkspaceHistory {
     return { available: true, canUndo, canRedo: redo !== undefined, isBusy: this.busy, message: this.statusMessage };
   }
 
+  captureSourceRevision(session: AgentSession): Promise<string> {
+    return this.runExclusive(async () => {
+      const cwd = session.sessionManager.getCwd();
+      await this.ensureRepo(cwd, session.sessionId);
+      await this.execGit(cwd, session.sessionId, ["add", "-A", "--", "."]);
+      return (await this.execGit(cwd, session.sessionId, ["write-tree"])).trim();
+    });
+  }
+
   checkpoint(session: AgentSession, label: string): Promise<HistoryOperationResult> {
     const existing = this.checkpointBySession.get(session.sessionId);
     if (existing) return existing;

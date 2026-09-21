@@ -29,6 +29,7 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
     runId: null,
     activeStep: null,
     steps: [],
+    sourceRevision: null,
     verifiedAt: null,
     message: null,
   },

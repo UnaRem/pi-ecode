@@ -53,6 +53,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
     runId: null,
     activeStep: null,
     steps: [],
+    sourceRevision: null,
     verifiedAt: null,
     message: null,
   },

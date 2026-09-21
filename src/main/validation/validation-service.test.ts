@@ -49,6 +49,48 @@ describe("ValidationService", () => {
     await service.dispose();
   });
 
+  it("binds a passed result to the verified source revision", async () => {
+    const cwd = await project({ scripts: { typecheck: "node -e \"process.exit(0)\"" } });
+    const service = new ValidationService(() => undefined);
+    await service.configure(cwd);
+
+    const result = await service.run({ sourceRevision: "tree-a", readSourceRevision: async () => "tree-a" });
+
+    expect(result.status).toBe("passed");
+    expect(result.sourceRevision).toBe("tree-a");
+    await service.dispose();
+  });
+
+  it("marks a successful pipeline stale when the source revision changes", async () => {
+    const cwd = await project({ scripts: { typecheck: "node -e \"process.exit(0)\"" } });
+    const service = new ValidationService(() => undefined);
+    await service.configure(cwd);
+
+    const result = await service.run({ sourceRevision: "tree-a", readSourceRevision: async () => "tree-b" });
+
+    expect(result.status).toBe("stale");
+    expect(result.sourceRevision).toBeNull();
+    expect(result.verifiedAt).toBeNull();
+    await service.dispose();
+  });
+
+  it("remains stale when source changes and later returns to the same revision", async () => {
+    const cwd = await project({ scripts: { typecheck: "node -e \"setTimeout(() => {}, 150)\"" } });
+    let invalidated = false;
+    const service = new ValidationService((state) => {
+      if (!invalidated && state.activeStep === "typecheck") {
+        invalidated = true;
+        service.invalidate();
+      }
+    });
+    await service.configure(cwd);
+
+    const result = await service.run({ sourceRevision: "tree-a", readSourceRevision: async () => "tree-a" });
+
+    expect(result.status).toBe("stale");
+    await service.dispose();
+  });
+
   it("stops after the first failed check", async () => {
     const cwd = await project({
       scripts: {
@@ -86,6 +128,29 @@ describe("ValidationService", () => {
 
     expect(result.status).toBe("cancelled");
     expect(result.steps[0]?.status).toBe("cancelled");
+    await service.dispose();
+  });
+
+  it("honors cancellation requested between validation steps", async () => {
+    const cwd = await project({
+      scripts: {
+        typecheck: "node -e \"process.exit(0)\"",
+        test: "node -e \"console.log('should not run')\"",
+      },
+    });
+    let stopRequested = false;
+    const service = new ValidationService((state) => {
+      if (!stopRequested && state.steps[0]?.status === "passed") {
+        stopRequested = true;
+        void service.stop();
+      }
+    });
+    await service.configure(cwd);
+
+    const result = await service.run();
+
+    expect(result.status).toBe("cancelled");
+    expect(result.steps[1]?.status).toBe("pending");
     await service.dispose();
   });
 
