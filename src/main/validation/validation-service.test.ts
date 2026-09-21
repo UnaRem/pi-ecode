@@ -61,6 +61,19 @@ describe("ValidationService", () => {
     await service.dispose();
   });
 
+  it("ignores TypeScript build metadata written during validation", async () => {
+    const cwd = await project({
+      scripts: { typecheck: "node -e \"require('node:fs').writeFileSync('tsconfig.node.tsbuildinfo', 'cache')\"" },
+    });
+    const service = new ValidationService(() => undefined);
+    await service.configure(cwd);
+
+    const result = await service.run({ sourceRevision: "tree-a", readSourceRevision: async () => "tree-a" });
+
+    expect(result.status).toBe("passed");
+    await service.dispose();
+  });
+
   it("marks a successful pipeline stale when the source revision changes", async () => {
     const cwd = await project({ scripts: { typecheck: "node -e \"process.exit(0)\"" } });
     const service = new ValidationService(() => undefined);

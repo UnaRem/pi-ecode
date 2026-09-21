@@ -237,7 +237,7 @@ export class ValidationService {
       ignored: (path) => {
         const relativePath = path.slice(cwd.length).replaceAll("\\", "/").replace(/^\/+/, "");
         const firstSegment = relativePath.split("/")[0];
-        return Boolean(firstSegment && WATCH_IGNORES.has(firstSegment));
+        return relativePath.endsWith(".tsbuildinfo") || Boolean(firstSegment && WATCH_IGNORES.has(firstSegment));
       },
     });
     this.watcher = watcher;
