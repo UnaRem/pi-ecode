@@ -156,6 +156,8 @@ export interface ExplorerTask {
   activity?: string;
   finalText?: string;
   errorMessage?: string;
+  compactionMethod?: CompactionMethod;
+  compactionError?: string;
 }
 
 export interface ExplorerTimelineSnapshot {

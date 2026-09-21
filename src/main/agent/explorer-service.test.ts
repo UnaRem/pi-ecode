@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
-import { EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
+import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
 
 interface DeferredResult {
   promise: Promise<{ sessionId: string; finalText: string }>;
@@ -86,6 +86,11 @@ function request(index: number): Record<string, string> {
 }
 
 describe("ExplorerService", () => {
+  it("derives an auto-compaction reserve from the selected model window", () => {
+    expect(compactionReserveTokens(200_000, 70)).toBe(60_000);
+    expect(compactionReserveTokens(1, 90)).toBe(1);
+  });
+
   it("reuses the parent read, ffgrep, and fffind definitions exactly", () => {
     const definitions = new Map<string, { name: string }>(EXPLORER_TOOL_NAMES.map((name) => [name, { name }]));
     const parent = {
@@ -253,6 +258,28 @@ describe("ExplorerService", () => {
     expect(test.sent).toHaveLength(0);
     expect(test.service.current[0]?.status).toBe("interrupted");
     expect(test.service.current[0]?.finalText).toBeUndefined();
+  });
+
+  it("restores a persisted agent generation for the same parent session", () => {
+    const test = harness(vi.fn(async () => ({ sessionId: "unused", finalText: "unused" })));
+    const completed = {
+      id: "task-old", taskName: "inspect", title: "Inspect", objective: "Find behavior", scope: "src/",
+      deliverable: "Evidence", status: "completed", originToolCallId: "dispatch-old", thinkingLevel: "low",
+      attempt: 1, maxAttempts: 2, revision: 2, queuedAt: 1, startedAt: 2, endedAt: 3, finalText: "saved",
+      agentId: "explorer-1", agentRole: "explorer", provider: "openai", modelId: "model",
+    };
+    test.setBranch([{
+      type: "custom", id: "entry-generation", parentId: null, timestamp: new Date().toISOString(),
+      customType: "pi-ecode.explorer-state", data: {
+        version: 5,
+        tasks: [completed], locators: [], completions: [], agentSnapshots: [],
+        generations: [{ id: "generation-1", agentId: "explorer-1", provider: "openai", modelId: "model", sessionFile: "C:/sessions/child.jsonl", createdAt: 1, lastUsedAt: 2 }],
+      },
+    } as SessionEntry]);
+
+    test.restore();
+    expect(test.appended.at(-1)).toBeUndefined();
+    expect(test.service.current[0]).toMatchObject({ agentId: "explorer-1", provider: "openai", modelId: "model" });
   });
 
   it("redelivers a persisted pending completion after restoring the parent session", async () => {

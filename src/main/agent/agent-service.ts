@@ -100,6 +100,7 @@ export class AgentService {
     getParentSession: () => this.runtime?.session,
     getAgentDefinitions: () => this.agentCatalog?.enabled() ?? [],
     getMaxConcurrent: () => this.agentCatalog?.current?.maxConcurrent ?? 3,
+    getSessionRoot: (parent) => this.agentCatalog.sessionRoot(parent.sessionId),
     onChange: (explorers) => {
       this.emit({ type: "explorers", explorers });
       const session = this.runtime?.session;
@@ -438,6 +439,10 @@ export class AgentService {
     const explorerDirectory = join(dirname(target.path), ".explorers", target.id);
     if (await stat(explorerDirectory).then((details) => details.isDirectory()).catch(() => false)) {
       await this.trashItem(explorerDirectory);
+    }
+    const agentDirectory = this.agentCatalog.parentSessionRoot(target.id);
+    if (await stat(agentDirectory).then((details) => details.isDirectory()).catch(() => false)) {
+      await this.trashItem(agentDirectory);
     }
     await this.refreshSessions();
   }

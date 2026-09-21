@@ -28,6 +28,7 @@ describe("AgentCatalogService", () => {
     expect(catalog.agents.every((agent) => agent.model.mode === "inherit" && agent.thinkingLevel === "low")).toBe(true);
     expect(catalog.agents.every((agent) => agent.autoCompaction.thresholdPercent === null)).toBe(true);
     expect(JSON.stringify(catalog)).toContain("不执行任意 shell 命令");
+    expect(test.service.sessionRoot("parent-session")).toContain(join("parents", "parent-session", "sessions"));
   });
 
   it("persists project settings atomically and reloads them", async () => {
