@@ -144,17 +144,19 @@ export class ExplorerService {
   }
 
   async getToolOutput(taskId: string, toolCallId: string): Promise<string> {
-    this.requireTask(taskId);
+    const task = this.requireTask(taskId);
     const parsed = rawToolCallId(toolCallId);
     if (!parsed) throw new Error("Invalid Explorer tool call id.");
     const live = this.liveSessions.get(taskId);
-    const locator = this.locatorForAttempt(taskId, parsed.attempt);
-    const messages = live && this.tasks.get(taskId)?.attempt === parsed.attempt
-      ? this.taskMessages(this.requireTask(taskId), live.messages)
-      : messagesForLocator(locator);
+    const locator = this.locators.get(taskId)?.find((candidate) => candidate.attempt === parsed.attempt);
+    const messages = live && task.attempt === parsed.attempt
+      ? this.taskMessages(task, live.messages)
+      : locator ? messagesForLocator(locator) : [];
     const result = messages.findLast((message) => message.role === "toolResult" && message.toolCallId === parsed.toolCallId);
-    if (!result || result.role !== "toolResult") throw new Error("Explorer tool output is not available.");
-    return textFromContent(result.content);
+    if (result?.role === "toolResult") return textFromContent(result.content);
+    const cached = this.timelines.get(taskId)?.timeline.find((item) => item.kind === "tool" && item.id === toolCallId);
+    if (cached?.kind === "tool") return cached.tool.output;
+    throw new Error("Explorer tool output is not available.");
   }
 
   async interrupt(taskId: string): Promise<void> {

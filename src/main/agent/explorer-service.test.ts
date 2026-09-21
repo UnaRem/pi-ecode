@@ -275,6 +275,34 @@ describe("ExplorerService", () => {
     expect(test.service.current[0]).toMatchObject({ attempt: 2, finalText: "recovered after error" });
   });
 
+  it("falls back to cached timeline output before a tool result is persisted", async () => {
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+    const task = test.service.current[0];
+    if (!task) throw new Error("Dispatched task is missing.");
+    const toolCallId = `${task.id}:1:read-call`;
+    const timelines = (test.service as unknown as {
+      timelines: Map<string, { taskId: string; revision: number; timeline: Array<Record<string, unknown>> }>;
+    }).timelines;
+    timelines.set(task.id, {
+      taskId: task.id,
+      revision: 1,
+      timeline: [{
+        kind: "tool",
+        id: toolCallId,
+        tool: { id: toolCallId, name: "read", title: "读取文件", input: "src/file.ts", output: "缓存输出", status: "success" },
+      }],
+    });
+
+    await expect(test.service.getToolOutput(task.id, toolCallId)).resolves.toBe("缓存输出");
+    await expect(test.service.getToolOutput(task.id, `${task.id}:1:missing-call`)).rejects.toThrow("Explorer tool output is not available");
+
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child-late", finalText: "late" });
+    await stop;
+  });
+
   it("wakes agent_wait with attention when a child has no activity", async () => {
     vi.useFakeTimers();
     const pending = deferredResult();
