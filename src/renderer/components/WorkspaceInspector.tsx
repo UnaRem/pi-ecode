@@ -1,9 +1,10 @@
-import { Check, CircleAlert, CircleDashed, FileCode2, LoaderCircle, Play, Square, TerminalSquare } from "lucide-react";
+import { FileCode2, Play, Square, TerminalSquare } from "lucide-react";
 import { useState, type AnimationEvent } from "react";
-import type { CandidateState, ChangeReview, ToolActivity, ValidationState, ValidationStep } from "@shared/contracts";
+import type { CandidateState, ChangeReview, ToolActivity, ValidationState } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
 import { GitPushButton } from "./GitPushButton";
+import { ValidationStepList, ValidationStepStatusIcon } from "./ValidationSteps";
 
 interface WorkspaceInspectorProps {
   tools: ToolActivity[];
@@ -21,13 +22,6 @@ interface WorkspaceInspectorProps {
   onActivateCandidate: () => void;
 }
 
-function StepStatus({ step }: { step: ValidationStep }) {
-  if (step.status === "running") return <LoaderCircle className="spin" size={13} aria-hidden="true" />;
-  if (step.status === "passed") return <Check size={13} aria-hidden="true" />;
-  if (step.status === "failed") return <CircleAlert size={13} aria-hidden="true" />;
-  return <CircleDashed size={13} aria-hidden="true" />;
-}
-
 function formatToolDuration(tool: ToolActivity): string {
   if (!tool.startedAt) return "";
   const elapsed = Math.max(0, (tool.endedAt ?? Date.now()) - tool.startedAt);
@@ -42,7 +36,7 @@ function ToolQueue({ tools, selectedTool, onSelect }: Pick<WorkspaceInspectorPro
       <div className="inspector-tool-list">
         {tools.length === 0 ? <p>{t("tool.waitingOutput")}</p> : tools.map((tool) => (
           <button key={tool.id} className={tool.id === selectedTool?.id ? "selected" : ""} onClick={() => onSelect(tool.id)} aria-pressed={tool.id === selectedTool?.id}>
-            <span className={`inspector-tool-status ${tool.status}`}><StepStatus step={{ id: "build", label: tool.title, command: tool.name, status: tool.status === "success" ? "passed" : tool.status === "error" ? "failed" : "running", output: tool.output, exitCode: null, durationMs: null }} /></span>
+            <span className={`inspector-tool-status ${tool.status}`}><ValidationStepStatusIcon step={{ id: "build", label: tool.title, command: tool.name, status: tool.status === "success" ? "passed" : tool.status === "error" ? "failed" : "running", output: tool.output, exitCode: null, durationMs: null }} /></span>
             <strong>{tool.title}</strong>
             <time>{formatToolDuration(tool)}</time>
           </button>
@@ -71,13 +65,26 @@ function OutputPanel(props: Pick<WorkspaceInspectorProps, "tools" | "selectedToo
   );
 }
 
+export function ValidationLogs({ validation }: { validation: ValidationState }) {
+  const { t } = useI18n();
+  const steps = validation.steps.filter((step) => step.output);
+  if (steps.length === 0) return null;
+  return <div className="inspector-validation-logs">
+    <strong>{t("validation.logs")}</strong>
+    {steps.map((step) => <details key={step.id} open={step.id === validation.activeStep || step.status === "failed"}>
+      <summary>{step.label}</summary>
+      <pre>{step.output}</pre>
+    </details>)}
+  </div>;
+}
+
 function ValidationControls(props: Pick<WorkspaceInspectorProps, "validation" | "candidate" | "projectPath" | "isStreaming" | "onRunValidation" | "onStopValidation" | "onPrepareCandidate" | "onActivateCandidate">) {
   const { t } = useI18n();
   const running = props.validation.status === "running";
   return (
     <section className="inspector-section inspector-validation" tabIndex={-1}>
       <header>
-        <strong>{t("validation.piECodeTitle")}</strong>
+        <strong>{t(props.validation.isSelfProject ? "validation.piECodeTitle" : "validation.projectPipeline")}</strong>
         {running ? (
           <button onClick={props.onStopValidation}><Square size={10} fill="currentColor" />{t("validation.stop")}</button>
         ) : (
@@ -85,12 +92,9 @@ function ValidationControls(props: Pick<WorkspaceInspectorProps, "validation" | 
         )}
       </header>
       <GitPushButton projectKey={props.projectPath} disabled={props.isStreaming} validationStatus={props.validation.status} />
-      <div className="inspector-validation-steps">
-        {props.validation.steps.map((step) => (
-          <div key={step.id} className={step.status}><StepStatus step={step} /><span>{step.label}</span></div>
-        ))}
-      </div>
+      <ValidationStepList steps={props.validation.steps} className="inspector-validation-steps" />
       {props.validation.message && <p className={`inspector-validation-message ${props.validation.status}`}>{props.validation.message}</p>}
+      <ValidationLogs validation={props.validation} />
       {props.validation.isSelfProject && (
         <button
           className="inspector-candidate-action"
@@ -156,7 +160,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const { t } = useI18n();
   const [tab, setTab] = useState<InspectorTab>("tools");
   const [leavingTab, setLeavingTab] = useState<InspectorTab | null>(null);
-  const activeTab = props.validation.isSelfProject ? tab : "tools";
+  const activeTab = props.validation.supported ? tab : "tools";
   const selectTab = (nextTab: InspectorTab): void => {
     if (nextTab === activeTab) return;
     setLeavingTab(activeTab);
@@ -174,7 +178,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     <aside className="workspace-inspector" data-region="inspector" aria-label={t("tool.panelTitle")}>
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
         <button type="button" role="tab" aria-selected={activeTab === "tools"} onClick={() => selectTab("tools")}>{t("tool.panelTitle")}</button>
-        {props.validation.isSelfProject && <button type="button" role="tab" aria-selected={activeTab === "validation"} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
+        {props.validation.supported && <button type="button" role="tab" aria-selected={activeTab === "validation"} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
       </div>
       <div className="inspector-scroll">
         <div className="inspector-tab-stack">

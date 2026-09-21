@@ -1,9 +1,10 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import type { ConversationItem, ExplorerTask, ToolActivity } from "@shared/contracts";
+import type { ConversationItem, ExplorerTask, ToolActivity, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { useScrollFollow } from "../hooks/use-scroll-follow";
 import { ExplorerCards } from "./ExplorerCards";
+import { ValidationCard } from "./ValidationCard";
 
 export type ConversationRenderGroup =
   | { kind: "message"; id: string; item: Extract<ConversationItem, { kind: "message" }> }
@@ -46,12 +47,14 @@ export function ToolBatch({
   selectedToolId,
   onSelectTool,
   explorers = [],
+  validation,
 }: {
   tools: ToolActivity[];
   animateNewTools?: boolean;
   selectedToolId: string | null;
   onSelectTool: (toolId: string) => void;
   explorers?: ExplorerTask[];
+  validation?: ValidationState;
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
@@ -80,6 +83,7 @@ export function ToolBatch({
   const firstTool = tools[0];
   const toolIds = new Set(tools.map((tool) => tool.id));
   const linkedExplorers = explorers.filter((task) => toolIds.has(task.originToolCallId));
+  const linkedValidation = validation?.originToolCallId && toolIds.has(validation.originToolCallId) ? validation : null;
   return (
     <section className="tool-batch plaintext-tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
       <div className={expanded ? "tool-dropdown open" : "tool-dropdown"}>
@@ -104,6 +108,7 @@ export function ToolBatch({
         </div>
       </div>
       <ExplorerCards tasks={linkedExplorers} />
+      {linkedValidation && <ValidationCard validation={linkedValidation} />}
     </section>
   );
 }

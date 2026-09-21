@@ -42,13 +42,22 @@
 .inspector-validation > header button:hover, .inspector-candidate-action:hover { border-color: var(--color-accent); }
 .inspector-validation-steps { display: grid; gap: var(--space-1); }
 .inspector-validation-steps > div { display: flex; min-height: 28px; align-items: center; gap: var(--space-2); color: var(--color-text-muted); font-size: 10.5px; }
+.inspector-validation-steps > div small { margin-left: auto; color: currentColor; font-size: 9px; }
 .inspector-validation-steps > div.running { color: var(--color-accent); }
 .inspector-validation-steps > div.passed { color: var(--color-success); }
 .inspector-validation-steps > div.failed { color: var(--color-danger); }
+.inspector-validation-steps > div.cancelled, .inspector-validation-steps > div.skipped { color: var(--color-text-faint); }
+.validation-step-status { display: inline-flex; align-items: center; justify-content: center; }
 .inspector-candidate-action { width: 100%; margin-top: var(--space-3); }
 .inspector-validation-message { margin: var(--space-2) 0 0; color: var(--color-text-muted); font-size: 10px; line-height: 1.45; }
-.inspector-validation-message.failed { color: var(--color-danger); }
+.inspector-validation-message.failed, .inspector-validation-message.stale { color: var(--color-danger); }
 .inspector-validation-message.passed, .inspector-validation-message.ready { color: var(--color-success); }
+.inspector-validation-logs { margin-top: var(--space-3); border-top: 1px solid var(--color-border); padding-top: var(--space-3); }
+.inspector-validation-logs > strong { display: block; margin-bottom: var(--space-2); color: var(--color-text-muted); font-size: 10px; }
+.inspector-validation-logs details { border-bottom: 1px solid var(--color-border); }
+.inspector-validation-logs summary { padding: 6px 0; color: var(--color-accent); font-size: 10px; cursor: pointer; }
+.inspector-validation-logs summary:focus-visible { border-radius: 3px; outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.inspector-validation-logs pre { max-height: 220px; margin: 0 0 var(--space-2); padding: var(--space-2); overflow: auto; border-radius: var(--radius-sm); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .inspector-version-list { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2); }
 .inspector-version-list code { overflow: hidden; color: var(--color-text-faint); font: 9px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .inspector-file-list { max-height: 128px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; padding-right: 3px; }

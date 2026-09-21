@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CandidateState, ChangeReview, ValidationState } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
-import { WorkspaceInspector } from "./WorkspaceInspector";
+import { ValidationLogs, WorkspaceInspector } from "./WorkspaceInspector";
 
 const validation: ValidationState = { supported: true, isSelfProject: false, status: "idle", runId: null, activeStep: null, steps: [], sourceRevision: null, originToolCallId: null, startedAt: null, verifiedAt: null, message: null };
 const review: ChangeReview = {
@@ -19,7 +19,7 @@ const candidate: CandidateState = { status: "idle", candidateId: null, candidate
 describe("WorkspaceInspector", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("keeps validation hidden for non-PiECode projects", () => {
+  it("offers validation for any project with configured scripts", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const tool = { id: "bash-1", name: "bash", title: "npm test", input: "npm test", output: "203 passed", status: "success" as const };
     const markup = renderToStaticMarkup(
@@ -46,9 +46,8 @@ describe("WorkspaceInspector", () => {
     expect(markup).toContain("src/App.tsx");
     expect(markup).toContain('class="inspector-patch-reveal" aria-hidden="true" inert=""');
     expect(markup).toContain('class="inspector-tab-panel entering"');
-    expect(markup).not.toContain('role="tab" aria-selected="false">Verification');
+    expect(markup).toContain('role="tab" aria-selected="false">Verification');
     expect(markup).not.toContain("PiECode project verification");
-    expect(markup).not.toContain("Run checks");
   });
 
   it("shows output from the selected non-command tool", () => {
@@ -78,7 +77,23 @@ describe("WorkspaceInspector", () => {
     expect(markup).not.toContain("command output</pre>");
   });
 
-  it("offers the verification tab only for the PiECode source project", () => {
+  it("keeps completed validation logs available by step", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ValidationLogs validation={{
+          ...validation,
+          status: "failed",
+          steps: [{ id: "test", label: "Tests", command: "npm run test", status: "failed", output: "assertion failed", exitCode: 1, durationMs: 20 }],
+        }} />
+      </I18nProvider>,
+    );
+    expect(markup).toContain("Validation logs");
+    expect(markup).toContain("assertion failed");
+    expect(markup).toContain("open=\"\"");
+  });
+
+  it("keeps the PiECode candidate pipeline limited to the source project", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(
       <I18nProvider>

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ConversationItem, ExplorerTask, ToolActivity } from "@shared/contracts";
+import type { ConversationItem, ExplorerTask, ToolActivity, ValidationState } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
 import { groupConsecutiveTools, isScrollAreaAtBottom, ToolBatch } from "./ToolBatch";
 
@@ -99,6 +99,27 @@ describe("ToolBatch", () => {
     expect(markup).toContain("Explorer linked");
     expect(markup).toContain("Exploring");
     expect(markup).not.toContain("Explorer other");
+  });
+
+  it("renders the validation state only under its originating tool call", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const validation: ValidationState = {
+      supported: true, isSelfProject: false, status: "running", runId: "run-1", activeStep: "test",
+      steps: [{ id: "test", label: "Tests", command: "npm run test", status: "running", output: "", exitCode: null, durationMs: null }],
+      sourceRevision: null, originToolCallId: "validation-call", startedAt: 1, verifiedAt: null, message: null,
+    };
+    const markup = renderToStaticMarkup(
+      createElement(I18nProvider, null, createElement(ToolBatch, {
+        tools: [{ ...activity("validation-call"), name: "run_validation" }],
+        validation,
+        selectedToolId: null,
+        onSelectTool: vi.fn(),
+      })),
+    );
+
+    expect(markup).toContain("Background validation");
+    expect(markup).toContain("Tests: running");
+    expect(markup).toContain("Tests");
   });
 
   it("connects the entering class to the tool row animation", () => {

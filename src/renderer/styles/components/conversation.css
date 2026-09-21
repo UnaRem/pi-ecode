@@ -91,6 +91,26 @@
 .explorer-result summary:focus-visible { border-radius: 3px; outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .explorer-result pre { max-height: 220px; margin: 7px 0 0; padding: 8px; overflow: auto; border-radius: var(--radius-sm); color: var(--color-text-muted); background: var(--color-surface-muted); font: 10px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; }
 @keyframes explorer-card-enter { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+.validation-card { margin: 7px 0 0 10px; padding: 9px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface); animation: validation-card-enter 180ms var(--ease-standard) both; transition: border-color 160ms ease, background-color 160ms ease; }
+.validation-card > header { display: flex; align-items: center; gap: 7px; }
+.validation-card > header strong { color: var(--color-text); font-size: 11px; }
+.validation-card > header > span:last-child { margin-left: auto; color: var(--color-text-faint); font-size: 10px; }
+.validation-card-icon { display: inline-flex; color: var(--color-text-faint); }
+.validation-card.running { border-color: var(--color-accent-border); background: var(--color-accent-soft); }
+.validation-card.running .validation-card-icon, .validation-card.running > header > span:last-child { color: var(--color-accent); }
+.validation-card.passed { border-color: var(--color-success-border); }
+.validation-card.passed .validation-card-icon, .validation-card.passed > header > span:last-child { color: var(--color-success); }
+.validation-card.failed, .validation-card.stale { border-color: var(--color-danger-border); background: var(--color-danger-soft); }
+.validation-card.failed .validation-card-icon, .validation-card.failed > header > span:last-child, .validation-card.stale .validation-card-icon, .validation-card.stale > header > span:last-child { color: var(--color-danger); }
+.validation-card-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 8px; }
+.validation-card-steps > div { min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); align-items: center; gap: 4px; color: var(--color-text-faint); font-size: 9.5px; }
+.validation-card-steps > div > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.validation-card-steps > div small { display: none; }
+.validation-card-steps > div.running { color: var(--color-accent); }
+.validation-card-steps > div.passed { color: var(--color-success); }
+.validation-card-steps > div.failed { color: var(--color-danger); }
+.validation-card > p { margin: 7px 0 0 18px; font-size: 10px; line-height: 1.45; }
+@keyframes validation-card-enter { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 .changed-files-presence { animation: changed-files-enter var(--duration-standard) var(--ease-standard) both; }
 .changed-files-presence.leaving { pointer-events: none; animation: changed-files-leave var(--duration-fast) var(--ease-exit) both; }
 @keyframes changed-files-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
