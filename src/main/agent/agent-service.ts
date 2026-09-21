@@ -46,12 +46,14 @@ import {
   EDIT_TOOL_COMPATIBILITY_GUIDANCE,
   EXPLORER_ORCHESTRATION_GUIDANCE,
   PARALLEL_TOOL_EXECUTION_GUIDANCE,
+  VALIDATION_ORCHESTRATION_GUIDANCE,
 } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
 import { listSessionSummaries } from "./session-summaries.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
 import { ExplorerService } from "./explorer-service.js";
+import { ValidationToolService } from "./validation-tool.js";
 
 const HISTORY_PAGE_TURNS = 25;
 
@@ -81,6 +83,7 @@ export class AgentService {
       pendingCount: session.pendingMessageCount, ...(isStreaming ? { error: null, canContinue: false } : {}) } });
   });
   private compactOperation: Promise<void> | undefined;
+  private validationOperation: Promise<ValidationState> | undefined;
   private contextEstimate: number | null = null;
   private compactionStatus: CompactionStatus = { status: "idle" };
   private readonly nativeCompaction = new NativeCompaction(
@@ -112,9 +115,19 @@ export class AgentService {
     (payload) => this.extensionUi.setQuestionnaireMetadata(payload),
   );
   private readonly history = new WorkspaceHistory(join(getAgentDir(), "state", "pi-ecode-workspace-history"));
+  private readonly validationTool = new ValidationToolService({
+    getState: () => this.validation.getState(),
+    start: (originToolCallId) => this.startValidationFromTool(originToolCallId),
+  });
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
+    this.validationTool.onValidationChanged(validation);
     this.emit({ type: "validation", validation });
+    const session = this.runtime?.session;
+    if (session) this.emit({ type: "state", patch: {
+      isStreaming: this.isAgentActive(session),
+      workingStartedAt: this.workingStartedAt,
+    } });
   });
   private readonly candidate = new CandidateService(
     join(getAgentDir(), "state", "pi-ecode-self-update"),
@@ -282,11 +295,13 @@ export class AgentService {
   }
 
   private isAgentActive(session: AgentSession): boolean {
-    return this.promptLifecycle.isActive(session) || this.explorers.isActive;
+    return this.promptLifecycle.isActive(session) || this.explorers.isActive || this.validation.getState().status === "running";
   }
 
   private get workingStartedAt(): number | null {
-    return this.promptLifecycle.workingStartedAt ?? this.explorers.workingStartedAt;
+    return this.promptLifecycle.workingStartedAt
+      ?? this.explorers.workingStartedAt
+      ?? this.validation.getState().startedAt;
   }
 
   async reloadRuntimeConfiguration(): Promise<void> {
@@ -470,11 +485,12 @@ export class AgentService {
   async stop(): Promise<void> {
     const session = this.requireRuntime().session;
     const explorerStop = this.explorers.interruptAll();
+    const validationStop = this.validation.stop();
     this.flushStreamItems();
     this.extensionUi.cancelPending();
     if (session.isCompacting) session.abortCompaction();
     const promptStop = this.promptLifecycle.stop(session);
-    await Promise.all([explorerStop, promptStop]);
+    await Promise.all([explorerStop, validationStop, promptStop]);
     await this.history.settlePending(session);
     await this.emitHistory(session);
   }
@@ -514,13 +530,40 @@ export class AgentService {
   }
 
   async runValidation(): Promise<ValidationState> {
+    if (this.validationOperation) throw new Error("Validation is already running.");
     const session = this.requireRuntime().session;
-    await this.history.checkpoint(session, "validation input");
+    const operation = (async () => {
+      await this.history.checkpoint(session, "validation input");
+      return this.executeValidation(session);
+    })();
+    return this.trackValidation(operation);
+  }
+
+  private startValidationFromTool(originToolCallId: string): void {
+    if (this.validationOperation) throw new Error("Validation is already running.");
+    const session = this.requireRuntime().session;
+    const operation = this.executeValidation(session, originToolCallId);
+    void this.trackValidation(operation).catch((error: unknown) => this.emit({ type: "error", message: errorText(error) }));
+  }
+
+  private async executeValidation(session: AgentSession, originToolCallId?: string): Promise<ValidationState> {
+    const sourceRevision = await this.history.captureSourceRevision(session);
     this.candidate.invalidate();
-    const result = await this.validation.run();
-    const review = await this.history.getReview(session);
-    this.emit({ type: "review", review });
+    const result = await this.validation.run({
+      sourceRevision,
+      readSourceRevision: () => this.history.captureSourceRevision(session),
+      ...(originToolCallId ? { originToolCallId } : {}),
+    });
+    this.emit({ type: "review", review: await this.history.getReview(session) });
     return result;
+  }
+
+  private trackValidation(operation: Promise<ValidationState>): Promise<ValidationState> {
+    this.validationOperation = operation;
+    void operation.finally(() => {
+      if (this.validationOperation === operation) this.validationOperation = undefined;
+    }).catch(() => undefined);
+    return operation;
   }
 
   async stopValidation(): Promise<void> {
@@ -544,16 +587,32 @@ export class AgentService {
   }
 
   async prepareCandidate(): Promise<CandidateState> {
-    const validation = this.validation.getState();
-    if (!validation.isSelfProject) throw new Error("Candidate updates are available only for the pi-ecode source project.");
-    if (validation.status !== "passed") throw new Error("Run verification successfully before preparing a candidate.");
-    return this.candidate.prepare();
+    const session = this.requireRuntime().session;
+    await this.assertValidationCurrent(session, "Run verification successfully before preparing a candidate.");
+    const candidate = await this.candidate.prepare();
+    try {
+      await this.assertValidationCurrent(session, "Source changed while preparing the candidate. Run verification again.");
+      return candidate;
+    } catch (error) {
+      this.candidate.invalidate();
+      throw error;
+    }
   }
 
   async activateCandidate(): Promise<void> {
-    const validation = this.validation.getState();
-    if (validation.status !== "passed") throw new Error("The verified result is stale. Run verification again.");
+    const session = this.requireRuntime().session;
+    await this.assertValidationCurrent(session, "The verified result is stale. Run verification again.");
     await this.candidate.activate();
+  }
+
+  private async assertValidationCurrent(session: AgentSession, message: string): Promise<void> {
+    const validation = this.validation.getState();
+    if (!validation.isSelfProject) throw new Error("Candidate updates are available only for the pi-ecode source project.");
+    if (validation.status !== "passed" || !validation.sourceRevision) throw new Error(message);
+    if (await this.history.captureSourceRevision(session) === validation.sourceRevision) return;
+    this.validation.invalidate("Project files changed after the last verification.");
+    this.candidate.invalidate();
+    throw new Error(message);
   }
 
   async rendererReady(): Promise<void> {
@@ -586,6 +645,7 @@ export class AgentService {
             this.confirmation.asExtension(),
             this.taskPlan.asExtension(),
             this.explorers.asExtension(),
+            this.validationTool.asExtension(),
           ],
           eventBus: this.extensionEventBus,
           appendSystemPromptOverride: (base) => [
@@ -593,6 +653,7 @@ export class AgentService {
             EDIT_TOOL_COMPATIBILITY_GUIDANCE,
             PARALLEL_TOOL_EXECUTION_GUIDANCE,
             EXPLORER_ORCHESTRATION_GUIDANCE,
+            VALIDATION_ORCHESTRATION_GUIDANCE,
           ],
           extensionsOverride: (base) => ({
             ...base,
@@ -642,7 +703,7 @@ export class AgentService {
       case "agent_start":
         this.liveAssistantId = undefined;
         this.liveAssistantText = "";
-        this.validation.invalidate();
+        if (!this.validationTool.consumePreservedAgentStart()) this.validation.invalidate();
         this.candidate.invalidate();
         this.emit({ type: "review", review: { ...EMPTY_AGENT_SNAPSHOT.review } });
         this.emit({ type: "state", patch: { isStreaming: true, error: null, canContinue: false } });
@@ -869,6 +930,7 @@ export class AgentService {
     this.pendingStreamItems.clear();
     this.pendingStreamContext = undefined;
     this.extensionUi.cancelPending();
+    this.validationTool.reset();
     await this.explorers.reset();
     await this.validation.stop();
     this.unsubscribe?.();

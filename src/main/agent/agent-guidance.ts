@@ -1,3 +1,10 @@
+export const VALIDATION_ORCHESTRATION_GUIDANCE = `## Host-owned validation
+- Use run_validation only after implementation is complete and no further source edits are planned for the run.
+- run_validation accepts no commands or script names. The host runs only configured typecheck, test, and build scripts in that fixed order.
+- Validation runs in the background. After dispatch, continue only read-only work or end the turn; do not poll for status or start a duplicate run.
+- Any source change during validation makes the result stale. A passed result applies only to its recorded source revision.
+- Never describe a validation as passed until the delivered terminal result reports status passed.`;
+
 export const EXPLORER_ORCHESTRATION_GUIDANCE = `## Read-only Explorer subagents
 - Use dispatch_explorers only when a request contains at least two independent, non-overlapping repository investigations that each require substantial reading or searching.
 - Each Explorer task must define one objective, an exact read-only scope, and a concrete evidence-based deliverable. Explorers use the parent's read, ffgrep, and fffind tools and cannot edit files or execute commands.

@@ -54,6 +54,8 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
     activeStep: null,
     steps: [],
     sourceRevision: null,
+    originToolCallId: null,
+    startedAt: null,
     verifiedAt: null,
     message: null,
   },

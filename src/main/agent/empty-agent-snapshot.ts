@@ -30,6 +30,8 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
     activeStep: null,
     steps: [],
     sourceRevision: null,
+    originToolCallId: null,
+    startedAt: null,
     verifiedAt: null,
     message: null,
   },

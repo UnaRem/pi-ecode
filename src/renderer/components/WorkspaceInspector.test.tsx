@@ -4,7 +4,7 @@ import type { CandidateState, ChangeReview, ValidationState } from "@shared/cont
 import { I18nProvider } from "../i18n/i18n";
 import { WorkspaceInspector } from "./WorkspaceInspector";
 
-const validation: ValidationState = { supported: true, isSelfProject: false, status: "idle", runId: null, activeStep: null, steps: [], sourceRevision: null, verifiedAt: null, message: null };
+const validation: ValidationState = { supported: true, isSelfProject: false, status: "idle", runId: null, activeStep: null, steps: [], sourceRevision: null, originToolCallId: null, startedAt: null, verifiedAt: null, message: null };
 const review: ChangeReview = {
   available: true,
   baseCommit: null,

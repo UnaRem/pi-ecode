@@ -3,6 +3,7 @@ import {
   EDIT_TOOL_COMPATIBILITY_GUIDANCE,
   EXPLORER_ORCHESTRATION_GUIDANCE,
   PARALLEL_TOOL_EXECUTION_GUIDANCE,
+  VALIDATION_ORCHESTRATION_GUIDANCE,
 } from "./agent-guidance.js";
 
 describe("agent guidance", () => {
@@ -25,6 +26,13 @@ describe("agent guidance", () => {
     expect(PARALLEL_TOOL_EXECUTION_GUIDANCE).toContain("Keep dependent calls sequential");
     expect(PARALLEL_TOOL_EXECUTION_GUIDANCE).toContain("Never split changes to the same file across parallel calls");
     expect(PARALLEL_TOOL_EXECUTION_GUIDANCE).toContain("request_confirmation must remain the only tool");
+  });
+
+  it("teaches every model the host validation protocol", () => {
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("run_validation accepts no commands");
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("typecheck, test, and build");
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("continue only read-only work");
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("source revision");
   });
 
   it("teaches every model the pi-ecode Explorer protocol", () => {

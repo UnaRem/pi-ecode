@@ -232,6 +232,8 @@ export interface ValidationState {
   activeStep: ValidationStepId | null;
   steps: ValidationStep[];
   sourceRevision: string | null;
+  originToolCallId: string | null;
+  startedAt: number | null;
   verifiedAt: number | null;
   message: string | null;
 }

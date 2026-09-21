@@ -37,6 +37,7 @@ interface PackageManifest {
 export interface ValidationRunOptions {
   sourceRevision?: string;
   readSourceRevision?: () => Promise<string>;
+  originToolCallId?: string;
 }
 
 function emptySteps(): ValidationStep[] {
@@ -60,6 +61,8 @@ function emptyState(): ValidationState {
     activeStep: null,
     steps: emptySteps(),
     sourceRevision: null,
+    originToolCallId: null,
+    startedAt: null,
     verifiedAt: null,
     message: null,
   };
@@ -136,6 +139,8 @@ export class ValidationService {
       runId: randomUUID(),
       activeStep: null,
       sourceRevision: null,
+      originToolCallId: options.originToolCallId ?? null,
+      startedAt: Date.now(),
       verifiedAt: null,
       message: null,
       steps: emptySteps().map((step) => (
