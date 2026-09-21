@@ -81,7 +81,7 @@ describe("ToolBatch", () => {
     expect(markup).toContain('class="tool-plaintext-row  "');
   });
 
-  it("renders only Explorers linked to this dispatch tool call", () => {
+  it("replaces large Explorer cards with one compact dispatch summary", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const explorer = (id: string, originToolCallId: string): ExplorerTask => ({
       id, taskName: id, title: `Explorer ${id}`, objective: "Inspect behavior", scope: `src/${id}`,
@@ -97,9 +97,10 @@ describe("ToolBatch", () => {
       })),
     );
 
-    expect(markup).toContain("Explorer linked");
-    expect(markup).toContain("Exploring");
+    expect(markup).toContain("Explorer · 1 active / 1 total");
+    expect(markup).not.toContain("Explorer linked");
     expect(markup).not.toContain("Explorer other");
+    expect(markup).not.toContain("explorer-cards");
   });
 
   it("renders the validation state only under its originating tool call", () => {

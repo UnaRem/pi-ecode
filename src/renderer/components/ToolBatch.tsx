@@ -3,7 +3,6 @@ import { ChevronDown } from "lucide-react";
 import type { ConversationItem, ExplorerTask, ToolActivity, ValidationState } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { useScrollFollow } from "../hooks/use-scroll-follow";
-import { ExplorerCards } from "./ExplorerCards";
 import { ValidationCard } from "./ValidationCard";
 
 export type ConversationRenderGroup =
@@ -83,13 +82,17 @@ export function ToolBatch({
   const firstTool = tools[0];
   const toolIds = new Set(tools.map((tool) => tool.id));
   const linkedExplorers = explorers.filter((task) => toolIds.has(task.originToolCallId));
+  const activeExplorers = linkedExplorers.filter((task) => task.status === "queued" || task.status === "running").length;
+  const summaryTitle = linkedExplorers.length > 0
+    ? t("explorer.compactSummary", { active: activeExplorers, total: linkedExplorers.length })
+    : firstTool?.title ?? t("tool.panelTitle");
   const linkedValidation = validation?.originToolCallId && toolIds.has(validation.originToolCallId) ? validation : null;
   return (
     <section className="tool-batch plaintext-tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
       <div className={expanded ? "tool-dropdown open" : "tool-dropdown"}>
         <button className="tool-summary" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
           <span className={`tool-inline-status ${firstTool?.status ?? "success"}`} />
-          <span>{firstTool?.title ?? t("tool.panelTitle")}</span>
+          <span>{summaryTitle}</span>
           <span className="tool-inline-count">{t("tool.batch", { count: tools.length })}</span>
           <ChevronDown className="tool-inline-chevron" size={13} aria-hidden="true" />
         </button>
@@ -107,7 +110,6 @@ export function ToolBatch({
           </div>
         </div>
       </div>
-      <ExplorerCards tasks={linkedExplorers} />
       {linkedValidation && <ValidationCard validation={linkedValidation} />}
     </section>
   );

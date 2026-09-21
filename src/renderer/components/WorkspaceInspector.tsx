@@ -1,10 +1,11 @@
 import { FileCode2, Play, Square, TerminalSquare } from "lucide-react";
-import { useState, type AnimationEvent } from "react";
-import type { CandidateState, ChangeReview, ToolActivity, ValidationState } from "@shared/contracts";
+import { useState, type AnimationEvent, type KeyboardEvent } from "react";
+import type { CandidateState, ChangeReview, ExplorerTask, ToolActivity, ValidationState } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
 import { GitPushButton } from "./GitPushButton";
 import { ValidationStepList, ValidationStepStatusIcon } from "./ValidationSteps";
+import { ExplorerPanel } from "./ExplorerPanel";
 
 interface WorkspaceInspectorProps {
   tools: ToolActivity[];
@@ -14,6 +15,10 @@ interface WorkspaceInspectorProps {
   candidate: CandidateState;
   projectPath: string;
   isStreaming: boolean;
+  explorers?: ExplorerTask[];
+  selectedExplorerId?: string | null;
+  onSelectExplorer?: (taskId: string) => void;
+  onStopExplorer?: (taskId: string) => void;
   onSelectTool: (toolId: string) => void;
   onRunValidation: () => void;
   onStopValidation: () => void;
@@ -154,13 +159,15 @@ function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFi
   );
 }
 
-type InspectorTab = "tools" | "validation";
+type InspectorTab = "tools" | "validation" | "agents";
 
 export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const { t } = useI18n();
   const [tab, setTab] = useState<InspectorTab>("tools");
   const [leavingTab, setLeavingTab] = useState<InspectorTab | null>(null);
-  const activeTab = props.validation.supported ? tab : "tools";
+  const explorers = props.explorers ?? [];
+  const availableTabs: InspectorTab[] = ["tools", ...(props.validation.supported ? ["validation" as const] : []), "agents"];
+  const activeTab = availableTabs.includes(tab) ? tab : "tools";
   const selectTab = (nextTab: InspectorTab): void => {
     if (nextTab === activeTab) return;
     setLeavingTab(activeTab);
@@ -170,22 +177,38 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     <ToolQueue {...props} onSelect={props.onSelectTool} />
     <OutputPanel {...props} />
     <ChangeFiles {...props} />
-  </> : <ValidationControls {...props} />;
+  </> : target === "validation" ? <ValidationControls {...props} /> : <ExplorerPanel
+    tasks={explorers}
+    selectedTaskId={props.selectedExplorerId ?? null}
+    onSelect={props.onSelectExplorer ?? (() => undefined)}
+    onStop={props.onStopExplorer ?? (() => undefined)}
+  />;
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, target: InspectorTab): void => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const index = availableTabs.indexOf(target);
+    const offset = event.key === "ArrowRight" ? 1 : -1;
+    const next = availableTabs[(index + offset + availableTabs.length) % availableTabs.length];
+    if (!next) return;
+    selectTab(next);
+    requestAnimationFrame(() => document.getElementById(`inspector-tab-${next}`)?.focus());
+  };
   const finishLeaving = (event: AnimationEvent<HTMLDivElement>): void => {
     if (event.animationName === "inspector-tab-leave") setLeavingTab(null);
   };
   return (
     <aside className="workspace-inspector" data-region="inspector" aria-label={t("tool.panelTitle")}>
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
-        <button type="button" role="tab" aria-selected={activeTab === "tools"} onClick={() => selectTab("tools")}>{t("tool.panelTitle")}</button>
-        {props.validation.supported && <button type="button" role="tab" aria-selected={activeTab === "validation"} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
+        <button id="inspector-tab-tools" type="button" role="tab" aria-selected={activeTab === "tools"} aria-controls="inspector-panel-tools" tabIndex={activeTab === "tools" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "tools")} onClick={() => selectTab("tools")}>{t("tool.panelTitle")}</button>
+        {props.validation.supported && <button id="inspector-tab-validation" type="button" role="tab" aria-selected={activeTab === "validation"} aria-controls="inspector-panel-validation" tabIndex={activeTab === "validation" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "validation")} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
+        <button id="inspector-tab-agents" type="button" role="tab" aria-selected={activeTab === "agents"} aria-controls="inspector-panel-agents" tabIndex={activeTab === "agents" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "agents")} onClick={() => selectTab("agents")}>{t("explorer.tab")}<span>{explorers.length}</span></button>
       </div>
       <div className="inspector-scroll">
         <div className="inspector-tab-stack">
           {leavingTab && leavingTab !== activeTab && (
             <div className="inspector-tab-panel leaving" inert onAnimationEnd={finishLeaving}>{renderTab(leavingTab)}</div>
           )}
-          <div key={activeTab} className="inspector-tab-panel entering">{renderTab(activeTab)}</div>
+          <div id={`inspector-panel-${activeTab}`} key={activeTab} className="inspector-tab-panel entering" role="tabpanel" aria-labelledby={`inspector-tab-${activeTab}`}>{renderTab(activeTab)}</div>
         </div>
       </div>
     </aside>

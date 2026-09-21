@@ -13,6 +13,7 @@ import { useScrollFollow } from "../hooks/use-scroll-follow";
 
 interface ConversationProps {
   timeline: ConversationItem[];
+  viewKey?: string;
   explorers?: ExplorerTask[];
   validation?: ValidationState;
   isStreaming: boolean;
@@ -32,6 +33,10 @@ interface ConversationProps {
 }
 
 const BOTTOM_THRESHOLD = 48;
+
+function isScrollNearBottom(element: HTMLElement): boolean {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= BOTTOM_THRESHOLD;
+}
 
 export function formatWorkingDuration(elapsedMs: number): string {
   const totalSeconds = Math.floor(Math.max(0, elapsedMs) / 1000);
@@ -344,6 +349,9 @@ export function Conversation(props: ConversationProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const userElements = useRef(new Map<string, HTMLElement>());
   const historyAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const scrollPositionsRef = useRef(new Map<string, number>());
+  const previousViewKeyRef = useRef(props.viewKey ?? "conversation");
+  const latestUserViewKeyRef = useRef(props.viewKey ?? "conversation");
   const followingRef = useRef(true);
   const [isFollowing, setIsFollowing] = useState(true);
   const { nicknames, saveNickname } = useMessageNicknames({
@@ -373,17 +381,26 @@ export function Conversation(props: ConversationProps) {
     container.scrollTo({ top: container.scrollHeight, behavior });
   };
 
-  useEffect(() => {
-    setFollowing(true);
-    requestAnimationFrame(() => scrollToBottom("auto"));
-  }, [conversationKey]);
+  const viewKey = props.viewKey ?? conversationKey;
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || previousViewKeyRef.current === viewKey) return;
+    scrollPositionsRef.current.set(previousViewKeyRef.current, container.scrollTop);
+    previousViewKeyRef.current = viewKey;
+    const savedPosition = scrollPositionsRef.current.get(viewKey);
+    container.scrollTop = savedPosition ?? container.scrollHeight;
+    setFollowing(savedPosition === undefined || isScrollNearBottom(container));
+  }, [viewKey]);
 
   useEffect(() => {
+    const switchedView = latestUserViewKeyRef.current !== viewKey;
+    latestUserViewKeyRef.current = viewKey;
     if (!latestUserId) return;
     setActiveUserId(latestUserId);
+    if (switchedView) return;
     setFollowing(true);
     requestAnimationFrame(() => scrollToBottom("auto"));
-  }, [latestUserId]);
+  }, [latestUserId, viewKey]);
 
   const firstTimelineId = props.timeline[0]?.id;
   useLayoutEffect(() => {

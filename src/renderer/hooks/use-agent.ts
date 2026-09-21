@@ -90,6 +90,19 @@ export function useAgent() {
     }
   }, [isLoadingOlder, state.timelineHasMore]);
 
+  const loadExplorerTimeline = useCallback(async (taskId: string) => {
+    const snapshot = await run(() => window.piDesktop.getExplorerTimeline(taskId));
+    if (snapshot) dispatch({ type: "explorer-timeline", snapshot });
+  }, [run]);
+
+  const stopExplorer = useCallback(async (taskId: string) => {
+    await run(() => window.piDesktop.stopExplorer(taskId));
+  }, [run]);
+
+  const getExplorerToolOutput = useCallback(async (taskId: string, toolCallId: string) => (
+    run(() => window.piDesktop.getExplorerToolOutput(taskId, toolCallId))
+  ), [run]);
+
   const continueAfterError = useCallback(async () => {
     dispatch({ type: "state", patch: { error: null, canContinue: false } });
     await run(() => window.piDesktop.continueAfterError());
@@ -180,6 +193,9 @@ export function useAgent() {
       deleteSession,
       renameSession,
       loadOlderTimeline,
+      loadExplorerTimeline,
+      stopExplorer,
+      getExplorerToolOutput,
       continueAfterError,
       send,
       editorRestored,

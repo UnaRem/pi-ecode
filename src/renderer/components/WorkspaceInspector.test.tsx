@@ -46,8 +46,11 @@ describe("WorkspaceInspector", () => {
     expect(markup).toContain("src/App.tsx");
     expect(markup).toContain('class="inspector-patch-reveal" aria-hidden="true" inert=""');
     expect(markup).toContain('class="inspector-tab-panel entering"');
-    expect(markup).toContain('role="tab" aria-selected="false">Verification');
+    expect(markup).toContain('id="inspector-tab-validation"');
+    expect(markup).toContain('aria-selected="false" aria-controls="inspector-panel-validation"');
     expect(markup).not.toContain("PiECode project verification");
+    expect(markup).toContain('id="inspector-tab-agents"');
+    expect(markup).toContain("Agents<span>0</span>");
   });
 
   it("shows output from the selected non-command tool", () => {
@@ -114,6 +117,7 @@ describe("WorkspaceInspector", () => {
         />
       </I18nProvider>,
     );
-    expect(markup).toContain('role="tab" aria-selected="false">Verification');
+    expect(markup).toContain('id="inspector-tab-validation"');
+    expect(markup).toContain('aria-selected="false" aria-controls="inspector-panel-validation"');
   });
 });

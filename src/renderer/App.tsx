@@ -6,6 +6,7 @@ import { Sidebar } from "./components/Sidebar";
 import { StartupScreen } from "./components/StartupScreen";
 import { Topbar } from "./components/Topbar";
 import { WorkspaceInspector } from "./components/WorkspaceInspector";
+import { ExplorerContextBar } from "./components/ExplorerContextBar";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { useAgent } from "./hooks/use-agent";
 import { useAppConfig } from "./hooks/use-app-config";
@@ -28,10 +29,22 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const [selectedExplorerId, setSelectedExplorerId] = useState<string | null>(null);
+  const [explorerToolOutput, setExplorerToolOutput] = useState<{ key: string; output: string } | null>(null);
   const selectedModel = state.models.find((model) => `${model.provider}/${model.id}` === state.selectedModel);
   const activeSession = state.sessions.find((session) => session.path === state.sessionFile);
   const sessionTitle = state.sessionTitle ?? (activeSession?.messageCount ? activeSession.title : null);
-  const workspaceTools = useWorkspaceTools(state.timeline, state.sessionFile ?? "new-session");
+  const selectedExplorer = state.explorers.find((task) => task.id === selectedExplorerId) ?? null;
+  const explorerTimeline = selectedExplorerId ? state.explorerTimelines[selectedExplorerId]?.timeline ?? [] : [];
+  const activeTimeline = selectedExplorer ? explorerTimeline : state.timeline;
+  const activeViewKey = selectedExplorer ? `explorer:${selectedExplorer.id}` : `main:${state.sessionFile ?? "new-session"}`;
+  const workspaceTools = useWorkspaceTools(activeTimeline, activeViewKey);
+  const selectedExplorerToolKey = selectedExplorer && workspaceTools.selectedTool
+    ? `${selectedExplorer.id}:${workspaceTools.selectedTool.id}`
+    : null;
+  const inspectorSelectedTool = workspaceTools.selectedTool && explorerToolOutput?.key === selectedExplorerToolKey
+    ? { ...workspaceTools.selectedTool, output: explorerToolOutput.output, outputTruncated: false }
+    : workspaceTools.selectedTool;
 
   const leaveSettings = useCallback((): boolean => {
     if (settingsDirty && !window.confirm(t("settings.confirmDiscard"))) return false;
@@ -41,15 +54,46 @@ export default function App() {
   }, [settingsDirty, t]);
 
   useEffect(() => {
+    if (selectedExplorerId && !selectedExplorer) setSelectedExplorerId(null);
+  }, [selectedExplorer, selectedExplorerId]);
+
+  useEffect(() => {
+    setSelectedExplorerId(null);
+  }, [state.sessionFile]);
+
+  useEffect(() => {
+    if (!selectedExplorer || !workspaceTools.selectedTool || workspaceTools.selectedTool.status === "running") {
+      setExplorerToolOutput(null);
+      return;
+    }
+    let cancelled = false;
+    void actions.getExplorerToolOutput(selectedExplorer.id, workspaceTools.selectedTool.id).then((output) => {
+      if (!cancelled && output !== undefined) setExplorerToolOutput({
+        key: `${selectedExplorer.id}:${workspaceTools.selectedTool!.id}`,
+        output,
+      });
+    });
+    return () => { cancelled = true; };
+  }, [actions.getExplorerToolOutput, selectedExplorer, workspaceTools.selectedTool]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n" && state.projectPath && !settingsOpen) {
+      if (event.key === "Escape" && selectedExplorerId) {
+        event.preventDefault();
+        setSelectedExplorerId(null);
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n" && state.projectPath && !settingsOpen) {
         event.preventDefault();
         void actions.newSession();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [actions, settingsOpen, state.projectPath]);
+  }, [actions.newSession, selectedExplorerId, settingsOpen, state.projectPath]);
+
+  const selectExplorer = useCallback((taskId: string): void => {
+    setSelectedExplorerId(taskId);
+    void actions.loadExplorerTimeline(taskId);
+  }, [actions.loadExplorerTimeline]);
 
   if (startupVisible) {
     return <StartupScreen ready={!isLoading} iconSrc={brandIconSrc} onFinished={() => setStartupVisible(false)} />;
@@ -108,26 +152,30 @@ export default function App() {
           onOpenSidebar={() => setSidebarOpen(true)}
           onRenameSession={(title) => void actions.renameSession(title)}
         />
+        {selectedExplorer && <ExplorerContextBar task={selectedExplorer} onReturn={() => setSelectedExplorerId(null)} />}
         <Conversation
-          timeline={state.timeline}
-          explorers={state.explorers}
-          validation={state.validation}
-          isStreaming={state.isStreaming}
-          workingStartedAt={state.workingStartedAt}
+          timeline={activeTimeline}
+          viewKey={activeViewKey}
+          explorers={selectedExplorer ? [] : state.explorers}
+          {...(!selectedExplorer ? { validation: state.validation } : {})}
+          isStreaming={selectedExplorer
+            ? selectedExplorer.status === "running" || state.explorerTimelines[selectedExplorer.id] === undefined
+            : state.isStreaming}
+          workingStartedAt={selectedExplorer ? selectedExplorer.startedAt ?? null : state.workingStartedAt}
           projectName={state.projectName}
-          error={state.error}
-          canContinue={state.canContinue}
-          notice={state.notice}
+          error={selectedExplorer ? null : state.error}
+          canContinue={selectedExplorer ? false : state.canContinue}
+          notice={selectedExplorer ? null : state.notice}
           conversationIdentity={appConfig?.conversationIdentity}
-          review={state.review}
-          hasOlderTimeline={state.timelineHasMore}
-          isLoadingOlder={isLoadingOlder}
-          onLoadOlder={() => void actions.loadOlderTimeline()}
+          {...(!selectedExplorer ? { review: state.review } : {})}
+          hasOlderTimeline={selectedExplorer ? false : state.timelineHasMore}
+          isLoadingOlder={selectedExplorer ? false : isLoadingOlder}
+          {...(!selectedExplorer ? { onLoadOlder: () => void actions.loadOlderTimeline() } : {})}
           onContinue={() => void actions.continueAfterError()}
           selectedToolId={workspaceTools.selectedToolId}
           onSelectTool={workspaceTools.selectTool}
         />
-        <Composer
+        {!selectedExplorer && <Composer
           isStreaming={state.isStreaming}
           pendingCount={state.pendingCount}
           modelReady={Boolean(state.selectedModel)}
@@ -153,18 +201,22 @@ export default function App() {
           onRedo={() => void actions.redo()}
           onSetModel={(value) => void actions.setModel(value)}
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
-        />
+        />}
           </>
         )}
       </section>
       <WorkspaceInspector
         tools={workspaceTools.tools}
-        selectedTool={workspaceTools.selectedTool}
+        selectedTool={inspectorSelectedTool}
         validation={state.validation}
         review={state.review}
         candidate={state.candidate}
         projectPath={state.projectPath}
         isStreaming={state.isStreaming}
+        explorers={state.explorers}
+        selectedExplorerId={selectedExplorerId}
+        onSelectExplorer={selectExplorer}
+        onStopExplorer={(taskId) => void actions.stopExplorer(taskId)}
         onSelectTool={workspaceTools.selectTool}
         onRunValidation={() => void actions.runValidation()}
         onStopValidation={() => void actions.stopValidation()}
