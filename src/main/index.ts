@@ -60,10 +60,12 @@ function createWindow(): void {
   const iconPath = isPackagedRuntime
     ? join(process.resourcesPath, iconFileName)
     : join(app.getAppPath(), "resources", iconFileName);
-  const initialWidth = Math.min(1440, screen.getPrimaryDisplay().workAreaSize.width);
+  const primaryWorkArea = screen.getPrimaryDisplay().workArea;
+  const initialWidth = Math.min(1440, primaryWorkArea.width);
   const window = new BrowserWindow({
     width: initialWidth,
-    height: 780,
+    height: primaryWorkArea.height,
+    y: primaryWorkArea.y,
     minWidth: 820,
     minHeight: 560,
     title: "PiECode",

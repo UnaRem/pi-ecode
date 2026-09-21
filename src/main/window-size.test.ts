@@ -6,10 +6,16 @@ describe("main window size", () => {
   const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
 
   it("uses a 1440px initial width capped by the primary display work area", () => {
-    expect(source).toContain("screen.getPrimaryDisplay().workAreaSize.width");
-    expect(source).toContain("Math.min(1440");
+    expect(source).toContain("screen.getPrimaryDisplay().workArea");
+    expect(source).toContain("Math.min(1440, primaryWorkArea.width)");
     expect(source).toContain("width: initialWidth");
     expect(source).toContain("minWidth: 820");
+  });
+
+  it("fills the primary display work area vertically without maximizing", () => {
+    expect(source).toContain("height: primaryWorkArea.height");
+    expect(source).toContain("y: primaryWorkArea.y");
+    expect(source).not.toContain("window.maximize()");
   });
 
   it("lets the branded development executable own its taskbar identity", () => {
