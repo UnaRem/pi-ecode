@@ -1,3 +1,4 @@
+import type { AgentRole, ProjectAgentCatalog } from "./agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
 
@@ -140,7 +141,11 @@ export interface ExplorerTask {
   status: ExplorerStatus;
   originToolCallId: string;
   sessionId?: string;
-  thinkingLevel: "low" | "medium";
+  agentId?: string;
+  agentRole?: AgentRole;
+  provider?: string;
+  modelId?: string;
+  thinkingLevel: ThinkingLevel;
   attempt: number;
   maxAttempts: number;
   revision: number;
@@ -340,6 +345,7 @@ export interface AgentSnapshot {
   canContinue: boolean;
   taskPlan: TaskPlan | null;
   explorers: ExplorerTask[];
+  agentCatalog: ProjectAgentCatalog | null;
   extensionUi: ExtensionUiRequest | null;
   history: WorkspaceHistoryState;
   validation: ValidationState;
@@ -355,6 +361,7 @@ export type AgentEvent =
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
   | { type: "explorers"; explorers: ExplorerTask[] }
+  | { type: "agent-catalog"; catalog: ProjectAgentCatalog }
   | { type: "explorer-timeline"; snapshot: ExplorerTimelineSnapshot }
   | { type: "extension-ui"; request: ExtensionUiRequest | null }
   | { type: "state"; patch: Partial<Pick<AgentSnapshot, "sessionTitle" | "isStreaming" | "workingStartedAt" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error" | "canContinue">> }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
 
 interface DeferredResult {
@@ -13,14 +14,17 @@ function deferredResult(): DeferredResult {
   return { promise, resolve };
 }
 
-function harness(runExplorer: NonNullable<ConstructorParameters<typeof ExplorerService>[0]["runExplorer"]>) {
+function harness(
+  runExplorer: NonNullable<ConstructorParameters<typeof ExplorerService>[0]["runExplorer"]>,
+  options: Partial<ConstructorParameters<typeof ExplorerService>[0]> = {},
+) {
   let branch: SessionEntry[] = [];
   const tools = new Map<string, ToolDefinition>();
   const sent: Array<{ content: unknown; options: unknown }> = [];
   const appended: Array<{ customType: string; data: unknown }> = [];
   const handlers = new Map<string, (event: unknown, context: ExtensionContext) => void>();
   const parent = { model: { id: "model" } } as unknown as AgentSession;
-  const service = new ExplorerService({ getParentSession: () => parent, onChange: vi.fn(), runExplorer });
+  const service = new ExplorerService({ getParentSession: () => parent, onChange: vi.fn(), runExplorer, ...options });
   const pi = {
     on: (event: string, handler: (event: unknown, context: ExtensionContext) => void) => handlers.set(event, handler),
     registerTool: (definition: ToolDefinition) => { tools.set(definition.name, definition); },
@@ -51,6 +55,23 @@ function harness(runExplorer: NonNullable<ConstructorParameters<typeof ExplorerS
         ...(thinkingLevel ? { thinking_level: thinkingLevel } : {}),
       }, undefined, undefined, context);
     },
+  };
+}
+
+function agent(id: string, role: ProjectAgentDefinition["role"] = "explorer"): ProjectAgentDefinition {
+  return {
+    id,
+    name: id,
+    role,
+    builtIn: true,
+    enabled: true,
+    model: { mode: "inherit" },
+    thinkingLevel: "low",
+    autoCompaction: { enabled: true, thresholdPercent: null },
+    prompt: `prompt for ${id}`,
+    disabledTools: [],
+    createdAt: 1,
+    updatedAt: 1,
   };
 }
 
@@ -98,6 +119,39 @@ describe("ExplorerService", () => {
     expect(mediumTest.service.current[0]?.thinkingLevel).toBe("medium");
     lowTest.service.interruptAll();
     mediumTest.service.interruptAll();
+    low.resolve({ sessionId: "low", finalText: "stopped" });
+    medium.resolve({ sessionId: "medium", finalText: "stopped" });
+  });
+
+  it("assigns configured project agents and refuses to run one agent twice", async () => {
+    const pending = deferredResult();
+    const definitions = [agent("explorer-1"), agent("explorer-2"), agent("validator-1", "validator")];
+    const test = harness(() => pending.promise, { getAgentDefinitions: () => definitions, getMaxConcurrent: () => 2 });
+
+    await test.dispatch([request(1), request(2)]);
+    expect(test.service.current.map((task) => task.agentId)).toEqual(["explorer-1", "explorer-2"]);
+    expect(test.service.current.every((task) => task.thinkingLevel === "low")).toBe(true);
+    await expect(test.dispatch([{ ...request(3), agent_id: "explorer-1" }])).rejects.toThrow("正在执行其他任务");
+
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child", finalText: "stopped" });
+    await stop;
+  });
+
+  it("uses a configured agent thinking level unless the dispatch explicitly overrides it", async () => {
+    const low = deferredResult();
+    const medium = deferredResult();
+    const configured = agent("reviewer-1", "reviewer");
+    configured.thinkingLevel = "high";
+    const first = harness(() => low.promise, { getAgentDefinitions: () => [configured] });
+    const second = harness(() => medium.promise, { getAgentDefinitions: () => [configured] });
+
+    await first.dispatch([{ ...request(1), agent_id: "reviewer-1" }]);
+    await second.dispatch([{ ...request(2), agent_id: "reviewer-1" }], "medium");
+    expect(first.service.current[0]?.thinkingLevel).toBe("high");
+    expect(second.service.current[0]?.thinkingLevel).toBe("medium");
+    void first.service.interruptAll();
+    void second.service.interruptAll();
     low.resolve({ sessionId: "low", finalText: "stopped" });
     medium.resolve({ sessionId: "medium", finalText: "stopped" });
   });

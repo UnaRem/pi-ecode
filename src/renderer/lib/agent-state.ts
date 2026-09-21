@@ -45,6 +45,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   canContinue: false,
   taskPlan: null,
   explorers: [],
+  agentCatalog: null,
   extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
@@ -232,6 +233,8 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
         }),
       };
     }
+    case "agent-catalog":
+      return { ...state, agentCatalog: event.catalog };
     case "explorer-timeline": {
       const current = state.explorerTimelines[event.snapshot.taskId];
       if (current && current.revision >= event.snapshot.revision) return state;

@@ -53,6 +53,7 @@ import { listSessionSummaries } from "./session-summaries.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
 import { ExplorerService } from "./explorer-service.js";
+import { AgentCatalogService } from "./agent-catalog-service.js";
 import { ValidationToolService } from "./validation-tool.js";
 
 const HISTORY_PAGE_TURNS = 25;
@@ -94,8 +95,11 @@ export class AgentService {
   private readonly streamContinuity = new StreamContinuity();
   private readonly confirmation = new ConfirmationService();
   private readonly taskPlan = new TaskPlanService((taskPlan) => this.emit({ type: "task-plan", taskPlan }));
+  private readonly agentCatalog: AgentCatalogService;
   private readonly explorers = new ExplorerService({
     getParentSession: () => this.runtime?.session,
+    getAgentDefinitions: () => this.agentCatalog?.enabled() ?? [],
+    getMaxConcurrent: () => this.agentCatalog?.current?.maxConcurrent ?? 3,
     onChange: (explorers) => {
       this.emit({ type: "explorers", explorers });
       const session = this.runtime?.session;
@@ -139,8 +143,10 @@ export class AgentService {
   constructor(
     openExternal: (url: string) => Promise<void> = async () => undefined,
     trashItem: (path: string) => Promise<void> = async () => { throw new Error("System trash is unavailable."); },
+    agentCatalogDirectory = join(getAgentDir(), "state", "pi-ecode-agents"),
   ) {
     this.trashItem = trashItem;
+    this.agentCatalog = new AgentCatalogService(agentCatalogDirectory);
     this.auth = new AuthService(
       () => this.runtime?.session.modelRuntime,
       (event) => {
@@ -204,6 +210,7 @@ export class AgentService {
     this.startupError = undefined;
 
     try {
+      await this.agentCatalog.open(cwd);
       this.runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
         cwd,
         agentDir: getAgentDir(),
@@ -386,6 +393,7 @@ export class AgentService {
       canContinue: failure?.canContinue ?? false,
       taskPlan: this.taskPlan.current,
       explorers: this.explorers.current,
+      agentCatalog: this.agentCatalog.current,
       extensionUi: this.extensionUi.current,
       history,
       validation: this.validation.getState(),

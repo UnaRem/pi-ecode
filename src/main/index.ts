@@ -13,6 +13,7 @@ if (process.platform === "win32" && !IS_BRANDED_DEVELOPMENT_RUNTIME) app.setAppU
 const service = new AgentService(
   (url) => shell.openExternal(url),
   (path) => shell.trashItem(path),
+  join(app.getPath("userData"), "agents"),
 );
 const settings = new SettingsService({
   agentDir: service.agentDirectory,
