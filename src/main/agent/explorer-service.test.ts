@@ -37,9 +37,13 @@ function harness(runExplorer: NonNullable<ConstructorParameters<typeof ExplorerS
     appended,
     setBranch: (entries: SessionEntry[]) => { branch = entries; },
     restore: () => handlers.get("session_tree")?.({}, context),
-    dispatch: async (explorers: Array<Record<string, string>>) => {
+    dispatch: async (explorers: Array<Record<string, string>>, thinkingLevel?: "low" | "medium") => {
       if (!tool) throw new Error("Explorer tool was not registered.");
-      return tool.execute("dispatch-1", { description: "parallel research", explorers }, undefined, undefined, context);
+      return tool.execute("dispatch-1", {
+        description: "parallel research",
+        explorers,
+        ...(thinkingLevel ? { thinking_level: thinkingLevel } : {}),
+      }, undefined, undefined, context);
     },
   };
 }
@@ -75,12 +79,62 @@ describe("ExplorerService", () => {
     expect(() => explorerToolDefinitions(parent)).toThrow("parent ffgrep tool");
   });
 
+  it("defaults Explorer thinking to low and accepts a batch-level medium override", async () => {
+    const low = deferredResult();
+    const medium = deferredResult();
+    const lowTest = harness(() => low.promise);
+    const mediumTest = harness(() => medium.promise);
+
+    await lowTest.dispatch([request(1)]);
+    await mediumTest.dispatch([request(2)], "medium");
+
+    expect(lowTest.service.current[0]?.thinkingLevel).toBe("low");
+    expect(mediumTest.service.current[0]?.thinkingLevel).toBe("medium");
+    lowTest.service.interruptAll();
+    mediumTest.service.interruptAll();
+    low.resolve({ sessionId: "low", finalText: "stopped" });
+    medium.resolve({ sessionId: "medium", finalText: "stopped" });
+  });
+
+  it("retries one inactive attempt and preserves the selected thinking level", async () => {
+    vi.useFakeTimers();
+    let attempts = 0;
+    const service = new ExplorerService({
+      getParentSession: () => ({ model: { id: "model" } }) as unknown as AgentSession,
+      onChange: vi.fn(),
+      watchdog: { warningMs: 10, inactivityMs: 20, totalMs: 100, intervalMs: 5, maxAttempts: 2 },
+      runExplorer: (task, _request, _parent, signal) => {
+        attempts += 1;
+        if (attempts === 2) return Promise.resolve({ sessionId: "retry-child", finalText: "recovered" });
+        return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
+      },
+    });
+    let tool: ToolDefinition | undefined;
+    const extension = service.asExtension();
+    const pi = {
+      on: vi.fn(),
+      registerTool: (definition: ToolDefinition) => { tool = definition; },
+      appendEntry: vi.fn(),
+      sendMessage: vi.fn(),
+    } as unknown as ExtensionAPI;
+    void (typeof extension === "function" ? extension(pi) : extension.factory(pi));
+    if (!tool) throw new Error("Explorer tool was not registered.");
+
+    await tool.execute("dispatch-retry", { description: "retry", thinking_level: "medium", explorers: [request(1)] }, undefined, undefined, {} as ExtensionContext);
+    await vi.advanceTimersByTimeAsync(25);
+    await vi.waitFor(() => expect(service.current[0]?.status).toBe("completed"));
+
+    expect(attempts).toBe(2);
+    expect(service.current[0]).toMatchObject({ attempt: 2, maxAttempts: 2, thinkingLevel: "medium", finalText: "recovered" });
+    vi.useRealTimers();
+  });
+
   it("runs at most three Explorers and starts queued work in FIFO order", async () => {
     const deferred = Array.from({ length: 4 }, deferredResult);
     const starts: string[] = [];
     const test = harness((task) => {
-      starts.push(task.task_name);
-      return deferred[Number(task.task_name.slice(5)) - 1]!.promise;
+      starts.push(task.taskName);
+      return deferred[Number(task.taskName.slice(5)) - 1]!.promise;
     });
 
     await test.dispatch([request(1), request(2), request(3), request(4)]);
@@ -118,7 +172,8 @@ describe("ExplorerService", () => {
     const test = harness(runExplorer);
     const running = {
       id: "child-1", taskName: "inspect", title: "Inspect", objective: "Find behavior", scope: "src/",
-      deliverable: "Evidence", status: "running", originToolCallId: "dispatch-old", queuedAt: 1, startedAt: 2,
+      deliverable: "Evidence", status: "running", originToolCallId: "dispatch-old", thinkingLevel: "low",
+      attempt: 1, maxAttempts: 2, revision: 1, queuedAt: 1, startedAt: 2,
     };
     test.setBranch([{
       type: "custom", id: "entry-1", parentId: null, timestamp: new Date().toISOString(),

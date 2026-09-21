@@ -120,6 +120,18 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
     if (typeof sourceId !== "string") throw new Error("Invalid conversation image id.");
     return service.getConversationImage(sourceId);
   });
+  ipcMain.handle(IPC_CHANNELS.getExplorerTimeline, (_event, taskId: unknown) => {
+    if (typeof taskId !== "string") throw new Error("Invalid Explorer task id.");
+    return service.getExplorerTimeline(taskId);
+  });
+  ipcMain.handle(IPC_CHANNELS.getExplorerToolOutput, (_event, taskId: unknown, toolCallId: unknown) => {
+    if (typeof taskId !== "string" || typeof toolCallId !== "string") throw new Error("Invalid Explorer tool output request.");
+    return service.getExplorerToolOutput(taskId, toolCallId);
+  });
+  ipcMain.handle(IPC_CHANNELS.stopExplorer, (_event, taskId: unknown) => {
+    if (typeof taskId !== "string") throw new Error("Invalid Explorer task id.");
+    return service.stopExplorer(taskId);
+  });
   ipcMain.handle(IPC_CHANNELS.newSession, () => service.newSession());
   ipcMain.handle(IPC_CHANNELS.switchSession, (_event, path: string) => service.switchSession(path));
   ipcMain.handle(IPC_CHANNELS.deleteSession, (_event, path: string) => service.deleteSession(path));

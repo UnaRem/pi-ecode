@@ -38,8 +38,11 @@ describe("agent guidance", () => {
   it("teaches every model the pi-ecode Explorer protocol", () => {
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("dispatch_explorers");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("read, ffgrep, and fffind");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("thinking defaults to low");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("At most three run concurrently");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("do not poll or wait");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("retry once after 3 minutes");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("stop after 10 minutes total");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("cannot edit files or execute commands");
   });
 });

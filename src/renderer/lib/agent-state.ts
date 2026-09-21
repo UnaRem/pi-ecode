@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentSnapshot, AgentTimelinePage, ConversationItem, ImageAttachment } from "@shared/contracts";
+import type { AgentEvent, AgentSnapshot, AgentTimelinePage, ConversationItem, ExplorerTimelineSnapshot, ImageAttachment } from "@shared/contracts";
 import { parsePastedTexts } from "../../shared/pasted-text";
 
 export interface PendingPrompt {
@@ -23,6 +23,7 @@ export interface AgentViewState extends AgentSnapshot {
   notice: string | null;
   pendingPrompts: PendingPrompt[];
   editorRestoreMode: "replace" | "merge";
+  explorerTimelines: Record<string, ExplorerTimelineSnapshot>;
 }
 
 export const INITIAL_AGENT_STATE: AgentViewState = {
@@ -94,6 +95,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   restoredEditorImages: [],
   editorRestoreVersion: 0,
   notice: null,
+  explorerTimelines: {},
 };
 
 function upsertTimeline(
@@ -212,6 +214,7 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
         restoredEditorImages: [],
         editorRestoreVersion: state.editorRestoreVersion,
         notice: null,
+        explorerTimelines: event.snapshot.sessionId === state.sessionId ? state.explorerTimelines : {},
       };
     case "timeline-upsert":
       return { ...state, timeline: upsertTimeline(state.timeline, event.item) };
@@ -219,8 +222,21 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
       return { ...state, context: event.context };
     case "task-plan":
       return { ...state, taskPlan: event.taskPlan };
-    case "explorers":
-      return { ...state, explorers: event.explorers };
+    case "explorers": {
+      const current = new Map(state.explorers.map((task) => [task.id, task]));
+      return {
+        ...state,
+        explorers: event.explorers.map((task) => {
+          const previous = current.get(task.id);
+          return previous && previous.revision > task.revision ? previous : task;
+        }),
+      };
+    }
+    case "explorer-timeline": {
+      const current = state.explorerTimelines[event.snapshot.taskId];
+      if (current && current.revision >= event.snapshot.revision) return state;
+      return { ...state, explorerTimelines: { ...state.explorerTimelines, [event.snapshot.taskId]: event.snapshot } };
+    }
     case "extension-ui":
       return { ...state, extensionUi: event.request };
     case "state":

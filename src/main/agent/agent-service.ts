@@ -1,4 +1,4 @@
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import {
   type AgentSession,
@@ -104,6 +104,7 @@ export class AgentService {
         workingStartedAt: this.workingStartedAt,
       } });
     },
+    onTimeline: (snapshot) => this.emit({ type: "explorer-timeline", snapshot }),
   });
   private readonly extensionUi = new ExtensionUiBridge(
     (request) => this.emit({ type: "extension-ui", request }),
@@ -240,6 +241,18 @@ export class AgentService {
   getConversationImage(sourceId: string): ConversationImagePayload | null {
     if (!/^\d+:\d+$/u.test(sourceId)) throw new Error("Invalid conversation image id.");
     return this.runtime ? conversationImagePayload(this.runtime.session.messages, sourceId) : null;
+  }
+
+  getExplorerTimeline(taskId: string) {
+    return this.explorers.getTimeline(taskId);
+  }
+
+  getExplorerToolOutput(taskId: string, toolCallId: string): Promise<string> {
+    return this.explorers.getToolOutput(taskId, toolCallId);
+  }
+
+  stopExplorer(taskId: string): Promise<void> {
+    return this.explorers.interrupt(taskId);
   }
 
   private timelinePage(session: AgentSession): AgentTimelinePage {
@@ -414,6 +427,10 @@ export class AgentService {
     if (!target) throw new Error("That session does not belong to the active project.");
     if (target.path === runtime.session.sessionFile) throw new Error("The active session cannot be deleted.");
     await this.trashItem(target.path);
+    const explorerDirectory = join(dirname(target.path), ".explorers", target.id);
+    if (await stat(explorerDirectory).then((details) => details.isDirectory()).catch(() => false)) {
+      await this.trashItem(explorerDirectory);
+    }
     await this.refreshSessions();
   }
 

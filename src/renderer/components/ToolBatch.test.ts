@@ -85,7 +85,8 @@ describe("ToolBatch", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const explorer = (id: string, originToolCallId: string): ExplorerTask => ({
       id, taskName: id, title: `Explorer ${id}`, objective: "Inspect behavior", scope: `src/${id}`,
-      deliverable: "Evidence", status: "running", originToolCallId, queuedAt: 1,
+      deliverable: "Evidence", status: "running", originToolCallId, thinkingLevel: "low",
+      attempt: 1, maxAttempts: 2, revision: 1, queuedAt: 1,
     });
     const markup = renderToStaticMarkup(
       createElement(I18nProvider, null, createElement(ToolBatch, {

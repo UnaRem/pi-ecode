@@ -8,6 +8,9 @@ export const IPC_CHANNELS = {
   loadOlderTimeline: "agent:load-older-timeline",
   getToolOutput: "agent:get-tool-output",
   getConversationImage: "agent:get-conversation-image",
+  getExplorerTimeline: "agent:get-explorer-timeline",
+  getExplorerToolOutput: "agent:get-explorer-tool-output",
+  stopExplorer: "agent:stop-explorer",
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
   deleteSession: "agent:delete-session",
@@ -137,11 +140,23 @@ export interface ExplorerTask {
   status: ExplorerStatus;
   originToolCallId: string;
   sessionId?: string;
+  thinkingLevel: "low" | "medium";
+  attempt: number;
+  maxAttempts: number;
+  revision: number;
   queuedAt: number;
   startedAt?: number;
   endedAt?: number;
+  lastActivityAt?: number;
+  activity?: string;
   finalText?: string;
   errorMessage?: string;
+}
+
+export interface ExplorerTimelineSnapshot {
+  taskId: string;
+  revision: number;
+  timeline: ConversationItem[];
 }
 
 export type TaskPlanItemStatus = "pending" | "in_progress" | "completed";
@@ -340,6 +355,7 @@ export type AgentEvent =
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
   | { type: "explorers"; explorers: ExplorerTask[] }
+  | { type: "explorer-timeline"; snapshot: ExplorerTimelineSnapshot }
   | { type: "extension-ui"; request: ExtensionUiRequest | null }
   | { type: "state"; patch: Partial<Pick<AgentSnapshot, "sessionTitle" | "isStreaming" | "workingStartedAt" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error" | "canContinue">> }
   | { type: "sessions"; sessions: SessionSummary[] }
@@ -370,6 +386,9 @@ export interface DesktopApi {
   loadOlderTimeline(): Promise<AgentTimelinePage>;
   getToolOutput(toolCallId: string): Promise<string>;
   getConversationImage(sourceId: string): Promise<ConversationImagePayload | null>;
+  getExplorerTimeline(taskId: string): Promise<ExplorerTimelineSnapshot>;
+  getExplorerToolOutput(taskId: string, toolCallId: string): Promise<string>;
+  stopExplorer(taskId: string): Promise<void>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   deleteSession(path: string): Promise<void>;

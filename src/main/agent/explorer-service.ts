@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   createAgentSessionFromServices,
   createAgentSessionServices,
   getAgentDir,
   type AgentSession,
+  type AgentSessionEvent,
   type ExtensionAPI,
   type ExtensionContext,
   type InlineExtension,
@@ -14,16 +16,26 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { ExplorerTask } from "../../shared/contracts.js";
-import { textFromContent } from "./message-mapper.js";
+import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot } from "../../shared/contracts.js";
+import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
+import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
 
 const EXPLORER_STATE_ENTRY = "pi-ecode.explorer-state";
 const EXPLORER_RESULT_MESSAGE = "pi-ecode.explorer-result";
 const MAX_CONCURRENT_EXPLORERS = 3;
 const MAX_DISPATCH_TASKS = 8;
 const MAX_FINAL_TEXT_LENGTH = 16 * 1024;
+const TIMELINE_THROTTLE_MS = 33;
 const TERMINAL_STATUSES = new Set<ExplorerTask["status"]>(["completed", "failed", "interrupted"]);
 export const EXPLORER_TOOL_NAMES = ["read", "ffgrep", "fffind"] as const;
+
+const DEFAULT_WATCHDOG = {
+  warningMs: 60_000,
+  inactivityMs: 3 * 60_000,
+  totalMs: 10 * 60_000,
+  intervalMs: 5_000,
+  maxAttempts: 2,
+} as const;
 
 const EXPLORER_CHILD_GUIDANCE = `## PiECode read-only Explorer
 You are a leaf Explorer working for a parent coding agent.
@@ -33,9 +45,16 @@ You are a leaf Explorer working for a parent coding agent.
 - Cite relevant file paths and finish with a concise, actionable result for the parent agent.
 - If the task cannot be answered with the available read-only tools, state the blocker instead of guessing.`;
 
+interface ExplorerLocator {
+  taskId: string;
+  attempt: number;
+  sessionFile: string;
+}
+
 interface ExplorerStateEntry {
-  version: 1;
+  version: 2;
   tasks: ExplorerTask[];
+  locators: ExplorerLocator[];
   deliveredToolCallIds: string[];
 }
 
@@ -52,15 +71,33 @@ interface ExplorerRunResult {
   finalText: string;
 }
 
+interface WatchdogOptions {
+  warningMs: number;
+  inactivityMs: number;
+  totalMs: number;
+  intervalMs: number;
+  maxAttempts: number;
+}
+
 interface ExplorerServiceOptions {
   getParentSession: () => AgentSession | undefined;
   onChange: (tasks: ExplorerTask[]) => void;
-  runExplorer?: (request: ExplorerRequest, parent: AgentSession, signal: AbortSignal) => Promise<ExplorerRunResult>;
+  onTimeline?: (snapshot: ExplorerTimelineSnapshot) => void;
+  runExplorer?: (
+    task: ExplorerTask,
+    request: ExplorerRequest,
+    parent: AgentSession,
+    signal: AbortSignal,
+  ) => Promise<ExplorerRunResult>;
+  watchdog?: Partial<WatchdogOptions>;
   now?: () => number;
 }
 
 const ExplorerParameters = Type.Object({
   description: Type.String({ minLength: 1, maxLength: 160, description: "Short reason for this parallel investigation" }),
+  thinking_level: Type.Optional(Type.Union([Type.Literal("low"), Type.Literal("medium")], {
+    description: "Explorer reasoning level. Defaults to low; use medium only for complex cross-module synthesis.",
+  })),
   explorers: Type.Array(Type.Object({
     task_name: Type.String({ minLength: 1, maxLength: 40, pattern: "^[a-z][a-z0-9_]*$", description: "Unique snake_case task identifier" }),
     title: Type.String({ minLength: 1, maxLength: 100, description: "Short user-visible task title" }),
@@ -74,15 +111,26 @@ function cloneTasks(tasks: Iterable<ExplorerTask>): ExplorerTask[] {
   return [...tasks].map((task) => ({ ...task }));
 }
 
+function normalizeTask(task: ExplorerTask): ExplorerTask {
+  return {
+    ...task,
+    thinkingLevel: task.thinkingLevel === "medium" ? "medium" : "low",
+    attempt: Number.isInteger(task.attempt) && task.attempt > 0 ? task.attempt : 1,
+    maxAttempts: Number.isInteger(task.maxAttempts) && task.maxAttempts > 0 ? task.maxAttempts : DEFAULT_WATCHDOG.maxAttempts,
+    revision: Number.isInteger(task.revision) ? task.revision : 0,
+  };
+}
+
 function restoredState(entries: readonly SessionEntry[]): ExplorerStateEntry | null {
   let restored: ExplorerStateEntry | null = null;
   for (const entry of entries) {
     if (entry.type !== "custom" || entry.customType !== EXPLORER_STATE_ENTRY) continue;
     const state = entry.data as Partial<ExplorerStateEntry> | undefined;
-    if (state?.version !== 1 || !Array.isArray(state.tasks) || !Array.isArray(state.deliveredToolCallIds)) continue;
+    if (!state || !Array.isArray(state.tasks) || !Array.isArray(state.deliveredToolCallIds)) continue;
     restored = {
-      version: 1,
-      tasks: state.tasks.map((task) => ({ ...task })),
+      version: 2,
+      tasks: state.tasks.map((task) => normalizeTask(task)),
+      locators: Array.isArray(state.locators) ? state.locators.map((locator) => ({ ...locator })) : [],
       deliveredToolCallIds: [...state.deliveredToolCallIds],
     };
   }
@@ -111,20 +159,57 @@ function taskPrompt(request: ExplorerRequest): string {
 </explorer_task>`;
 }
 
+function namespaceTimeline(taskId: string, attempt: number, timeline: ConversationItem[]): ConversationItem[] {
+  return timeline.map((item): ConversationItem => item.kind === "message"
+    ? { ...item, id: `${taskId}:${attempt}:${item.id}`, message: { ...item.message, id: `${taskId}:${attempt}:${item.message.id}` } }
+    : { ...item, id: `${taskId}:${attempt}:${item.id}`, tool: { ...item.tool, id: `${taskId}:${attempt}:${item.tool.id}` } });
+}
+
+function attemptSeparator(taskId: string, attempt: number, timestamp: number): ConversationItem {
+  return messageItem({
+    id: `${taskId}:${attempt}:retry`,
+    role: "assistant",
+    text: `Retrying Explorer attempt ${attempt}/${DEFAULT_WATCHDOG.maxAttempts} after extended inactivity.`,
+    timestamp,
+  });
+}
+
+function messagesFromFile(sessionFile: string): AgentMessage[] {
+  return SessionManager.open(sessionFile).getBranch().flatMap((entry) => entry.type === "message" ? [entry.message] : []);
+}
+
+function rawToolCallId(namespacedId: string): { attempt: number; toolCallId: string } | null {
+  const match = /^[^:]+:(\d+):(.*)$/u.exec(namespacedId);
+  return match ? { attempt: Number(match[1]), toolCallId: match[2] ?? "" } : null;
+}
+
+class ExplorerWatchdogError extends Error {
+  constructor(readonly reason: "inactivity" | "total") {
+    super(reason === "inactivity" ? "Explorer had no activity for 3 minutes." : "Explorer exceeded the 10 minute time limit.");
+  }
+}
+
 export class ExplorerService {
   private readonly tasks = new Map<string, ExplorerTask>();
   private readonly queue: string[] = [];
   private readonly controllers = new Map<string, AbortController>();
   private readonly operations = new Set<Promise<void>>();
   private readonly deliveredToolCallIds = new Set<string>();
+  private readonly locators = new Map<string, ExplorerLocator[]>();
+  private readonly liveSessions = new Map<string, AgentSession>();
+  private readonly timelines = new Map<string, ExplorerTimelineSnapshot>();
+  private readonly timelineTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly now: () => number;
-  private readonly runExplorer: (request: ExplorerRequest, parent: AgentSession, signal: AbortSignal) => Promise<ExplorerRunResult>;
+  private readonly watchdog: WatchdogOptions;
+  private readonly runExplorer: ExplorerServiceOptions["runExplorer"] extends infer T ? NonNullable<T> : never;
   private extensionApi: ExtensionAPI | undefined;
+  private generation = 0;
   private disposed = false;
 
   constructor(private readonly options: ExplorerServiceOptions) {
     this.now = options.now ?? Date.now;
-    this.runExplorer = options.runExplorer ?? ((request, parent, signal) => this.runChildSession(request, parent, signal));
+    this.watchdog = { ...DEFAULT_WATCHDOG, ...options.watchdog };
+    this.runExplorer = options.runExplorer ?? ((task, request, parent, signal) => this.runChildSession(task, request, parent, signal));
   }
 
   get current(): ExplorerTask[] {
@@ -146,12 +231,56 @@ export class ExplorerService {
     return { name: "pi-ecode-explorers", factory: (pi) => this.register(pi) };
   }
 
+  async getTimeline(taskId: string): Promise<ExplorerTimelineSnapshot> {
+    const task = this.requireTask(taskId);
+    const live = this.timelines.get(taskId);
+    if (live) return structuredClone(live);
+    const timeline: ConversationItem[] = [];
+    for (const locator of this.locators.get(taskId) ?? []) {
+      if (locator.attempt > 1) timeline.push(attemptSeparator(taskId, locator.attempt, task.startedAt ?? task.queuedAt));
+      timeline.push(...namespaceTimeline(taskId, locator.attempt, mapTimeline(messagesFromFile(locator.sessionFile))));
+    }
+    const snapshot = { taskId, revision: task.revision, timeline };
+    this.timelines.set(taskId, snapshot);
+    return structuredClone(snapshot);
+  }
+
+  async getToolOutput(taskId: string, toolCallId: string): Promise<string> {
+    this.requireTask(taskId);
+    const parsed = rawToolCallId(toolCallId);
+    if (!parsed) throw new Error("Invalid Explorer tool call id.");
+    const live = this.liveSessions.get(taskId);
+    const messages = live && this.tasks.get(taskId)?.attempt === parsed.attempt
+      ? live.messages
+      : messagesFromFile(this.locatorForAttempt(taskId, parsed.attempt).sessionFile);
+    const result = messages.findLast((message) => message.role === "toolResult" && message.toolCallId === parsed.toolCallId);
+    if (!result || result.role !== "toolResult") throw new Error("Explorer tool output is not available.");
+    return textFromContent(result.content);
+  }
+
+  async interrupt(taskId: string): Promise<void> {
+    const task = this.requireTask(taskId);
+    if (TERMINAL_STATUSES.has(task.status)) return;
+    task.status = "interrupted";
+    task.activity = "Stopped by user";
+    task.endedAt = this.now();
+    this.bump(task);
+    this.controllers.get(taskId)?.abort();
+    const queuedIndex = this.queue.indexOf(taskId);
+    if (queuedIndex >= 0) this.queue.splice(queuedIndex, 1);
+    this.publish();
+    await this.operationsForTask(taskId);
+    this.notifyBatchIfReady(task.originToolCallId);
+  }
+
   async interruptAll(): Promise<void> {
     const interruptedBatches = new Set<string>();
     for (const task of this.tasks.values()) {
       if (task.status !== "queued" && task.status !== "running") continue;
       task.status = "interrupted";
+      task.activity = "Stopped by user";
       task.endedAt = this.now();
+      this.bump(task);
       interruptedBatches.add(task.originToolCallId);
       this.controllers.get(task.id)?.abort();
     }
@@ -163,9 +292,15 @@ export class ExplorerService {
 
   async reset(): Promise<void> {
     this.disposed = true;
+    this.generation += 1;
     await this.interruptAll();
+    for (const timer of this.timelineTimers.values()) clearTimeout(timer);
     this.tasks.clear();
     this.controllers.clear();
+    this.locators.clear();
+    this.liveSessions.clear();
+    this.timelines.clear();
+    this.timelineTimers.clear();
     this.deliveredToolCallIds.clear();
     this.extensionApi = undefined;
     this.disposed = false;
@@ -184,26 +319,23 @@ export class ExplorerService {
       promptGuidelines: [
         "Use dispatch_explorers only when a task has at least two independent, non-overlapping repository questions that each require substantial reading or searching.",
         "Give every Explorer one objective, an exact read-only scope, and a concrete evidence-based deliverable. Explorers cannot edit files or execute shell commands.",
+        "Explorer thinking defaults to low. Use medium only for complex cross-module synthesis; high and above are unavailable.",
         "Do not call wait tools or repeatedly poll after dispatch. Continue independent work or end the turn; the completed batch is delivered automatically.",
-        "Do not dispatch sequential questions, duplicate scopes, simple lookups, or work the root agent can finish with a few parallel read/search tool calls.",
       ],
       executionMode: "sequential",
       parameters: ExplorerParameters,
       execute: async (toolCallId, params, signal) => {
         signal?.throwIfAborted();
-        const snapshots = this.dispatch(toolCallId, params.explorers);
+        const snapshots = this.dispatch(toolCallId, params.explorers, params.thinking_level ?? "low");
         return {
-          content: [{
-            type: "text",
-            text: `Dispatched ${snapshots.length} read-only Explorer(s). Up to ${MAX_CONCURRENT_EXPLORERS} run concurrently; results will be delivered automatically.`,
-          }],
-          details: { kind: "pi-ecode.explorer-dispatch", version: 1, explorers: snapshots },
+          content: [{ type: "text", text: `Dispatched ${snapshots.length} read-only Explorer(s) at ${params.thinking_level ?? "low"} thinking. Up to ${MAX_CONCURRENT_EXPLORERS} run concurrently.` }],
+          details: { kind: "pi-ecode.explorer-dispatch", version: 2, explorers: snapshots },
         };
       },
     });
   }
 
-  private dispatch(toolCallId: string, requests: ExplorerRequest[]): ExplorerTask[] {
+  private dispatch(toolCallId: string, requests: ExplorerRequest[], thinkingLevel: "low" | "medium"): ExplorerTask[] {
     if (this.disposed) throw new Error("Explorer service is unavailable.");
     const parent = this.options.getParentSession();
     if (!parent?.model) throw new Error("Select a model before dispatching Explorers.");
@@ -212,18 +344,12 @@ export class ExplorerService {
       if (names.has(request.task_name)) throw new Error(`Duplicate Explorer task_name: ${request.task_name}`);
       names.add(request.task_name);
     }
-
     const created = requests.map((request): ExplorerTask => {
       const task: ExplorerTask = {
-        id: randomUUID(),
-        taskName: request.task_name,
-        title: request.title.trim(),
-        objective: request.objective.trim(),
-        scope: request.scope.trim(),
-        deliverable: request.deliverable.trim(),
-        status: "queued",
-        originToolCallId: toolCallId,
-        queuedAt: this.now(),
+        id: randomUUID(), taskName: request.task_name, title: request.title.trim(), objective: request.objective.trim(),
+        scope: request.scope.trim(), deliverable: request.deliverable.trim(), status: "queued", originToolCallId: toolCallId,
+        thinkingLevel, attempt: 1, maxAttempts: this.watchdog.maxAttempts, revision: 1, queuedAt: this.now(),
+        lastActivityAt: this.now(), activity: "Queued",
       };
       this.tasks.set(task.id, task);
       this.queue.push(task.id);
@@ -241,48 +367,104 @@ export class ExplorerService {
       if (!id) return;
       const task = this.tasks.get(id);
       if (!task || task.status !== "queued") continue;
-      const request: ExplorerRequest = {
-        task_name: task.taskName,
-        title: task.title,
-        objective: task.objective,
-        scope: task.scope,
-        deliverable: task.deliverable,
-      };
       const controller = new AbortController();
       this.controllers.set(id, controller);
       task.status = "running";
       task.startedAt = this.now();
+      task.lastActivityAt = this.now();
+      task.activity = "Starting Explorer";
+      this.bump(task);
       this.publish();
-      const operation = this.executeTask(task, request, controller);
+      const generation = this.generation;
+      const operation = this.executeTask(task, controller, generation);
+      Object.assign(operation, { explorerTaskId: id });
       this.operations.add(operation);
       void operation.finally(() => this.operations.delete(operation));
     }
   }
 
-  private async executeTask(task: ExplorerTask, request: ExplorerRequest, controller: AbortController): Promise<void> {
+  private async executeTask(task: ExplorerTask, controller: AbortController, generation: number): Promise<void> {
+    const request: ExplorerRequest = {
+      task_name: task.taskName, title: task.title, objective: task.objective, scope: task.scope, deliverable: task.deliverable,
+    };
     const parent = this.options.getParentSession();
     try {
       if (!parent) throw new Error("Parent session is no longer available.");
-      const result = await this.runExplorer(request, parent, controller.signal);
-      if (task.status === "interrupted") return;
+      let result: ExplorerRunResult | undefined;
+      while (!result && task.attempt <= task.maxAttempts) {
+        try {
+          result = await this.runAttempt(task, request, parent, controller.signal);
+        } catch (error) {
+          if (task.status === "interrupted" || controller.signal.aborted) throw error;
+          if (error instanceof ExplorerWatchdogError && error.reason === "inactivity" && task.attempt < task.maxAttempts) {
+            task.attempt += 1;
+            task.activity = `Retrying attempt ${task.attempt}/${task.maxAttempts}`;
+            task.lastActivityAt = this.now();
+            this.bump(task);
+            this.publish();
+            continue;
+          }
+          throw error;
+        }
+      }
+      if (!result) throw new Error("Explorer produced no result.");
+      if (generation !== this.generation || task.status === "interrupted") return;
       task.status = "completed";
       task.sessionId = result.sessionId;
       task.finalText = compactFinalText(result.finalText);
+      task.activity = "Completed";
       task.endedAt = this.now();
+      this.bump(task);
     } catch (error) {
-      if (task.status === "interrupted") return;
+      if (generation !== this.generation || task.status === "interrupted") return;
       task.status = controller.signal.aborted ? "interrupted" : "failed";
       task.errorMessage = error instanceof Error ? error.message : String(error);
+      task.activity = task.status === "interrupted" ? "Stopped" : "Failed";
       task.endedAt = this.now();
+      this.bump(task);
     } finally {
       this.controllers.delete(task.id);
-      this.publish();
-      this.notifyBatchIfReady(task.originToolCallId);
-      this.drainQueue();
+      if (generation === this.generation) {
+        this.publish();
+        this.notifyBatchIfReady(task.originToolCallId);
+        this.drainQueue();
+      }
     }
   }
 
-  private async runChildSession(request: ExplorerRequest, parent: AgentSession, signal: AbortSignal): Promise<ExplorerRunResult> {
+  private async runAttempt(task: ExplorerTask, request: ExplorerRequest, parent: AgentSession, outerSignal: AbortSignal): Promise<ExplorerRunResult> {
+    const attemptController = new AbortController();
+    const signal = AbortSignal.any([outerSignal, attemptController.signal]);
+    let watchdogError: ExplorerWatchdogError | undefined;
+    let warned = false;
+    const interval = setInterval(() => {
+      const now = this.now();
+      if (task.startedAt && now - task.startedAt >= this.watchdog.totalMs) {
+        watchdogError = new ExplorerWatchdogError("total");
+        attemptController.abort();
+        return;
+      }
+      const idleFor = now - (task.lastActivityAt ?? task.startedAt ?? now);
+      if (idleFor >= this.watchdog.inactivityMs) {
+        watchdogError = new ExplorerWatchdogError("inactivity");
+        attemptController.abort();
+      } else if (!warned && idleFor >= this.watchdog.warningMs) {
+        warned = true;
+        task.activity = "Extended period without activity";
+        this.bump(task);
+        this.publish(false);
+      }
+    }, this.watchdog.intervalMs);
+    try {
+      return await this.runExplorer(task, request, parent, signal);
+    } catch (error) {
+      throw watchdogError ?? error;
+    } finally {
+      clearInterval(interval);
+    }
+  }
+
+  private async runChildSession(task: ExplorerTask, request: ExplorerRequest, parent: AgentSession, signal: AbortSignal): Promise<ExplorerRunResult> {
     const cwd = parent.sessionManager.getCwd();
     const sessionRoot = parent.sessionFile
       ? join(dirname(parent.sessionFile), ".explorers", parent.sessionId)
@@ -290,30 +472,29 @@ export class ExplorerService {
     await mkdir(sessionRoot, { recursive: true });
     signal.throwIfAborted();
     const services = await createAgentSessionServices({
-      cwd,
-      agentDir: getAgentDir(),
-      settingsManager: parent.settingsManager,
-      modelRuntime: parent.modelRuntime,
+      cwd, agentDir: getAgentDir(), settingsManager: parent.settingsManager, modelRuntime: parent.modelRuntime,
       resourceLoaderOptions: {
-        extensionFactories: [],
-        appendSystemPromptOverride: (base) => [...base, EXPLORER_CHILD_GUIDANCE],
+        extensionFactories: [], appendSystemPromptOverride: (base) => [...base, EXPLORER_CHILD_GUIDANCE],
         extensionsOverride: (base) => ({ ...base, extensions: [] }),
       },
     });
     const model = parent.model;
     if (!model) throw new Error("Explorer cannot start without a selected parent model.");
-    const customTools = explorerToolDefinitions(parent);
     const created = await createAgentSessionFromServices({
       services,
-      sessionManager: SessionManager.create(cwd, sessionRoot, {
-        ...(parent.sessionFile ? { parentSession: parent.sessionFile } : {}),
-      }),
+      sessionManager: SessionManager.create(cwd, sessionRoot, { ...(parent.sessionFile ? { parentSession: parent.sessionFile } : {}) }),
       model,
-      thinkingLevel: parent.thinkingLevel,
+      thinkingLevel: task.thinkingLevel,
       tools: [...EXPLORER_TOOL_NAMES],
-      customTools,
+      customTools: explorerToolDefinitions(parent),
     });
     const child = created.session;
+    this.liveSessions.set(task.id, child);
+    task.sessionId = child.sessionId;
+    const sessionFile = child.sessionFile;
+    if (sessionFile) this.addLocator({ taskId: task.id, attempt: task.attempt, sessionFile });
+    this.touch(task, `Waiting for model · ${task.thinkingLevel}`, true);
+    const unsubscribe = child.subscribe((event) => this.onChildEvent(task, child, event));
     const abortChild = (): void => { void child.abort(); };
     signal.addEventListener("abort", abortChild, { once: true });
     try {
@@ -329,8 +510,80 @@ export class ExplorerService {
       return { sessionId: child.sessionId, finalText: text };
     } finally {
       signal.removeEventListener("abort", abortChild);
+      unsubscribe();
+      if (this.liveSessions.get(task.id) === child) this.liveSessions.delete(task.id);
       child.dispose();
     }
+  }
+
+  private onChildEvent(task: ExplorerTask, child: AgentSession, event: AgentSessionEvent): void {
+    if (task.status !== "running") return;
+    if (event.type === "message_update") {
+      this.touch(task, "Generating response");
+      const messages = child.messages.includes(event.message) ? child.messages : [...child.messages, event.message];
+      this.replaceAttemptTimeline(task, mapTimeline(messages));
+    } else if (event.type === "message_end" || event.type === "agent_settled") {
+      this.touch(task, event.type === "agent_settled" ? "Finishing" : "Waiting for model");
+      this.replaceAttemptTimeline(task, mapTimeline(child.messages));
+    } else if (event.type === "tool_execution_start") {
+      this.touch(task, toolTitle(event.toolName, event.args));
+      this.updateLiveTool(task, event.toolCallId, event.toolName, event.args, "", false);
+    } else if (event.type === "tool_execution_update") {
+      this.touch(task, toolTitle(event.toolName, event.args));
+      this.updateLiveTool(task, event.toolCallId, event.toolName, event.args, textFromToolResult(event.partialResult), false);
+    } else if (event.type === "tool_execution_end") {
+      this.touch(task, "Waiting for model");
+      this.updateLiveTool(task, event.toolCallId, event.toolName, undefined, textFromToolResult(event.result), event.isError);
+    }
+  }
+
+  private replaceAttemptTimeline(task: ExplorerTask, attemptTimeline: ConversationItem[]): void {
+    const previous = this.timelines.get(task.id)?.timeline ?? [];
+    const prefix = previous.filter((item) => !item.id.startsWith(`${task.id}:${task.attempt}:`));
+    if (task.attempt > 1 && !prefix.some((item) => item.id === `${task.id}:${task.attempt}:retry`)) {
+      prefix.push(attemptSeparator(task.id, task.attempt, this.now()));
+    }
+    this.setTimeline(task, [...prefix, ...namespaceTimeline(task.id, task.attempt, attemptTimeline)]);
+  }
+
+  private updateLiveTool(task: ExplorerTask, rawId: string, name: string, args: unknown, output: string, isError: boolean): void {
+    const snapshot = this.timelines.get(task.id) ?? { taskId: task.id, revision: 0, timeline: [] };
+    const id = `${task.id}:${task.attempt}:${rawId}`;
+    const existing = snapshot.timeline.find((item) => item.kind === "tool" && item.id === id);
+    const tool = {
+      id,
+      name,
+      title: existing?.kind === "tool" ? existing.tool.title : toolTitle(name, args),
+      input: existing?.kind === "tool" ? existing.tool.input : formatToolInput(args),
+      ...toolOutputView(output),
+      status: isError ? "error" as const : "running" as const,
+      startedAt: existing?.kind === "tool" ? existing.tool.startedAt ?? this.now() : this.now(),
+      ...(isError ? { endedAt: this.now() } : {}),
+    };
+    const timeline = existing
+      ? snapshot.timeline.map((item) => item.id === id ? toolItem(tool) : item)
+      : [...snapshot.timeline, toolItem(tool)];
+    this.setTimeline(task, timeline);
+  }
+
+  private setTimeline(task: ExplorerTask, timeline: ConversationItem[]): void {
+    const revision = (this.timelines.get(task.id)?.revision ?? 0) + 1;
+    this.timelines.set(task.id, { taskId: task.id, revision, timeline });
+    if (this.timelineTimers.has(task.id)) return;
+    const timer = setTimeout(() => {
+      this.timelineTimers.delete(task.id);
+      const snapshot = this.timelines.get(task.id);
+      if (snapshot) this.options.onTimeline?.(structuredClone(snapshot));
+      this.options.onChange(this.current);
+    }, TIMELINE_THROTTLE_MS);
+    this.timelineTimers.set(task.id, timer);
+  }
+
+  private touch(task: ExplorerTask, activity: string, persist = false): void {
+    task.lastActivityAt = this.now();
+    task.activity = activity;
+    this.bump(task);
+    if (persist) this.publish();
   }
 
   private notifyBatchIfReady(toolCallId: string): void {
@@ -338,7 +591,7 @@ export class ExplorerService {
     const batch = this.current.filter((task) => task.originToolCallId === toolCallId);
     if (batch.length === 0 || batch.some((task) => !TERMINAL_STATUSES.has(task.status))) return;
     this.deliveredToolCallIds.add(toolCallId);
-    this.persist();
+    this.publish();
     const body = batch.map((task) => {
       const result = task.finalText ?? task.errorMessage ?? "No result was produced.";
       return `<explorer task_name="${task.taskName}" status="${task.status}">\n${result}\n</explorer>`;
@@ -352,43 +605,83 @@ export class ExplorerService {
   }
 
   private restore(context: ExtensionContext): void {
+    this.generation += 1;
     for (const controller of this.controllers.values()) controller.abort();
+    for (const timer of this.timelineTimers.values()) clearTimeout(timer);
     this.tasks.clear();
     this.queue.length = 0;
     this.controllers.clear();
+    this.locators.clear();
+    this.liveSessions.clear();
+    this.timelines.clear();
+    this.timelineTimers.clear();
     this.deliveredToolCallIds.clear();
     const state = restoredState(context.sessionManager.getBranch());
     let changed = false;
     if (state) {
       for (const restored of state.tasks) {
-        const task = { ...restored };
+        const task = normalizeTask(restored);
         if (task.status === "queued" || task.status === "running") {
           task.status = "interrupted";
           task.endedAt = this.now();
           task.errorMessage = "Explorer was interrupted when the parent session closed.";
+          task.activity = "Interrupted when parent session closed";
+          this.bump(task);
           this.deliveredToolCallIds.add(task.originToolCallId);
           changed = true;
         }
         this.tasks.set(task.id, task);
       }
+      for (const locator of state.locators) this.addLocator(locator);
       for (const id of state.deliveredToolCallIds) this.deliveredToolCallIds.add(id);
     }
     this.options.onChange(this.current);
     if (changed) this.persist();
   }
 
-  private publish(): void {
-    const snapshot = this.current;
-    this.options.onChange(snapshot);
-    this.persist();
+  private publish(persist = true): void {
+    this.options.onChange(this.current);
+    if (persist) this.persist();
   }
 
   private persist(): void {
     if (!this.extensionApi) return;
     this.extensionApi.appendEntry<ExplorerStateEntry>(EXPLORER_STATE_ENTRY, {
-      version: 1,
+      version: 2,
       tasks: this.current,
+      locators: [...this.locators.values()].flat().map((locator) => ({ ...locator })),
       deliveredToolCallIds: [...this.deliveredToolCallIds],
     });
+  }
+
+  private addLocator(locator: ExplorerLocator): void {
+    const locators = this.locators.get(locator.taskId) ?? [];
+    const existing = locators.findIndex((candidate) => candidate.attempt === locator.attempt);
+    if (existing >= 0) locators[existing] = { ...locator };
+    else locators.push({ ...locator });
+    locators.sort((left, right) => left.attempt - right.attempt);
+    this.locators.set(locator.taskId, locators);
+  }
+
+  private locatorForAttempt(taskId: string, attempt: number): ExplorerLocator {
+    const locator = this.locators.get(taskId)?.find((candidate) => candidate.attempt === attempt);
+    if (!locator) throw new Error("Explorer session transcript is not available.");
+    return locator;
+  }
+
+  private requireTask(taskId: string): ExplorerTask {
+    if (!taskId || taskId.length > 200) throw new Error("Invalid Explorer task id.");
+    const task = this.tasks.get(taskId);
+    if (!task) throw new Error("Explorer task does not belong to the active parent session.");
+    return task;
+  }
+
+  private bump(task: ExplorerTask): void {
+    task.revision += 1;
+  }
+
+  private async operationsForTask(taskId: string): Promise<void> {
+    const matching = [...this.operations].filter((operation) => (operation as Promise<void> & { explorerTaskId?: string }).explorerTaskId === taskId);
+    await Promise.allSettled(matching);
   }
 }
