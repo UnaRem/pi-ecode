@@ -125,6 +125,25 @@ export interface ToolActivity {
   endedAt?: number;
 }
 
+export type ExplorerStatus = "queued" | "running" | "completed" | "failed" | "interrupted";
+
+export interface ExplorerTask {
+  id: string;
+  taskName: string;
+  title: string;
+  objective: string;
+  scope: string;
+  deliverable: string;
+  status: ExplorerStatus;
+  originToolCallId: string;
+  sessionId?: string;
+  queuedAt: number;
+  startedAt?: number;
+  endedAt?: number;
+  finalText?: string;
+  errorMessage?: string;
+}
+
 export type TaskPlanItemStatus = "pending" | "in_progress" | "completed";
 
 export interface TaskPlanItem {
@@ -302,6 +321,7 @@ export interface AgentSnapshot {
   error: string | null;
   canContinue: boolean;
   taskPlan: TaskPlan | null;
+  explorers: ExplorerTask[];
   extensionUi: ExtensionUiRequest | null;
   history: WorkspaceHistoryState;
   validation: ValidationState;
@@ -316,6 +336,7 @@ export type AgentEvent =
   | { type: "timeline-upsert"; item: ConversationItem }
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
+  | { type: "explorers"; explorers: ExplorerTask[] }
   | { type: "extension-ui"; request: ExtensionUiRequest | null }
   | { type: "state"; patch: Partial<Pick<AgentSnapshot, "sessionTitle" | "isStreaming" | "workingStartedAt" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error" | "canContinue">> }
   | { type: "sessions"; sessions: SessionSummary[] }

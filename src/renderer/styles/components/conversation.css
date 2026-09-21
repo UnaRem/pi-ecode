@@ -73,6 +73,24 @@
 .tool-plaintext-row:last-child { border-bottom: 0; }
 .tool-plaintext-row > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-inline-duration { margin-left: auto; }
+.explorer-cards { display: grid; gap: 6px; margin: 7px 0 0 10px; }
+.explorer-card { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface); animation: explorer-card-enter 180ms var(--ease-standard) both; transition: border-color 160ms ease, background-color 160ms ease; }
+.explorer-card header { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.explorer-card header strong { min-width: 0; overflow: hidden; color: var(--color-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.explorer-status-icon { display: inline-flex; flex: 0 0 auto; color: var(--color-text-faint); }
+.explorer-status { margin-left: auto; flex: 0 0 auto; color: var(--color-text-faint); font-size: 10px; }
+.explorer-card.running { border-color: var(--color-accent-border); background: var(--color-accent-soft); }
+.explorer-card.running .explorer-status-icon, .explorer-card.running .explorer-status { color: var(--color-accent); }
+.explorer-card.completed { border-color: var(--color-success-border); }
+.explorer-card.completed .explorer-status-icon, .explorer-card.completed .explorer-status { color: var(--color-success); }
+.explorer-card.failed { border-color: var(--color-danger-border); background: var(--color-danger-soft); }
+.explorer-card.failed .explorer-status-icon, .explorer-card.failed .explorer-status { color: var(--color-danger); }
+.explorer-scope { margin: 4px 0 0 21px; overflow: hidden; font-size: 10px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.explorer-result { margin: 6px 0 0 21px; font-size: 10px; }
+.explorer-result summary { width: fit-content; color: var(--color-accent); cursor: pointer; }
+.explorer-result summary:focus-visible { border-radius: 3px; outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.explorer-result pre { max-height: 220px; margin: 7px 0 0; padding: 8px; overflow: auto; border-radius: var(--radius-sm); color: var(--color-text-muted); background: var(--color-surface-muted); font: 10px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; }
+@keyframes explorer-card-enter { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 .changed-files-presence { animation: changed-files-enter var(--duration-standard) var(--ease-standard) both; }
 .changed-files-presence.leaving { pointer-events: none; animation: changed-files-leave var(--duration-fast) var(--ease-exit) both; }
 @keyframes changed-files-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }

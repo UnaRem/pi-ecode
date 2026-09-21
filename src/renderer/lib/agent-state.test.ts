@@ -85,6 +85,17 @@ describe("reduceAgentEvent", () => {
     expect(state.timeline).toEqual([]);
   });
 
+  it("applies Explorer updates without changing the conversation timeline", () => {
+    const explorers = [{
+      id: "explorer-1", taskName: "inspect", title: "Inspect", objective: "Find behavior",
+      scope: "src/", deliverable: "Evidence", status: "running" as const,
+      originToolCallId: "dispatch-1", queuedAt: 1,
+    }];
+    const state = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "explorers", explorers });
+    expect(state.explorers).toEqual(explorers);
+    expect(state.timeline).toEqual([]);
+  });
+
   it("tracks the active extension UI request", () => {
     const request = { id: "question-1", method: "select" as const, title: "Choose", options: [{ value: "one", label: "One" }] };
     const opened = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "extension-ui", request });

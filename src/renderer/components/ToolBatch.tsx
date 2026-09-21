@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import type { ConversationItem, ToolActivity } from "@shared/contracts";
+import type { ConversationItem, ExplorerTask, ToolActivity } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { useScrollFollow } from "../hooks/use-scroll-follow";
+import { ExplorerCards } from "./ExplorerCards";
 
 export type ConversationRenderGroup =
   | { kind: "message"; id: string; item: Extract<ConversationItem, { kind: "message" }> }
@@ -44,11 +45,13 @@ export function ToolBatch({
   animateNewTools = false,
   selectedToolId,
   onSelectTool,
+  explorers = [],
 }: {
   tools: ToolActivity[];
   animateNewTools?: boolean;
   selectedToolId: string | null;
   onSelectTool: (toolId: string) => void;
+  explorers?: ExplorerTask[];
 }) {
   const { t } = useI18n();
   const listRef = useRef<HTMLDivElement>(null);
@@ -75,6 +78,8 @@ export function ToolBatch({
   useScrollFollow(listRef, contentRef, followingRef);
 
   const firstTool = tools[0];
+  const toolIds = new Set(tools.map((tool) => tool.id));
+  const linkedExplorers = explorers.filter((task) => toolIds.has(task.originToolCallId));
   return (
     <section className="tool-batch plaintext-tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
       <div className={expanded ? "tool-dropdown open" : "tool-dropdown"}>
@@ -98,6 +103,7 @@ export function ToolBatch({
           </div>
         </div>
       </div>
+      <ExplorerCards tasks={linkedExplorers} />
     </section>
   );
 }

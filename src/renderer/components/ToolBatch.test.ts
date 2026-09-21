@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ConversationItem, ToolActivity } from "@shared/contracts";
+import type { ConversationItem, ExplorerTask, ToolActivity } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
 import { groupConsecutiveTools, isScrollAreaAtBottom, ToolBatch } from "./ToolBatch";
 
@@ -79,6 +79,26 @@ describe("ToolBatch", () => {
 
     expect(markup).toMatch(/class="tool-plaintext-row[^\"]*entering/);
     expect(markup).toContain('class="tool-plaintext-row  "');
+  });
+
+  it("renders only Explorers linked to this dispatch tool call", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const explorer = (id: string, originToolCallId: string): ExplorerTask => ({
+      id, taskName: id, title: `Explorer ${id}`, objective: "Inspect behavior", scope: `src/${id}`,
+      deliverable: "Evidence", status: "running", originToolCallId, queuedAt: 1,
+    });
+    const markup = renderToStaticMarkup(
+      createElement(I18nProvider, null, createElement(ToolBatch, {
+        tools: [{ ...activity("dispatch-call"), name: "dispatch_explorers" }],
+        explorers: [explorer("linked", "dispatch-call"), explorer("other", "other-call")],
+        selectedToolId: null,
+        onSelectTool: vi.fn(),
+      })),
+    );
+
+    expect(markup).toContain("Explorer linked");
+    expect(markup).toContain("Exploring");
+    expect(markup).not.toContain("Explorer other");
   });
 
   it("connects the entering class to the tool row animation", () => {

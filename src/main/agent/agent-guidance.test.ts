@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { EDIT_TOOL_COMPATIBILITY_GUIDANCE, PARALLEL_TOOL_EXECUTION_GUIDANCE } from "./agent-guidance.js";
+import {
+  EDIT_TOOL_COMPATIBILITY_GUIDANCE,
+  EXPLORER_ORCHESTRATION_GUIDANCE,
+  PARALLEL_TOOL_EXECUTION_GUIDANCE,
+} from "./agent-guidance.js";
 
 describe("agent guidance", () => {
   it("maps GPT patch behavior to pi's edit tool", () => {
@@ -21,5 +25,13 @@ describe("agent guidance", () => {
     expect(PARALLEL_TOOL_EXECUTION_GUIDANCE).toContain("Keep dependent calls sequential");
     expect(PARALLEL_TOOL_EXECUTION_GUIDANCE).toContain("Never split changes to the same file across parallel calls");
     expect(PARALLEL_TOOL_EXECUTION_GUIDANCE).toContain("request_confirmation must remain the only tool");
+  });
+
+  it("teaches every model the pi-ecode Explorer protocol", () => {
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("dispatch_explorers");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("read, ffgrep, and fffind");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("At most three run concurrently");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("do not poll or wait");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("cannot edit files or execute commands");
   });
 });

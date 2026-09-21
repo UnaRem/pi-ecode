@@ -110,6 +110,7 @@ export default function App() {
         />
         <Conversation
           timeline={state.timeline}
+          explorers={state.explorers}
           isStreaming={state.isStreaming}
           workingStartedAt={state.workingStartedAt}
           projectName={state.projectName}

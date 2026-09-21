@@ -1,3 +1,11 @@
+export const EXPLORER_ORCHESTRATION_GUIDANCE = `## Read-only Explorer subagents
+- Use dispatch_explorers only when a request contains at least two independent, non-overlapping repository investigations that each require substantial reading or searching.
+- Each Explorer task must define one objective, an exact read-only scope, and a concrete evidence-based deliverable. Explorers use the parent's read, ffgrep, and fffind tools and cannot edit files or execute commands.
+- Dispatch all independent Explorer tasks in one call. At most three run concurrently; additional tasks queue automatically.
+- After dispatch, do not poll or wait. Continue work that does not depend on the results, or end the turn; one batch result will be delivered automatically after every Explorer reaches a terminal state.
+- Do not dispatch sequential questions, duplicate scopes, simple lookups, or work that a few parallel root read/search calls can finish efficiently.
+- Treat Explorer reports as evidence to review, not authority to claim implementation or validation.`;
+
 export const PARALLEL_TOOL_EXECUTION_GUIDANCE = `## Parallel tool execution
 - When two or more tool calls are independent and all inputs are already known, issue them together in one assistant response so the runtime can execute them in parallel.
 - Prefer parallel batches for independent reads, searches, and non-mutating diagnostic checks across different targets.

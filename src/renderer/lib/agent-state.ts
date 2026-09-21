@@ -43,6 +43,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   error: null,
   canContinue: false,
   taskPlan: null,
+  explorers: [],
   extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
@@ -215,6 +216,8 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
       return { ...state, context: event.context };
     case "task-plan":
       return { ...state, taskPlan: event.taskPlan };
+    case "explorers":
+      return { ...state, explorers: event.explorers };
     case "extension-ui":
       return { ...state, extensionUi: event.request };
     case "state":

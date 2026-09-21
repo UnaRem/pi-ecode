@@ -1,0 +1,134 @@
+import { describe, expect, it, vi } from "vitest";
+import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
+
+interface DeferredResult {
+  promise: Promise<{ sessionId: string; finalText: string }>;
+  resolve: (value: { sessionId: string; finalText: string }) => void;
+}
+
+function deferredResult(): DeferredResult {
+  let resolve = (_value: { sessionId: string; finalText: string }): void => {};
+  const promise = new Promise<{ sessionId: string; finalText: string }>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function harness(runExplorer: NonNullable<ConstructorParameters<typeof ExplorerService>[0]["runExplorer"]>) {
+  let branch: SessionEntry[] = [];
+  let tool: ToolDefinition | undefined;
+  const sent: Array<{ content: unknown; options: unknown }> = [];
+  const appended: Array<{ customType: string; data: unknown }> = [];
+  const handlers = new Map<string, (event: unknown, context: ExtensionContext) => void>();
+  const parent = { model: { id: "model" } } as unknown as AgentSession;
+  const service = new ExplorerService({ getParentSession: () => parent, onChange: vi.fn(), runExplorer });
+  const pi = {
+    on: (event: string, handler: (event: unknown, context: ExtensionContext) => void) => handlers.set(event, handler),
+    registerTool: (definition: ToolDefinition) => { tool = definition; },
+    appendEntry: (customType: string, data: unknown) => appended.push({ customType, data }),
+    sendMessage: (message: { content: unknown }, options: unknown) => sent.push({ content: message.content, options }),
+  } as unknown as ExtensionAPI;
+  const extension = service.asExtension();
+  void (typeof extension === "function" ? extension(pi) : extension.factory(pi));
+  const context = { sessionManager: { getBranch: () => branch } } as unknown as ExtensionContext;
+  handlers.get("session_start")?.({}, context);
+  return {
+    service,
+    sent,
+    appended,
+    setBranch: (entries: SessionEntry[]) => { branch = entries; },
+    restore: () => handlers.get("session_tree")?.({}, context),
+    dispatch: async (explorers: Array<Record<string, string>>) => {
+      if (!tool) throw new Error("Explorer tool was not registered.");
+      return tool.execute("dispatch-1", { description: "parallel research", explorers }, undefined, undefined, context);
+    },
+  };
+}
+
+function request(index: number): Record<string, string> {
+  return {
+    task_name: `task_${index}`,
+    title: `Task ${index}`,
+    objective: `Answer question ${index}`,
+    scope: `src/area-${index}`,
+    deliverable: `Evidence ${index}`,
+  };
+}
+
+describe("ExplorerService", () => {
+  it("reuses the parent read, ffgrep, and fffind definitions exactly", () => {
+    const definitions = new Map<string, { name: string }>(EXPLORER_TOOL_NAMES.map((name) => [name, { name }]));
+    const parent = {
+      getToolDefinition: vi.fn((name: string) => definitions.get(name)),
+    } as unknown as Pick<AgentSession, "getToolDefinition">;
+
+    expect(explorerToolDefinitions(parent)).toEqual(EXPLORER_TOOL_NAMES.map((name) => definitions.get(name)));
+    expect(parent.getToolDefinition).toHaveBeenCalledTimes(3);
+    expect(parent.getToolDefinition).not.toHaveBeenCalledWith("grep");
+    expect(parent.getToolDefinition).not.toHaveBeenCalledWith("find");
+  });
+
+  it("refuses to fall back when the parent fff tools are unavailable", () => {
+    const parent = {
+      getToolDefinition: (name: string) => name === "read" ? ({ name } as ToolDefinition) : undefined,
+    } as Pick<AgentSession, "getToolDefinition">;
+
+    expect(() => explorerToolDefinitions(parent)).toThrow("parent ffgrep tool");
+  });
+
+  it("runs at most three Explorers and starts queued work in FIFO order", async () => {
+    const deferred = Array.from({ length: 4 }, deferredResult);
+    const starts: string[] = [];
+    const test = harness((task) => {
+      starts.push(task.task_name);
+      return deferred[Number(task.task_name.slice(5)) - 1]!.promise;
+    });
+
+    await test.dispatch([request(1), request(2), request(3), request(4)]);
+    expect(starts).toEqual(["task_1", "task_2", "task_3"]);
+    expect(test.service.current.map((task) => task.status)).toEqual(["running", "running", "running", "queued"]);
+
+    deferred[0]!.resolve({ sessionId: "child-1", finalText: "result 1" });
+    await vi.waitFor(() => expect(starts).toEqual(["task_1", "task_2", "task_3", "task_4"]));
+    expect(test.service.current.find((task) => task.taskName === "task_4")?.status).toBe("running");
+
+    deferred[1]!.resolve({ sessionId: "child-2", finalText: "result 2" });
+    deferred[2]!.resolve({ sessionId: "child-3", finalText: "result 3" });
+    deferred[3]!.resolve({ sessionId: "child-4", finalText: "result 4" });
+    await vi.waitFor(() => expect(test.sent).toHaveLength(1));
+    expect(test.service.current.every((task) => task.status === "completed")).toBe(true);
+    expect(test.sent[0]?.options).toEqual({ triggerTurn: true, deliverAs: "followUp" });
+  });
+
+  it("keeps interrupted tasks terminal when child promises settle later", async () => {
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+
+    const interrupted = test.service.interruptAll();
+    pending.resolve({ sessionId: "late-child", finalText: "late result" });
+    await interrupted;
+
+    expect(test.sent).toHaveLength(0);
+    expect(test.service.current[0]?.status).toBe("interrupted");
+    expect(test.service.current[0]?.finalText).toBeUndefined();
+  });
+
+  it("restores unfinished parent state as interrupted without rerunning children", () => {
+    const runExplorer = vi.fn(async () => ({ sessionId: "unused", finalText: "unused" }));
+    const test = harness(runExplorer);
+    const running = {
+      id: "child-1", taskName: "inspect", title: "Inspect", objective: "Find behavior", scope: "src/",
+      deliverable: "Evidence", status: "running", originToolCallId: "dispatch-old", queuedAt: 1, startedAt: 2,
+    };
+    test.setBranch([{
+      type: "custom", id: "entry-1", parentId: null, timestamp: new Date().toISOString(),
+      customType: "pi-ecode.explorer-state", data: { version: 1, tasks: [running], deliveredToolCallIds: [] },
+    } as SessionEntry]);
+
+    test.restore();
+
+    expect(runExplorer).not.toHaveBeenCalled();
+    expect(test.service.current[0]?.status).toBe("interrupted");
+    expect(test.service.current[0]?.errorMessage).toContain("parent session closed");
+  });
+});

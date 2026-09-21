@@ -42,11 +42,16 @@ import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
 import { ExtensionUiBridge } from "./extension-ui-bridge.js";
 import { AuthService } from "./auth-service.js";
-import { EDIT_TOOL_COMPATIBILITY_GUIDANCE, PARALLEL_TOOL_EXECUTION_GUIDANCE } from "./agent-guidance.js";
+import {
+  EDIT_TOOL_COMPATIBILITY_GUIDANCE,
+  EXPLORER_ORCHESTRATION_GUIDANCE,
+  PARALLEL_TOOL_EXECUTION_GUIDANCE,
+} from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
 import { listSessionSummaries } from "./session-summaries.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
+import { ExplorerService } from "./explorer-service.js";
 
 const HISTORY_PAGE_TURNS = 25;
 
@@ -71,8 +76,8 @@ export class AgentService {
   private streamTimer: ReturnType<typeof setTimeout> | undefined;
   private visibleTimelineTurns = HISTORY_PAGE_TURNS;
   private readonly promptLifecycle = new PromptLifecycle((session) => {
-    const isStreaming = this.promptLifecycle.isActive(session);
-    this.emit({ type: "state", patch: { isStreaming, workingStartedAt: this.promptLifecycle.workingStartedAt,
+    const isStreaming = this.isAgentActive(session);
+    this.emit({ type: "state", patch: { isStreaming, workingStartedAt: this.workingStartedAt,
       pendingCount: session.pendingMessageCount, ...(isStreaming ? { error: null, canContinue: false } : {}) } });
   });
   private compactOperation: Promise<void> | undefined;
@@ -86,6 +91,17 @@ export class AgentService {
   private readonly streamContinuity = new StreamContinuity();
   private readonly confirmation = new ConfirmationService();
   private readonly taskPlan = new TaskPlanService((taskPlan) => this.emit({ type: "task-plan", taskPlan }));
+  private readonly explorers = new ExplorerService({
+    getParentSession: () => this.runtime?.session,
+    onChange: (explorers) => {
+      this.emit({ type: "explorers", explorers });
+      const session = this.runtime?.session;
+      if (session) this.emit({ type: "state", patch: {
+        isStreaming: this.isAgentActive(session),
+        workingStartedAt: this.workingStartedAt,
+      } });
+    },
+  });
   private readonly extensionUi = new ExtensionUiBridge(
     (request) => this.emit({ type: "extension-ui", request }),
     (message) => this.emit({ type: "notice", message }),
@@ -262,7 +278,15 @@ export class AgentService {
 
   get runtimeBusy(): boolean {
     const session = this.runtime?.session;
-    return Boolean(session && (this.promptLifecycle.isActive(session) || session.isCompacting));
+    return Boolean(session && (this.isAgentActive(session) || session.isCompacting));
+  }
+
+  private isAgentActive(session: AgentSession): boolean {
+    return this.promptLifecycle.isActive(session) || this.explorers.isActive;
+  }
+
+  private get workingStartedAt(): number | null {
+    return this.promptLifecycle.workingStartedAt ?? this.explorers.workingStartedAt;
   }
 
   async reloadRuntimeConfiguration(): Promise<void> {
@@ -327,12 +351,13 @@ export class AgentService {
       selectedModel: model ? `${model.provider}/${model.id}` : null,
       thinkingLevel: session.thinkingLevel,
       thinkingLevels: session.getAvailableThinkingLevels(),
-      isStreaming: this.promptLifecycle.isActive(session),
-      workingStartedAt: this.promptLifecycle.workingStartedAt,
+      isStreaming: this.isAgentActive(session),
+      workingStartedAt: this.workingStartedAt,
       pendingCount: session.pendingMessageCount,
       error: failure?.message ?? this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
       canContinue: failure?.canContinue ?? false,
       taskPlan: this.taskPlan.current,
+      explorers: this.explorers.current,
       extensionUi: this.extensionUi.current,
       history,
       validation: this.validation.getState(),
@@ -345,6 +370,7 @@ export class AgentService {
 
   async newSession(): Promise<AgentSnapshot> {
     const runtime = this.requireRuntime();
+    if (this.runtimeBusy) throw new Error("Stop the active agent run before creating a session.");
     await runtime.newSession();
     const snapshot = await this.getSnapshot();
     this.emit({ type: "snapshot", snapshot });
@@ -353,6 +379,7 @@ export class AgentService {
 
   async switchSession(sessionPath: string): Promise<AgentSnapshot> {
     const runtime = this.requireRuntime();
+    if (this.runtimeBusy) throw new Error("Stop the active agent run before switching sessions.");
     this.flushStreamItems();
     const sessions = await listSessionSummaries(this.projectPath);
     if (!sessions.some((session) => session.path === sessionPath)) {
@@ -442,10 +469,12 @@ export class AgentService {
 
   async stop(): Promise<void> {
     const session = this.requireRuntime().session;
+    const explorerStop = this.explorers.interruptAll();
     this.flushStreamItems();
     this.extensionUi.cancelPending();
     if (session.isCompacting) session.abortCompaction();
-    await this.promptLifecycle.stop(session);
+    const promptStop = this.promptLifecycle.stop(session);
+    await Promise.all([explorerStop, promptStop]);
     await this.history.settlePending(session);
     await this.emitHistory(session);
   }
@@ -551,12 +580,19 @@ export class AgentService {
       const services = await createAgentSessionServices({
         cwd: targetCwd,
         resourceLoaderOptions: {
-          extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.confirmation.asExtension(), this.taskPlan.asExtension()],
+          extensionFactories: [
+            this.history.asExtension(),
+            this.nativeCompaction.asExtension(),
+            this.confirmation.asExtension(),
+            this.taskPlan.asExtension(),
+            this.explorers.asExtension(),
+          ],
           eventBus: this.extensionEventBus,
           appendSystemPromptOverride: (base) => [
             ...base,
             EDIT_TOOL_COMPATIBILITY_GUIDANCE,
             PARALLEL_TOOL_EXECUTION_GUIDANCE,
+            EXPLORER_ORCHESTRATION_GUIDANCE,
           ],
           extensionsOverride: (base) => ({
             ...base,
@@ -615,7 +651,8 @@ export class AgentService {
         this.flushStreamItems();
         const failure = providerFailure(session.messages);
         this.emit({ type: "state", patch: {
-          isStreaming: this.promptLifecycle.isActive(session), pendingCount: session.pendingMessageCount,
+          isStreaming: this.isAgentActive(session), workingStartedAt: this.workingStartedAt,
+          pendingCount: session.pendingMessageCount,
           error: failure?.message ?? null, canContinue: failure?.canContinue ?? false,
         } });
         this.emitContext(session);
@@ -832,6 +869,7 @@ export class AgentService {
     this.pendingStreamItems.clear();
     this.pendingStreamContext = undefined;
     this.extensionUi.cancelPending();
+    await this.explorers.reset();
     await this.validation.stop();
     this.unsubscribe?.();
     this.unsubscribe = undefined;
