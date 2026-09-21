@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { AgentEvent, SessionSummary } from "../../shared/contracts.js";
+import type { AgentEvent, SessionSummary, ValidationState } from "../../shared/contracts.js";
 
 const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[] }));
 vi.mock("./session-summaries.js", () => ({
@@ -253,6 +253,34 @@ describe("AgentService prompt lifecycle", () => {
         message: null,
       },
     });
+  });
+
+  it("starts child validation without waiting for a parent-session checkpoint", async () => {
+    const session = { sessionId: "session-validator" } as unknown as AgentSession;
+    const service = new AgentService();
+    const validation: ValidationState = {
+      supported: true,
+      isSelfProject: true,
+      status: "passed",
+      runId: "run-1",
+      activeStep: null,
+      steps: [],
+      sourceRevision: "revision-1",
+      originToolCallId: null,
+      startedAt: 1,
+      verifiedAt: 2,
+      message: "passed",
+    };
+    const internal = service as unknown as {
+      runtime: { session: AgentSession };
+      executeValidation: (activeSession: AgentSession) => Promise<ValidationState>;
+      runValidationFromAgent: () => Promise<ValidationState>;
+    };
+    internal.runtime = { session };
+    const executeValidation = vi.spyOn(internal, "executeValidation").mockResolvedValue(validation);
+
+    await expect(internal.runValidationFromAgent()).resolves.toEqual(validation);
+    expect(executeValidation).toHaveBeenCalledWith(session);
   });
 
   it("records tool execution start and end times", () => {

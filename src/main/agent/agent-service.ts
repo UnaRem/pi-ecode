@@ -103,7 +103,7 @@ export class AgentService {
     getAgentDefinitions: () => this.agentCatalog?.enabled() ?? [],
     getMaxConcurrent: () => this.agentCatalog?.current?.maxConcurrent ?? 3,
     getSessionRoot: (parent) => this.agentCatalog.sessionRoot(parent.sessionId),
-    runValidation: () => this.runValidation(),
+    runValidation: () => this.runValidationFromAgent(),
     onChange: (explorers) => {
       this.emit({ type: "explorers", explorers });
       const session = this.runtime?.session;
@@ -597,6 +597,12 @@ export class AgentService {
       await this.history.checkpoint(session, "validation input");
       return this.executeValidation(session);
     })();
+    return this.trackValidation(operation);
+  }
+
+  private runValidationFromAgent(): Promise<ValidationState> {
+    if (this.validationOperation) throw new Error("Validation is already running.");
+    const operation = this.executeValidation(this.requireRuntime().session);
     return this.trackValidation(operation);
   }
 

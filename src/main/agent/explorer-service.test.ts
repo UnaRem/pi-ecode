@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
-import { AgentMessageParameters, ExplorerParameters, ExplorerStatusParameters, taskPrompt } from "./explorer-support.js";
+import { AgentMessageParameters, EXPLORER_CHILD_GUIDANCE, ExplorerParameters, ExplorerStatusParameters, taskPrompt } from "./explorer-support.js";
 
 interface DeferredResult {
   promise: Promise<{ sessionId: string; finalText: string }>;
@@ -97,7 +97,8 @@ describe("ExplorerService", () => {
     expect(prompt).toContain("任务标题：核查上下文");
     expect(prompt).toContain("交付要求：给出证据");
     expect(prompt).not.toContain("<task_name>");
-    expect(prompt).toContain("用中文输出自包含报告");
+    expect(prompt).toContain("所有用户可见自然语言都使用简体中文");
+    expect(EXPLORER_CHILD_GUIDANCE).toContain("工具调用前后的说明、进度更新和最终报告");
   });
 
   it("reuses the parent read, ffgrep, and fffind definitions exactly", () => {
@@ -257,6 +258,79 @@ describe("ExplorerService", () => {
     expect(attempts).toBe(2);
     expect(service.current[0]).toMatchObject({ attempt: 2, maxAttempts: 2, thinkingLevel: "medium", finalText: "recovered" });
     vi.useRealTimers();
+  });
+
+  it("retries an ordinary child error once before completing", async () => {
+    let attempts = 0;
+    const test = harness(async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("temporary provider error");
+      return { sessionId: "child-retry", finalText: "recovered after error" };
+    });
+
+    await test.dispatch([request(1)]);
+    await vi.waitFor(() => expect(test.service.current[0]?.status).toBe("completed"));
+
+    expect(attempts).toBe(2);
+    expect(test.service.current[0]).toMatchObject({ attempt: 2, finalText: "recovered after error" });
+  });
+
+  it("wakes agent_wait with attention when a child has no activity", async () => {
+    vi.useFakeTimers();
+    const pending = deferredResult();
+    const test = harness(() => pending.promise, {
+      watchdog: { warningMs: 50, inactivityMs: 500, totalMs: 1_000, intervalMs: 10, maxAttempts: 2 },
+    });
+    await test.dispatch([request(1)]);
+    const taskId = test.service.current[0]?.id;
+    if (!taskId) throw new Error("Dispatched task is missing.");
+
+    const waitResult = test.call("agent_wait", { task_ids: [taskId], mode: "all" });
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(JSON.stringify(await waitResult)).toContain('"attention":true');
+    expect(JSON.stringify(await test.call("agent_status", { task_id: taskId }))).toContain("长时间无活动");
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child-late", finalText: "late" });
+    await stop;
+    vi.useRealTimers();
+  });
+
+  it("sends a lightweight attention notice when no agent_wait is active", async () => {
+    vi.useFakeTimers();
+    const pending = deferredResult();
+    const test = harness(() => pending.promise, {
+      watchdog: { warningMs: 50, inactivityMs: 500, totalMs: 1_000, intervalMs: 10, maxAttempts: 2 },
+    });
+    await test.dispatch([request(1)]);
+
+    await vi.advanceTimersByTimeAsync(60);
+
+    expect(JSON.stringify(test.sent)).toContain("agent_attention");
+    expect(JSON.stringify(test.sent)).not.toContain("Answer question 1");
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child-late", finalText: "late" });
+    await stop;
+    vi.useRealTimers();
+  });
+
+  it("notifies the parent after the second error without embedding the error report", async () => {
+    let attempts = 0;
+    const test = harness(async () => {
+      attempts += 1;
+      throw new Error("private provider failure");
+    });
+    await test.dispatch([request(1)]);
+
+    await vi.waitFor(() => expect(test.service.current[0]?.status).toBe("failed"));
+    await vi.waitFor(() => expect(test.sent).toHaveLength(1));
+
+    expect(attempts).toBe(2);
+    expect(JSON.stringify(test.sent[0]?.content)).toContain("agent_completion");
+    expect(JSON.stringify(test.sent[0]?.content)).not.toContain("private provider failure");
+    const taskId = test.service.current[0]?.id;
+    if (!taskId) throw new Error("Failed task is missing.");
+    expect(JSON.stringify(await test.call("agent_result", { task_id: taskId }))).toContain("private provider failure");
   });
 
   it("notifies the parent when one task finishes and returns the saved report only on request", async () => {

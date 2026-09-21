@@ -27,7 +27,8 @@ export const EXPLORER_CHILD_GUIDANCE = `## PiECode 子代理
 - 只处理本次委派的目标和范围，重新核实当前源码，不依赖过时记忆。
 - 不嵌套派发，不询问用户，不修改代理配置或主会话状态。
 - 只调用本会话实际提供的工具；没有写工具时不得声称已修改文件。
-- 用中文给出自包含报告，引用相关路径和符号；受阻时明确说明证据和阻塞点。`;
+- 所有用户可见自然语言都必须使用简体中文，包括工具调用前后的说明、进度更新和最终报告；代码、路径、命令、API 名称与报错原文可保留原文。
+- 最终给出自包含报告并引用相关路径和符号；受阻时明确写出缺少的依赖、已有证据和可降级方案。`;
 
 export interface ExplorerLocator {
   taskId: string;
@@ -214,7 +215,7 @@ export function taskPrompt(request: ExplorerRequest): string {
 工作范围：${request.scope}
 交付要求：${request.deliverable}
 
-请重新核实当前源码后，用中文输出自包含报告；不要输出英文 XML 标签，不要修改任务范围之外的内容。`;
+请重新核实当前源码；所有用户可见自然语言都使用简体中文，包括工具调用前后的说明、进度更新和最终报告；不要输出英文 XML 标签，不要修改任务范围之外的内容。`;
 }
 
 export function namespaceTimeline(taskId: string, attempt: number, timeline: ConversationItem[]): ConversationItem[] {

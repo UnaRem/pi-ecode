@@ -41,7 +41,9 @@ describe("agent guidance", () => {
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("thinking defaults to low");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("At most three run concurrently");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("do not poll or wait");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("retry once after 3 minutes");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("attention marker");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("retry once after an inactivity abort or another non-user error");
+    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("After a second failure");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("stop after 10 minutes total");
     expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("cannot edit files or execute commands");
   });

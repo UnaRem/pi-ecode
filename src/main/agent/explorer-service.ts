@@ -69,6 +69,11 @@ import {
 
 export { compactionReserveTokens, EXPLORER_TOOL_NAMES, explorerToolDefinitions } from "./explorer-support.js";
 
+interface ExplorerWaitResult {
+  tasks: ExplorerTask[];
+  attention: boolean;
+}
+
 export class ExplorerService {
   private readonly tasks = new Map<string, ExplorerTask>();
   private readonly writeLocks = new AgentWriteLockService();
@@ -85,11 +90,12 @@ export class ExplorerService {
   private readonly waiters = new Set<{
     taskIds: Set<string>;
     mode: "all" | "any";
-    resolve: (tasks: ExplorerTask[]) => void;
+    resolve: (result: ExplorerWaitResult) => void;
     reject: (error: unknown) => void;
     cleanup: () => void;
   }>();
   private readonly suppressedCompletionTaskIds = new Set<string>();
+  private readonly attentionTaskIds = new Set<string>();
   private completionTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
   private readonly watchdog: WatchdogOptions;
@@ -155,7 +161,7 @@ export class ExplorerService {
     const task = this.requireTask(taskId);
     if (TERMINAL_STATUSES.has(task.status)) return;
     task.status = "interrupted";
-    task.activity = "Stopped by user";
+    task.activity = "用户已停止";
     task.endedAt = this.now();
     this.bump(task);
     this.controllers.get(taskId)?.abort();
@@ -171,7 +177,7 @@ export class ExplorerService {
     for (const task of this.tasks.values()) {
       if (task.status !== "queued" && task.status !== "running") continue;
       task.status = "interrupted";
-      task.activity = "Stopped by user";
+      task.activity = "用户已停止";
       task.endedAt = this.now();
       this.bump(task);
       this.controllers.get(task.id)?.abort();
@@ -203,6 +209,7 @@ export class ExplorerService {
     this.waiters.clear();
     this.suppressedCompletionTaskIds.clear();
     this.completions.clear();
+    this.attentionTaskIds.clear();
     this.taskAgents.clear();
     this.generations.clear();
     this.writeLocks.clear();
@@ -233,7 +240,8 @@ export class ExplorerService {
       promptGuidelines: [
         "根据项目代理目录选择 agent_id；一个代理同一时刻只能执行一个任务。",
         "探索者和审查者只读；验证者只能运行固定验证；非编辑者传空 write_scope，编辑者写入前声明精确范围。",
-        "派发后不要轮询。收到完成通知后调用 agent_result；需要后续任务时调用 agent_message。",
+        "派发后不要轮询。agent_wait 返回 attention 时调用一次 agent_status；任务失败会自动重试一次，仍失败时读取 agent_result，补足依赖、改派空闲同角色代理，或明确告知用户并由主会话降级执行。",
+        "收到完成通知后按需调用 agent_result；需要后续任务时调用 agent_message。不得把主会话降级执行描述为原代理验证通过。",
       ],
       executionMode: "sequential",
       parameters: ExplorerParameters,
@@ -279,12 +287,18 @@ export class ExplorerService {
     pi.registerTool({
       name: "agent_wait",
       label: "等待子代理任务",
-      description: "按 task_id 等待子代理进入终态；等待期间不轮询、不发起新的模型请求，只返回任务状态。",
+      description: "按 task_id 等待子代理进入终态或需要主会话关注的无活动警告；等待期间不轮询、不发起新的模型请求。",
       parameters: ExplorerWaitParameters,
       execute: async (_toolCallId, params, signal) => {
-        const tasks = await this.waitForTasks(params.task_ids, params.mode, signal);
-        const status = tasks.map((task) => ({ taskId: task.id, agent: task.taskName, status: task.status }));
-        return { content: [{ type: "text", text: JSON.stringify(status) }], details: { mode: params.mode, status } };
+        const result = await this.waitForTasks(params.task_ids, params.mode, signal);
+        const status = result.tasks.map((task) => ({
+          taskId: task.id,
+          agent: task.taskName,
+          status: task.status,
+          activity: task.activity,
+          ...(result.attention ? { attention: true } : {}),
+        }));
+        return { content: [{ type: "text", text: JSON.stringify(status) }], details: { mode: params.mode, attention: result.attention, status } };
       },
     });
     pi.registerTool({
@@ -435,7 +449,7 @@ export class ExplorerService {
       task.status = "running";
       task.startedAt = this.now();
       task.lastActivityAt = this.now();
-      task.activity = "Starting Explorer";
+      task.activity = "正在启动";
       this.bump(task);
       this.publish();
       const generation = this.generation;
@@ -460,15 +474,16 @@ export class ExplorerService {
           result = await this.runAttempt(task, request, parent, controller.signal);
         } catch (error) {
           if (task.status === "interrupted" || controller.signal.aborted) throw error;
-          if (error instanceof ExplorerWatchdogError && error.reason === "inactivity" && task.attempt < task.maxAttempts) {
+          if (task.attempt < task.maxAttempts) {
             this.rotateAgentGeneration(task);
             task.attempt += 1;
-            task.activity = `Retrying attempt ${task.attempt}/${task.maxAttempts}`;
+            task.activity = `正在重试 · ${task.attempt}/${task.maxAttempts}`;
             task.lastActivityAt = this.now();
             this.bump(task);
             this.publish();
             continue;
           }
+          this.rotateAgentGeneration(task);
           throw error;
         }
       }
@@ -477,15 +492,17 @@ export class ExplorerService {
       task.status = "completed";
       task.sessionId = result.sessionId;
       task.finalText = compactFinalText(result.finalText);
-      task.activity = "Completed";
+      task.activity = "已完成";
       task.endedAt = this.now();
+      this.attentionTaskIds.delete(task.id);
       this.bump(task);
     } catch (error) {
       if (generation !== this.generation || task.status === "interrupted") return;
       task.status = controller.signal.aborted ? "interrupted" : "failed";
       task.errorMessage = error instanceof Error ? error.message : String(error);
-      task.activity = task.status === "interrupted" ? "Stopped" : "Failed";
+      task.activity = task.status === "interrupted" ? "已停止" : "失败";
       task.endedAt = this.now();
+      this.attentionTaskIds.delete(task.id);
       this.bump(task);
     } finally {
       this.controllers.delete(task.id);
@@ -517,9 +534,12 @@ export class ExplorerService {
         attemptController.abort();
       } else if (!warned && idleFor >= this.watchdog.warningMs) {
         warned = true;
-        task.activity = "Extended period without activity";
+        task.activity = "长时间无活动，等待主会话检查";
+        this.attentionTaskIds.add(task.id);
         this.bump(task);
         this.publish(false);
+        if ([...this.waiters].some((waiter) => waiter.taskIds.has(task.id))) this.resolveWaiters();
+        else this.notifyAttention(task);
       }
     }, this.watchdog.intervalMs);
     try {
@@ -724,7 +744,7 @@ export class ExplorerService {
   private onChildEvent(task: ExplorerTask, child: AgentSession, event: AgentSessionEvent): void {
     if (task.status !== "running") return;
     if (event.type === "message_update") {
-      this.touch(task, "Generating response");
+      this.touch(task, "正在生成回复");
       const messages = child.messages.includes(event.message) ? child.messages : [...child.messages, event.message];
       this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, messages)));
     } else if (event.type === "message_end" || event.type === "agent_settled") {
@@ -737,7 +757,7 @@ export class ExplorerService {
       this.touch(task, toolTitle(event.toolName, event.args));
       this.updateLiveTool(task, event.toolCallId, event.toolName, event.args, textFromToolResult(event.partialResult), false);
     } else if (event.type === "tool_execution_end") {
-      this.touch(task, "Waiting for model");
+      this.touch(task, "等待模型");
       this.updateLiveTool(task, event.toolCallId, event.toolName, undefined, textFromToolResult(event.result), event.isError);
     }
   }
@@ -791,14 +811,22 @@ export class ExplorerService {
     if (persist) this.publish();
   }
 
-  private waitForTasks(taskIds: string[], mode: "all" | "any", signal?: AbortSignal): Promise<ExplorerTask[]> {
+  private waitForTasks(taskIds: string[], mode: "all" | "any", signal?: AbortSignal): Promise<ExplorerWaitResult> {
     const uniqueIds = [...new Set(taskIds)];
     const tasks = uniqueIds.map((taskId) => this.requireTask(taskId));
-    const isReady = (): boolean => mode === "all"
+    const attentionTasks = tasks.filter((task) => this.attentionTaskIds.has(task.id));
+    if (attentionTasks.length > 0) {
+      for (const task of attentionTasks) this.attentionTaskIds.delete(task.id);
+      return Promise.resolve({ tasks: attentionTasks.map((task) => ({ ...task })), attention: true });
+    }
+    const isReady = mode === "all"
       ? tasks.every((task) => TERMINAL_STATUSES.has(task.status))
       : tasks.some((task) => TERMINAL_STATUSES.has(task.status));
-    if (isReady()) return Promise.resolve(tasks.filter((task) => mode === "all" || TERMINAL_STATUSES.has(task.status)).map((task) => ({ ...task })));
-    return new Promise<ExplorerTask[]>((resolve, reject) => {
+    if (isReady) {
+      const readyTasks = tasks.filter((task) => mode === "all" || TERMINAL_STATUSES.has(task.status));
+      return Promise.resolve({ tasks: readyTasks.map((task) => ({ ...task })), attention: false });
+    }
+    return new Promise<ExplorerWaitResult>((resolve, reject) => {
       const waiter = {
         taskIds: new Set(uniqueIds), mode, resolve, reject,
         cleanup: () => signal?.removeEventListener("abort", onAbort),
@@ -816,14 +844,36 @@ export class ExplorerService {
   private resolveWaiters(): void {
     for (const waiter of [...this.waiters]) {
       const tasks = [...waiter.taskIds].map((taskId) => this.tasks.get(taskId)).filter((task): task is ExplorerTask => Boolean(task));
-      const ready = waiter.mode === "all"
+      const attentionTasks = tasks.filter((task) => this.attentionTaskIds.has(task.id));
+      const terminalReady = waiter.mode === "all"
         ? tasks.length === waiter.taskIds.size && tasks.every((task) => TERMINAL_STATUSES.has(task.status))
         : tasks.some((task) => TERMINAL_STATUSES.has(task.status));
-      if (!ready) continue;
+      if (attentionTasks.length === 0 && !terminalReady) continue;
       this.waiters.delete(waiter);
       waiter.cleanup();
+      if (attentionTasks.length > 0) {
+        for (const task of attentionTasks) this.attentionTaskIds.delete(task.id);
+        waiter.resolve({ tasks: attentionTasks.map((task) => ({ ...task })), attention: true });
+        continue;
+      }
       for (const task of tasks) if (TERMINAL_STATUSES.has(task.status)) this.suppressedCompletionTaskIds.add(task.id);
-      waiter.resolve(tasks.filter((task) => waiter.mode === "all" || TERMINAL_STATUSES.has(task.status)).map((task) => ({ ...task })));
+      const readyTasks = tasks.filter((task) => waiter.mode === "all" || TERMINAL_STATUSES.has(task.status));
+      waiter.resolve({ tasks: readyTasks.map((task) => ({ ...task })), attention: false });
+    }
+  }
+
+  private notifyAttention(task: ExplorerTask): void {
+    if (!this.extensionApi) return;
+    try {
+      this.extensionApi.sendMessage({
+        customType: "pi-ecode.explorer-attention",
+        content: [{ type: "text", text: `<agent_attention task_id="${task.id}" agent="${task.taskName}" status="${task.status}" reason="inactivity" />\n子代理长时间无活动。请调用 agent_status 查询一次，再决定继续等待、停止重派或由主会话降级执行。` }],
+        display: false,
+        details: { taskId: task.id, status: task.status, reason: "inactivity" },
+      }, { triggerTurn: true, deliverAs: "followUp" });
+      this.attentionTaskIds.delete(task.id);
+    } catch {
+      // Keep the attention marker so a later agent_wait can surface it.
     }
   }
 
@@ -885,6 +935,7 @@ export class ExplorerService {
     this.timelines.clear();
     this.timelineTimers.clear();
     this.completions.clear();
+    this.attentionTaskIds.clear();
     this.taskAgents.clear();
     const state = restoredState(context.sessionManager.getBranch());
     let changed = false;
@@ -895,7 +946,7 @@ export class ExplorerService {
           task.status = "interrupted";
           task.endedAt = this.now();
           task.errorMessage = "Explorer was interrupted when the parent session closed.";
-          task.activity = "Interrupted when parent session closed";
+          task.activity = "父会话关闭时已中断";
           this.bump(task);
           changed = true;
         }
