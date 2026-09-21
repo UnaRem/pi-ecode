@@ -196,6 +196,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     onSetConcurrency={props.onSetAgentConcurrency ?? (async () => undefined)}
   /> : <ExplorerPanel
     tasks={explorers}
+    {...(props.agentCatalog ? { agentCatalog: props.agentCatalog } : {})}
     selectedTaskId={props.selectedExplorerId ?? null}
     onSelect={props.onSelectExplorer ?? (() => undefined)}
     onStop={props.onStopExplorer ?? (() => undefined)}

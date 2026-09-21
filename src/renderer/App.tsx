@@ -35,7 +35,19 @@ export default function App() {
   const activeSession = state.sessions.find((session) => session.path === state.sessionFile);
   const sessionTitle = state.sessionTitle ?? (activeSession?.messageCount ? activeSession.title : null);
   const selectedExplorer = state.explorers.find((task) => task.id === selectedExplorerId) ?? null;
+  const selectedAgent = selectedExplorer?.agentId && state.agentCatalog
+    ? state.agentCatalog.agents.find((agent) => agent.id === selectedExplorer.agentId) ?? null
+    : null;
   const explorerTimeline = selectedExplorerId ? state.explorerTimelines[selectedExplorerId]?.timeline ?? [] : [];
+  const activeConversationIdentity = selectedExplorer && appConfig
+    ? {
+      ...appConfig.conversationIdentity,
+      assistant: {
+        ...appConfig.conversationIdentity.assistant,
+        nickname: selectedAgent?.name ?? selectedExplorer.title,
+      },
+    }
+    : appConfig?.conversationIdentity;
   const activeTimeline = selectedExplorer ? explorerTimeline : state.timeline;
   const activeViewKey = selectedExplorer ? `explorer:${selectedExplorer.id}` : `main:${state.sessionFile ?? "new-session"}`;
   const workspaceTools = useWorkspaceTools(activeTimeline, activeViewKey);
@@ -166,7 +178,7 @@ export default function App() {
           error={selectedExplorer ? null : state.error}
           canContinue={selectedExplorer ? false : state.canContinue}
           notice={selectedExplorer ? null : state.notice}
-          conversationIdentity={appConfig?.conversationIdentity}
+          conversationIdentity={activeConversationIdentity}
           {...(!selectedExplorer ? { review: state.review } : {})}
           hasOlderTimeline={selectedExplorer ? false : state.timelineHasMore}
           isLoadingOlder={selectedExplorer ? false : isLoadingOlder}
@@ -175,7 +187,8 @@ export default function App() {
           selectedToolId={workspaceTools.selectedToolId}
           onSelectTool={workspaceTools.selectTool}
         />
-        {!selectedExplorer && <Composer
+        <div hidden={Boolean(selectedExplorer)} aria-hidden={selectedExplorer ? true : undefined}>
+          <Composer
           isStreaming={state.isStreaming}
           pendingCount={state.pendingCount}
           modelReady={Boolean(state.selectedModel)}
@@ -201,7 +214,8 @@ export default function App() {
           onRedo={() => void actions.redo()}
           onSetModel={(value) => void actions.setModel(value)}
           onSetThinking={(level) => void actions.setThinkingLevel(level)}
-        />}
+          />
+        </div>
           </>
         )}
       </section>

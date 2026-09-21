@@ -116,6 +116,11 @@ export const ExplorerTaskIdParameters = Type.Object({
   task_id: Type.String({ minLength: 1, maxLength: 200, description: "任务 ID" }),
 });
 
+export const ExplorerWaitParameters = Type.Object({
+  task_ids: Type.Array(Type.String({ minLength: 1, maxLength: 200 }), { minItems: 1, maxItems: 8, description: "等待的子代理任务 ID" }),
+  mode: Type.Union([Type.Literal("all"), Type.Literal("any")], { description: "all 等待全部终态；any 等待任一终态" }),
+});
+
 export const AgentMessageParameters = Type.Object({
   agent_id: Type.String({ minLength: 1, maxLength: 80, description: "项目代理 ID" }),
   message: Type.String({ minLength: 1, maxLength: 4000, description: "发送给空闲代理的后续任务或追问" }),
@@ -203,7 +208,13 @@ export function compactFinalText(text: string): string {
 }
 
 export function taskPrompt(request: ExplorerRequest): string {
-  return `<agent_task>\n<task_name>${request.task_name}</task_name>\n<objective>${request.objective}</objective>\n<scope>${request.scope}</scope>\n<deliverable>${request.deliverable}</deliverable>\n</agent_task>`;
+  return `## 子代理任务
+任务标题：${request.title}
+任务目标：${request.objective}
+工作范围：${request.scope}
+交付要求：${request.deliverable}
+
+请重新核实当前源码后，用中文输出自包含报告；不要输出英文 XML 标签，不要修改任务范围之外的内容。`;
 }
 
 export function namespaceTimeline(taskId: string, attempt: number, timeline: ConversationItem[]): ConversationItem[] {

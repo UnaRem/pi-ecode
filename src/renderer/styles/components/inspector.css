@@ -107,6 +107,20 @@
 .explorer-task-main time { color: var(--color-text-faint); font-size: 9px; white-space: nowrap; }
 .explorer-task-stop { position: absolute; top: 7px; right: 7px; width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-sm); color: var(--color-danger); background: transparent; cursor: pointer; }
 .explorer-task-stop:hover, .explorer-task-stop:focus-visible { background: var(--color-danger-soft); }
+.explorer-agent-main { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 7px; padding: 8px 30px 8px 9px; }
+.explorer-agent-main .explorer-task-stop { top: 7px; right: 7px; }
+.explorer-agent-select { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 0; border: 0; color: var(--color-text-muted); background: transparent; text-align: left; cursor: pointer; }
+.explorer-agent-select:disabled { cursor: default; opacity: .72; }
+.explorer-agent-select strong, .explorer-agent-select small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.explorer-agent-select strong { color: var(--color-text); font-size: 11px; }
+.explorer-agent-select small { color: var(--color-text-faint); font-size: 9.5px; }
+.explorer-agent-main time { color: var(--color-text-faint); font-size: 9px; white-space: nowrap; }
+.explorer-agent-history { border-top: 1px solid var(--color-border); padding: 0 7px 6px; }
+.explorer-agent-history summary { padding: 6px 2px 4px; color: var(--color-text-faint); font-size: 9px; cursor: pointer; }
+.explorer-agent-history summary:focus-visible, .explorer-agent-select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: 3px; }
+.explorer-agent-history > div { display: flex; flex-direction: column; gap: 3px; }
+.explorer-history-task { border-color: var(--color-border) !important; border-radius: var(--radius-sm) !important; }
+.explorer-history-task .explorer-task-main { padding: 6px 26px 6px 6px; }
 .inspector-version-list { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2); }
 .inspector-version-list code { overflow: hidden; color: var(--color-text-faint); font: 9px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .inspector-file-list { max-height: 128px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; padding-right: 3px; }

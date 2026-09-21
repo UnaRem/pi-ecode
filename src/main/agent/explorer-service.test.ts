@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
-import { AgentMessageParameters, ExplorerParameters, ExplorerStatusParameters } from "./explorer-support.js";
+import { AgentMessageParameters, ExplorerParameters, ExplorerStatusParameters, taskPrompt } from "./explorer-support.js";
 
 interface DeferredResult {
   promise: Promise<{ sessionId: string; finalText: string }>;
@@ -92,6 +92,14 @@ describe("ExplorerService", () => {
     expect(compactionReserveTokens(1, 90)).toBe(1);
   });
 
+  it("uses Chinese task labels in the child prompt", () => {
+    const prompt = taskPrompt({ task_name: "inspect_context", title: "核查上下文", objective: "定位根因", scope: "src/main", deliverable: "给出证据" });
+    expect(prompt).toContain("任务标题：核查上下文");
+    expect(prompt).toContain("交付要求：给出证据");
+    expect(prompt).not.toContain("<task_name>");
+    expect(prompt).toContain("用中文输出自包含报告");
+  });
+
   it("reuses the parent read, ffgrep, and fffind definitions exactly", () => {
     const definitions = new Map<string, { name: string }>(EXPLORER_TOOL_NAMES.map((name) => [name, { name }]));
     const parent = {
@@ -163,6 +171,25 @@ describe("ExplorerService", () => {
     readOnlyPending.resolve({ sessionId: "read-only", finalText: "stopped" });
     editorPending.resolve({ sessionId: "editor", finalText: "stopped" });
     await stops;
+  });
+
+  it("waits for all or any selected tasks without polling", async () => {
+    const first = deferredResult();
+    const second = deferredResult();
+    const test = harness(() => first.promise, { getAgentDefinitions: () => [agent("explorer-1")] });
+    await test.dispatch([{ ...request(1), agent_id: "explorer-1", write_scope: [] }]);
+    const firstId = test.service.current[0]!.id;
+    const allWait = test.call("agent_wait", { task_ids: [firstId], mode: "all" });
+    first.resolve({ sessionId: "child-1", finalText: "完成" });
+    await expect(allWait).resolves.toMatchObject({ details: { mode: "all", status: [{ taskId: firstId, status: "completed" }] } });
+    expect(test.sent).toHaveLength(0);
+
+    const secondTest = harness(() => second.promise, { getAgentDefinitions: () => [agent("explorer-1")] });
+    await secondTest.dispatch([{ ...request(2), agent_id: "explorer-1", write_scope: [] }]);
+    const secondId = secondTest.service.current[0]!.id;
+    const anyWait = secondTest.call("agent_wait", { task_ids: [secondId], mode: "any" });
+    second.resolve({ sessionId: "child-2", finalText: "完成" });
+    await expect(anyWait).resolves.toMatchObject({ details: { mode: "any", status: [{ taskId: secondId, status: "completed" }] } });
   });
 
   it("assigns configured project agents and refuses to run one agent twice", async () => {

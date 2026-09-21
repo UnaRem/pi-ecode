@@ -349,7 +349,7 @@ export function Conversation(props: ConversationProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const userElements = useRef(new Map<string, HTMLElement>());
   const historyAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
-  const scrollPositionsRef = useRef(new Map<string, number>());
+  const initialScrollPendingRef = useRef(true);
   const previousViewKeyRef = useRef(props.viewKey ?? "conversation");
   const latestUserViewKeyRef = useRef(props.viewKey ?? "conversation");
   const followingRef = useRef(true);
@@ -385,11 +385,10 @@ export function Conversation(props: ConversationProps) {
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || previousViewKeyRef.current === viewKey) return;
-    scrollPositionsRef.current.set(previousViewKeyRef.current, container.scrollTop);
     previousViewKeyRef.current = viewKey;
-    const savedPosition = scrollPositionsRef.current.get(viewKey);
-    container.scrollTop = savedPosition ?? container.scrollHeight;
-    setFollowing(savedPosition === undefined || isScrollNearBottom(container));
+    initialScrollPendingRef.current = true;
+    container.scrollTop = 0;
+    setFollowing(true);
   }, [viewKey]);
 
   useEffect(() => {
@@ -403,6 +402,14 @@ export function Conversation(props: ConversationProps) {
   }, [latestUserId, viewKey]);
 
   const firstTimelineId = props.timeline[0]?.id;
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || !initialScrollPendingRef.current || props.timeline.length === 0) return;
+    initialScrollPendingRef.current = false;
+    container.scrollTop = container.scrollHeight;
+    setFollowing(true);
+  }, [firstTimelineId, props.timeline.length, viewKey]);
+
   useLayoutEffect(() => {
     const container = containerRef.current;
     const anchor = historyAnchorRef.current;

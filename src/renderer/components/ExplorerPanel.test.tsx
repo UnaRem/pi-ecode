@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ProjectAgentCatalog } from "@shared/agent-contracts";
 import type { ExplorerTask } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
 import { ExplorerPanel } from "./ExplorerPanel";
@@ -26,6 +27,27 @@ function task(patch: Partial<ExplorerTask> = {}): ExplorerTask {
     ...patch,
   };
 }
+
+const catalog: ProjectAgentCatalog = {
+  version: 1,
+  projectPath: "C:/workspace",
+  maxConcurrent: 3,
+  updatedAt: 1,
+  agents: [{
+    id: "explorer-1",
+    name: "探索者 1",
+    role: "explorer",
+    builtIn: true,
+    enabled: true,
+    model: { mode: "inherit" },
+    thinkingLevel: "high",
+    autoCompaction: { enabled: true, thresholdPercent: null },
+    prompt: "只读",
+    disabledTools: [],
+    createdAt: 1,
+    updatedAt: 1,
+  }],
+};
 
 describe("ExplorerPanel", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -62,5 +84,33 @@ describe("ExplorerPanel", () => {
     );
     expect(markup).toContain("Read-only Explorer transcript");
     expect(markup).toContain("Return to main conversation");
+  });
+
+  it("keeps the configured agent visible and nests task history under it", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "zh-CN", setItem: vi.fn() });
+    const historyTask = task({
+      id: "task-1",
+      taskName: "inspect_context",
+      title: "核查上下文",
+      status: "completed",
+      agentId: "explorer-1",
+      sessionId: "child-session-1",
+      endedAt: 2,
+    });
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ExplorerPanel
+          tasks={[historyTask]}
+          agentCatalog={catalog}
+          selectedTaskId={null}
+          onSelect={vi.fn()}
+          onStop={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+    expect(markup).toContain("探索者 1");
+    expect(markup).toContain("长期会话");
+    expect(markup).toContain("历史任务");
+    expect(markup).toContain("核查上下文");
   });
 });

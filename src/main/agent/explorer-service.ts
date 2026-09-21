@@ -47,6 +47,7 @@ import {
   type ExplorerRunResult,
   type ExplorerServiceOptions,
   ExplorerStatusParameters,
+  ExplorerWaitParameters,
   EXPLORER_STATE_ENTRY,
   ExplorerTaskIdParameters,
   EXPLORER_TOOL_NAMES,
@@ -81,6 +82,14 @@ export class ExplorerService {
   private readonly liveSessions = new Map<string, AgentSession>();
   private readonly timelines = new Map<string, ExplorerTimelineSnapshot>();
   private readonly timelineTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly waiters = new Set<{
+    taskIds: Set<string>;
+    mode: "all" | "any";
+    resolve: (tasks: ExplorerTask[]) => void;
+    reject: (error: unknown) => void;
+    cleanup: () => void;
+  }>();
+  private readonly suppressedCompletionTaskIds = new Set<string>();
   private completionTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
   private readonly watchdog: WatchdogOptions;
@@ -150,6 +159,7 @@ export class ExplorerService {
     task.endedAt = this.now();
     this.bump(task);
     this.controllers.get(taskId)?.abort();
+    this.resolveWaiters();
     const queuedIndex = this.queue.indexOf(taskId);
     if (queuedIndex >= 0) this.queue.splice(queuedIndex, 1);
     this.publish();
@@ -165,6 +175,7 @@ export class ExplorerService {
       task.endedAt = this.now();
       this.bump(task);
       this.controllers.get(task.id)?.abort();
+      this.resolveWaiters();
     }
     this.queue.length = 0;
     this.publish();
@@ -185,6 +196,12 @@ export class ExplorerService {
     this.liveSessions.clear();
     this.timelines.clear();
     this.timelineTimers.clear();
+    for (const waiter of this.waiters) {
+      waiter.cleanup();
+      waiter.reject(new Error("子代理服务已重置，等待已取消。"));
+    }
+    this.waiters.clear();
+    this.suppressedCompletionTaskIds.clear();
     this.completions.clear();
     this.taskAgents.clear();
     this.generations.clear();
@@ -211,11 +228,11 @@ export class ExplorerService {
     pi.registerTool({
       name: "agent_dispatch",
       label: "派发代理任务",
-      description: "向项目代理派发一个或多个任务。代理可长期复用会话；编辑者必须声明 write_scope。",
+      description: "向项目代理派发一个或多个任务。代理可长期复用会话；所有任务都要传 write_scope 数组，编辑者必须传非空范围。",
       promptSnippet: "按稳定 agent_id 指挥项目代理；完成通知不携带报告正文",
       promptGuidelines: [
         "根据项目代理目录选择 agent_id；一个代理同一时刻只能执行一个任务。",
-        "探索者和审查者只读；验证者只能运行固定验证；编辑者写入前必须声明精确 write_scope。",
+        "探索者和审查者只读；验证者只能运行固定验证；非编辑者传空 write_scope，编辑者写入前声明精确范围。",
         "派发后不要轮询。收到完成通知后调用 agent_result；需要后续任务时调用 agent_message。",
       ],
       executionMode: "sequential",
@@ -257,6 +274,17 @@ export class ExplorerService {
           resultUnread: notices.some((notice) => notice.taskId === task.id && !notice.acknowledgedAt),
         }));
         return { content: [{ type: "text", text: JSON.stringify(status) }], details: { status } };
+      },
+    });
+    pi.registerTool({
+      name: "agent_wait",
+      label: "等待子代理任务",
+      description: "按 task_id 等待子代理进入终态；等待期间不轮询、不发起新的模型请求，只返回任务状态。",
+      parameters: ExplorerWaitParameters,
+      execute: async (_toolCallId, params, signal) => {
+        const tasks = await this.waitForTasks(params.task_ids, params.mode, signal);
+        const status = tasks.map((task) => ({ taskId: task.id, agent: task.taskName, status: task.status }));
+        return { content: [{ type: "text", text: JSON.stringify(status) }], details: { mode: params.mode, status } };
       },
     });
     pi.registerTool({
@@ -464,6 +492,7 @@ export class ExplorerService {
       this.writeLocks.release(task.id);
       if (generation === this.generation) {
         this.publish();
+        this.resolveWaiters();
         this.notifyTaskIfReady(task);
         this.drainQueue();
       }
@@ -762,8 +791,45 @@ export class ExplorerService {
     if (persist) this.publish();
   }
 
+  private waitForTasks(taskIds: string[], mode: "all" | "any", signal?: AbortSignal): Promise<ExplorerTask[]> {
+    const uniqueIds = [...new Set(taskIds)];
+    const tasks = uniqueIds.map((taskId) => this.requireTask(taskId));
+    const isReady = (): boolean => mode === "all"
+      ? tasks.every((task) => TERMINAL_STATUSES.has(task.status))
+      : tasks.some((task) => TERMINAL_STATUSES.has(task.status));
+    if (isReady()) return Promise.resolve(tasks.filter((task) => mode === "all" || TERMINAL_STATUSES.has(task.status)).map((task) => ({ ...task })));
+    return new Promise<ExplorerTask[]>((resolve, reject) => {
+      const waiter = {
+        taskIds: new Set(uniqueIds), mode, resolve, reject,
+        cleanup: () => signal?.removeEventListener("abort", onAbort),
+      };
+      const onAbort = (): void => {
+        this.waiters.delete(waiter);
+        waiter.cleanup();
+        reject(new Error("等待子代理结果已取消。"));
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      this.waiters.add(waiter);
+    });
+  }
+
+  private resolveWaiters(): void {
+    for (const waiter of [...this.waiters]) {
+      const tasks = [...waiter.taskIds].map((taskId) => this.tasks.get(taskId)).filter((task): task is ExplorerTask => Boolean(task));
+      const ready = waiter.mode === "all"
+        ? tasks.length === waiter.taskIds.size && tasks.every((task) => TERMINAL_STATUSES.has(task.status))
+        : tasks.some((task) => TERMINAL_STATUSES.has(task.status));
+      if (!ready) continue;
+      this.waiters.delete(waiter);
+      waiter.cleanup();
+      for (const task of tasks) if (TERMINAL_STATUSES.has(task.status)) this.suppressedCompletionTaskIds.add(task.id);
+      waiter.resolve(tasks.filter((task) => waiter.mode === "all" || TERMINAL_STATUSES.has(task.status)).map((task) => ({ ...task })));
+    }
+  }
+
   private notifyTaskIfReady(task: ExplorerTask): void {
     if (this.disposed || (task.status !== "completed" && task.status !== "failed")) return;
+    if (this.suppressedCompletionTaskIds.delete(task.id)) return;
     if ([...this.completions.values()].some((notice) => notice.taskId === task.id)) return;
     const notice: ExplorerCompletionNotice = { id: randomUUID(), taskId: task.id, createdAt: this.now() };
     this.completions.set(notice.id, notice);
