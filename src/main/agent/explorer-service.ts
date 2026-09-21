@@ -284,7 +284,7 @@ export class ExplorerService {
           objective: params.message,
           scope: "沿用该代理既有项目范围，并只处理本次消息明确涉及的文件。",
           deliverable: params.deliverable ?? "用中文给出自包含结论，并引用本次重新核实的文件路径。",
-          ...(params.write_scope ? { write_scope: params.write_scope } : {}),
+          ...(params.write_scope.length > 0 ? { write_scope: params.write_scope } : {}),
         }]);
         return { content: [{ type: "text", text: `已向代理 ${params.agent_id} 发送后续任务，task_id=${snapshots[0]!.id}` }], details: { task: snapshots[0] } };
       },
@@ -341,7 +341,7 @@ export class ExplorerService {
           id: randomUUID(), taskName: request.task_name, title: request.title.trim(), objective: request.objective.trim(),
           scope: request.scope.trim(), deliverable: request.deliverable.trim(), status: "queued", originToolCallId: toolCallId,
           ...(definition ? { agentId: definition.id, agentRole: definition.role } : {}),
-          ...(request.write_scope ? { writeScope: [...request.write_scope] } : {}),
+          ...(request.write_scope?.length ? { writeScope: [...request.write_scope] } : {}),
           provider: model.provider, modelId: model.id,
           thinkingLevel: thinkingOverride ?? definition?.thinkingLevel ?? "low",
           attempt: 1, maxAttempts: this.watchdog.maxAttempts, revision: 1, queuedAt: this.now(),
@@ -350,8 +350,8 @@ export class ExplorerService {
         if (definition?.role === "editor") {
           if (!request.write_scope?.length) throw new Error("编辑者任务必须声明 write_scope。");
           this.writeLocks.acquire(parent.sessionManager.getCwd(), task.id, definition.id, request.write_scope);
-        } else if (request.write_scope) {
-          throw new Error(`只有编辑者任务可以声明 write_scope：${definition?.name ?? request.task_name}`);
+        } else if (request.write_scope?.length) {
+          throw new Error(`只有编辑者任务可以声明非空 write_scope：${definition?.name ?? request.task_name}`);
         }
         if (definition) {
           occupiedAgentIds.add(definition.id);

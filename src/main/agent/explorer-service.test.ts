@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
+import { AgentMessageParameters, ExplorerParameters } from "./explorer-support.js";
 
 interface DeferredResult {
   promise: Promise<{ sessionId: string; finalText: string }>;
@@ -23,7 +24,7 @@ function harness(
   const sent: Array<{ content: unknown; options: unknown }> = [];
   const appended: Array<{ customType: string; data: unknown }> = [];
   const handlers = new Map<string, (event: unknown, context: ExtensionContext) => void>();
-  const parent = { model: { id: "model" } } as unknown as AgentSession;
+  const parent = { model: { id: "model" }, sessionManager: { getCwd: () => "C:/project" } } as unknown as AgentSession;
   const service = new ExplorerService({ getParentSession: () => parent, onChange: vi.fn(), runExplorer, ...options });
   const pi = {
     on: (event: string, handler: (event: unknown, context: ExtensionContext) => void) => handlers.set(event, handler),
@@ -46,7 +47,7 @@ function harness(
       if (!tool) throw new Error(`${name} tool was not registered.`);
       return tool.execute(`call-${name}`, params, undefined, undefined, context);
     },
-    dispatch: async (explorers: Array<Record<string, string>>, thinkingLevel?: "low" | "medium") => {
+    dispatch: async (explorers: Array<Record<string, unknown>>, thinkingLevel?: "low" | "medium") => {
       const tool = tools.get("dispatch_explorers");
       if (!tool) throw new Error("Explorer tool was not registered.");
       return tool.execute("dispatch-1", {
@@ -75,7 +76,7 @@ function agent(id: string, role: ProjectAgentDefinition["role"] = "explorer"): P
   };
 }
 
-function request(index: number): Record<string, string> {
+function request(index: number): Record<string, unknown> {
   return {
     task_name: `task_${index}`,
     title: `Task ${index}`,
@@ -128,14 +129,38 @@ describe("ExplorerService", () => {
     medium.resolve({ sessionId: "medium", finalText: "stopped" });
   });
 
-  it("registers the main-session bus tools and requires write_scope for editors", async () => {
-    const pending = deferredResult();
-    const editor = agent("editor-1", "editor");
-    const test = harness(() => pending.promise, { getAgentDefinitions: () => [editor] });
+  it("exposes write_scope as a required array that permits non-editor empty scopes", () => {
+    const taskSchema = ExplorerParameters.properties.explorers.items;
+    expect(taskSchema.required).toContain("write_scope");
+    expect(taskSchema.properties.write_scope).toMatchObject({ minItems: 0 });
+    expect(AgentMessageParameters.required).toContain("write_scope");
+    expect(AgentMessageParameters.properties.write_scope).toMatchObject({ minItems: 0 });
+  });
 
-    await expect(test.dispatch([{ ...request(1), agent_id: "editor-1" }])).rejects.toThrow("必须声明 write_scope");
-    await expect(test.call("agent_status", {})).resolves.toBeDefined();
-    await expect(test.call("agent_result", { task_id: "missing" })).rejects.toThrow("不属于当前主会话");
+  it("accepts empty write_scope for read-only agents and requires a non-empty editor scope", async () => {
+    const readOnlyPending = deferredResult();
+    const editorPending = deferredResult();
+    const explorer = agent("explorer-1");
+    const editor = agent("editor-1", "editor");
+    const readOnlyTest = harness(() => readOnlyPending.promise, { getAgentDefinitions: () => [explorer] });
+    const editorTest = harness(() => editorPending.promise, { getAgentDefinitions: () => [editor] });
+
+    await readOnlyTest.dispatch([{ ...request(1), agent_id: "explorer-1", write_scope: [] }]);
+    expect(readOnlyTest.service.current[0]?.writeScope).toBeUndefined();
+    await expect(harness(() => Promise.resolve({ sessionId: "unused", finalText: "unused" }), {
+      getAgentDefinitions: () => [explorer],
+    }).dispatch([{ ...request(2), agent_id: "explorer-1", write_scope: ["src/main/**"] }])).rejects.toThrow("只有编辑者任务可以声明非空 write_scope");
+
+    await expect(editorTest.dispatch([{ ...request(3), agent_id: "editor-1", write_scope: [] }])).rejects.toThrow("必须声明 write_scope");
+    await editorTest.dispatch([{ ...request(4), agent_id: "editor-1", write_scope: ["src/main/**"] }]);
+    expect(editorTest.service.current[0]?.writeScope).toEqual(["src/main/**"]);
+    await expect(editorTest.call("agent_status", {})).resolves.toBeDefined();
+    await expect(editorTest.call("agent_result", { task_id: "missing" })).rejects.toThrow("不属于当前主会话");
+
+    const stops = Promise.all([readOnlyTest.service.interruptAll(), editorTest.service.interruptAll()]);
+    readOnlyPending.resolve({ sessionId: "read-only", finalText: "stopped" });
+    editorPending.resolve({ sessionId: "editor", finalText: "stopped" });
+    await stops;
   });
 
   it("assigns configured project agents and refuses to run one agent twice", async () => {

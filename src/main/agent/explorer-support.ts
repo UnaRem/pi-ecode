@@ -120,7 +120,7 @@ export const AgentMessageParameters = Type.Object({
   agent_id: Type.String({ minLength: 1, maxLength: 80, description: "项目代理 ID" }),
   message: Type.String({ minLength: 1, maxLength: 4000, description: "发送给空闲代理的后续任务或追问" }),
   deliverable: Type.Optional(Type.String({ minLength: 1, maxLength: 800, description: "期望报告格式" })),
-  write_scope: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { minItems: 1, maxItems: 30, description: "编辑者后续任务的新写入范围" })),
+  write_scope: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { minItems: 0, maxItems: 30, description: "编辑者传非空写入范围；其他角色传空数组" }),
 });
 
 export const ExplorerStatusParameters = Type.Object({
@@ -137,7 +137,7 @@ export const ExplorerParameters = Type.Object({
     objective: Type.String({ minLength: 1, maxLength: 800, description: "一个具体目标" }),
     scope: Type.String({ minLength: 1, maxLength: 800, description: "明确的文件、目录或模块范围" }),
     deliverable: Type.String({ minLength: 1, maxLength: 800, description: "证据和报告要求" }),
-    write_scope: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { minItems: 1, maxItems: 30, description: "编辑者必须声明的相对写入范围；目录使用 /** 后缀" })),
+    write_scope: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { minItems: 0, maxItems: 30, description: "编辑者传非空相对写入范围；其他角色传空数组；目录使用 /** 后缀" }),
   }), { minItems: 1, maxItems: 8 }),
 });
 
