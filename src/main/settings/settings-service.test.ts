@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { REDACTED_CONFIG_VALUE } from "../../shared/settings-contracts.js";
@@ -9,7 +10,7 @@ const temporaryDirectories: string[] = [];
 const activeServices: SettingsService[] = [];
 
 async function createHarness() {
-  const root = await mkdtemp(join(process.cwd(), ".pi-ecode-settings-"));
+  const root = await mkdtemp(join(await realpath(tmpdir()), "pi-ecode-settings-"));
   temporaryDirectories.push(root);
   const agentDir = join(root, "agent");
   const projectPath = join(root, "project");
