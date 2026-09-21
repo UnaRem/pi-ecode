@@ -1,3 +1,11 @@
+export const PARALLEL_TOOL_EXECUTION_GUIDANCE = `## Parallel tool execution
+- When two or more tool calls are independent and all inputs are already known, issue them together in one assistant response so the runtime can execute them in parallel.
+- Prefer parallel batches for independent reads, searches, and non-mutating diagnostic checks across different targets.
+- Keep dependent calls sequential when a later call needs output from an earlier call.
+- Keep edits, writes, Git state changes, and commands that may mutate the environment sequential. Never split changes to the same file across parallel calls.
+- Do not duplicate searches or add speculative calls merely to create a parallel batch.
+- A tool marked sequential makes its entire batch sequential; request_confirmation must remain the only tool in its assistant response.`;
+
 export const EDIT_TOOL_COMPATIBILITY_GUIDANCE = `## File editing tool compatibility
 - This runtime does not provide an apply_patch tool or shell command.
 - Use the edit tool for precise file changes; its input is path plus edits with exact oldText and newText values.

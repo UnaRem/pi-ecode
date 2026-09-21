@@ -42,7 +42,7 @@ import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
 import { ExtensionUiBridge } from "./extension-ui-bridge.js";
 import { AuthService } from "./auth-service.js";
-import { EDIT_TOOL_COMPATIBILITY_GUIDANCE } from "./agent-guidance.js";
+import { EDIT_TOOL_COMPATIBILITY_GUIDANCE, PARALLEL_TOOL_EXECUTION_GUIDANCE } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
 import { listSessionSummaries } from "./session-summaries.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
@@ -553,7 +553,11 @@ export class AgentService {
         resourceLoaderOptions: {
           extensionFactories: [this.history.asExtension(), this.nativeCompaction.asExtension(), this.confirmation.asExtension(), this.taskPlan.asExtension()],
           eventBus: this.extensionEventBus,
-          appendSystemPromptOverride: (base) => [...base, EDIT_TOOL_COMPATIBILITY_GUIDANCE],
+          appendSystemPromptOverride: (base) => [
+            ...base,
+            EDIT_TOOL_COMPATIBILITY_GUIDANCE,
+            PARALLEL_TOOL_EXECUTION_GUIDANCE,
+          ],
           extensionsOverride: (base) => ({
             ...base,
             extensions: base.extensions.filter((extension) => (
@@ -562,12 +566,15 @@ export class AgentService {
           }),
         },
       });
+      const sessionRuntime = await createAgentSessionFromServices({
+        services,
+        sessionManager,
+        ...(sessionStartEvent ? { sessionStartEvent } : {}),
+      });
+      // Keep parallel batching an explicit pi-ecode contract instead of relying on the SDK default.
+      sessionRuntime.session.agent.toolExecution = "parallel";
       return {
-        ...(await createAgentSessionFromServices({
-          services,
-          sessionManager,
-          ...(sessionStartEvent ? { sessionStartEvent } : {}),
-        })),
+        ...sessionRuntime,
         services,
         diagnostics: services.diagnostics,
       };
