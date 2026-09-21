@@ -124,7 +124,7 @@ export const AgentMessageParameters = Type.Object({
 });
 
 export const ExplorerStatusParameters = Type.Object({
-  task_id: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "可选任务 ID；省略时返回全部任务" })),
+  task_id: Type.String({ minLength: 0, maxLength: 200, description: "任务 ID；传空字符串返回运行中或未读任务" }),
 });
 
 export const ExplorerParameters = Type.Object({

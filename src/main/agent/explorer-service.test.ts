@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
-import { AgentMessageParameters, ExplorerParameters } from "./explorer-support.js";
+import { AgentMessageParameters, ExplorerParameters, ExplorerStatusParameters } from "./explorer-support.js";
 
 interface DeferredResult {
   promise: Promise<{ sessionId: string; finalText: string }>;
@@ -135,6 +135,8 @@ describe("ExplorerService", () => {
     expect(taskSchema.properties.write_scope).toMatchObject({ minItems: 0 });
     expect(AgentMessageParameters.required).toContain("write_scope");
     expect(AgentMessageParameters.properties.write_scope).toMatchObject({ minItems: 0 });
+    expect(ExplorerStatusParameters.required).toContain("task_id");
+    expect(ExplorerStatusParameters.properties.task_id).toMatchObject({ minLength: 0 });
   });
 
   it("accepts empty write_scope for read-only agents and requires a non-empty editor scope", async () => {
@@ -154,7 +156,7 @@ describe("ExplorerService", () => {
     await expect(editorTest.dispatch([{ ...request(3), agent_id: "editor-1", write_scope: [] }])).rejects.toThrow("必须声明 write_scope");
     await editorTest.dispatch([{ ...request(4), agent_id: "editor-1", write_scope: ["src/main/**"] }]);
     expect(editorTest.service.current[0]?.writeScope).toEqual(["src/main/**"]);
-    await expect(editorTest.call("agent_status", {})).resolves.toBeDefined();
+    await expect(editorTest.call("agent_status", { task_id: "" })).resolves.toBeDefined();
     await expect(editorTest.call("agent_result", { task_id: "missing" })).rejects.toThrow("不属于当前主会话");
 
     const stops = Promise.all([readOnlyTest.service.interruptAll(), editorTest.service.interruptAll()]);
@@ -234,7 +236,11 @@ describe("ExplorerService", () => {
     const first = deferredResult();
     const second = deferredResult();
     const test = harness((task) => task.taskName === "task_1" ? first.promise : second.promise);
-    await test.dispatch([request(1), request(2)]);
+    const dispatchResult = await test.dispatch([request(1), request(2)]);
+    const dispatchJson = JSON.stringify(dispatchResult);
+    for (const task of test.service.current) expect(dispatchJson).toContain(task.id);
+    expect(dispatchJson).not.toContain("Answer question 1");
+    expect(dispatchJson).not.toContain("src/area-1");
 
     first.resolve({ sessionId: "child-1", finalText: "private result 1" });
     await vi.waitFor(() => expect(test.sent).toHaveLength(1));
@@ -250,6 +256,8 @@ describe("ExplorerService", () => {
     expect(JSON.stringify(result)).toContain("private result 1");
     const statusAfter = await test.call("agent_status", { task_id: taskId });
     expect(JSON.stringify(statusAfter)).toContain('\"resultUnread\":false');
+    const unreadOnly = await test.call("agent_status", { task_id: "" });
+    expect(JSON.stringify(unreadOnly)).not.toContain(taskId);
 
     const stop = test.service.interruptAll();
     second.resolve({ sessionId: "child-2", finalText: "stopped" });
@@ -338,6 +346,27 @@ describe("ExplorerService", () => {
     await vi.waitFor(() => expect(test.sent).toHaveLength(1));
     expect(JSON.stringify(test.sent[0]?.content)).toContain("completion-1");
     expect(JSON.stringify(test.sent[0]?.content)).not.toContain("saved result");
+  });
+
+  it("does not redeliver an already acknowledged completion", async () => {
+    const test = harness(vi.fn(async () => ({ sessionId: "unused", finalText: "unused" })));
+    const completed = {
+      id: "child-acknowledged", taskName: "inspect", title: "Inspect", objective: "Find behavior", scope: "src/",
+      deliverable: "Evidence", status: "completed", originToolCallId: "dispatch-old", thinkingLevel: "low",
+      attempt: 1, maxAttempts: 2, revision: 2, queuedAt: 1, startedAt: 2, endedAt: 3, finalText: "saved result",
+    };
+    test.setBranch([{
+      type: "custom", id: "entry-acknowledged", parentId: null, timestamp: new Date().toISOString(),
+      customType: "pi-ecode.explorer-state", data: {
+        version: 5,
+        tasks: [completed], locators: [], agentSnapshots: [], generations: [],
+        completions: [{ id: "completion-ack", taskId: "child-acknowledged", createdAt: 3, acknowledgedAt: 4 }],
+      },
+    } as SessionEntry]);
+
+    test.restore();
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    expect(test.sent).toHaveLength(0);
   });
 
   it("restores unfinished parent state as interrupted without rerunning children", () => {

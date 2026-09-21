@@ -201,9 +201,11 @@ export class ExplorerService {
     const executeDispatch = async (toolCallId: string, params: Static<typeof ExplorerParameters>, signal?: AbortSignal) => {
       signal?.throwIfAborted();
       const snapshots = this.dispatch(toolCallId, params.explorers, params.thinking_level);
+      const taskIds = snapshots.map((task) => ({ taskId: task.id, agentId: task.agentId ?? null }));
+      const assigned = taskIds.map((task) => `${task.agentId ?? "explorer"}: ${task.taskId}`).join("\n");
       return {
-        content: [{ type: "text" as const, text: `已派发 ${snapshots.length} 个子代理任务；每个任务结束时会发送轻量通知，使用 agent_result 获取报告。` }],
-        details: { kind: "pi-ecode.agent-dispatch", version: 1, explorers: snapshots },
+        content: [{ type: "text" as const, text: `已派发 ${snapshots.length} 个子代理任务：\n${assigned}\n任务结束时会发送轻量通知，使用 agent_result 获取报告。` }],
+        details: { kind: "pi-ecode.agent-dispatch", version: 1, tasks: taskIds },
       };
     };
     pi.registerTool({
@@ -235,11 +237,16 @@ export class ExplorerService {
     pi.registerTool({
       name: "agent_status",
       label: "检查子代理状态",
-      description: "检查当前主会话所属子代理任务的状态、活动和未读完成通知，不读取报告正文。",
+      description: "检查当前主会话所属子代理任务的状态、活动和未读完成通知，不读取报告正文；空 task_id 返回最近的运行中或未读任务。",
       parameters: ExplorerStatusParameters,
       execute: async (_toolCallId, params) => {
-        const tasks = params.task_id ? [this.requireTask(params.task_id)] : this.current;
         const notices = [...this.completions.values()];
+        const tasks = params.task_id
+          ? [this.requireTask(params.task_id)]
+          : this.current.filter((task) => (
+            task.status === "queued" || task.status === "running"
+            || notices.some((notice) => notice.taskId === task.id && !notice.acknowledgedAt)
+          )).slice(-8);
         const status = tasks.map((task) => ({
           taskId: task.id,
           agent: task.taskName,
@@ -249,7 +256,7 @@ export class ExplorerService {
           resultAvailable: Boolean(task.finalText || task.errorMessage),
           resultUnread: notices.some((notice) => notice.taskId === task.id && !notice.acknowledgedAt),
         }));
-        return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }], details: { status } };
+        return { content: [{ type: "text", text: JSON.stringify(status) }], details: { status } };
       },
     });
     pi.registerTool({
@@ -287,7 +294,7 @@ export class ExplorerService {
           deliverable: params.deliverable ?? "用中文给出自包含结论，并引用本次重新核实的文件路径。",
           ...(params.write_scope.length > 0 ? { write_scope: params.write_scope } : {}),
         }]);
-        return { content: [{ type: "text", text: `已向代理 ${params.agent_id} 发送后续任务，task_id=${snapshots[0]!.id}` }], details: { task: snapshots[0] } };
+        return { content: [{ type: "text", text: `已向代理 ${params.agent_id} 发送后续任务，task_id=${snapshots[0]!.id}` }], details: { taskId: snapshots[0]!.id, agentId: params.agent_id } };
       },
     });
     pi.registerTool({
@@ -765,7 +772,7 @@ export class ExplorerService {
   }
 
   private scheduleCompletionDelivery(): void {
-    if (this.disposed || this.completionTimer || ![...this.completions.values()].some((notice) => !notice.deliveredAt)) return;
+    if (this.disposed || this.completionTimer || ![...this.completions.values()].some((notice) => !notice.deliveredAt && !notice.acknowledgedAt)) return;
     this.completionTimer = setTimeout(() => {
       this.completionTimer = undefined;
       this.deliverPendingCompletions();
@@ -773,7 +780,7 @@ export class ExplorerService {
   }
 
   private deliverPendingCompletions(): void {
-    const pending = [...this.completions.values()].filter((notice) => !notice.deliveredAt);
+    const pending = [...this.completions.values()].filter((notice) => !notice.deliveredAt && !notice.acknowledgedAt);
     if (!this.extensionApi || pending.length === 0) return;
     const summaries = pending.flatMap((notice) => {
       const task = this.tasks.get(notice.taskId);
