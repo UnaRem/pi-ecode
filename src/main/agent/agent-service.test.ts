@@ -72,11 +72,17 @@ describe("AgentService prompt lifecycle", () => {
     expect(contextState(session).canCompact).toBe(true);
   });
 
-  it("persists explicit model selections as the default for new sessions", async () => {
-    const model = { provider: "provider", id: "last-selected" };
+  it("persists model selections and reapplies the 200K context budget", async () => {
+    const model = { provider: "provider", id: "last-selected", contextWindow: 1_050_000 };
+    const applyOverrides = vi.fn();
     const session = {
       model,
       modelRuntime: { getModel: vi.fn(() => model) },
+      settingsManager: {
+        getGlobalSettings: () => ({}),
+        getProjectSettings: () => ({}),
+        applyOverrides,
+      },
       setModel: vi.fn(async () => undefined),
       getAvailableThinkingLevels: () => [],
     } as unknown as AgentSession;
@@ -87,6 +93,7 @@ describe("AgentService prompt lifecycle", () => {
 
     expect(session.modelRuntime.getModel).toHaveBeenCalledWith(model.provider, model.id);
     expect(session.setModel).toHaveBeenCalledWith(model, { persist: true });
+    expect(applyOverrides).toHaveBeenCalledWith({ compaction: { reserveTokens: 850_000 } });
   });
 
   it("normalizes and persists a renamed session", () => {

@@ -27,6 +27,7 @@ import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, t
 import { mapTimeline, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { AgentWriteLockService } from "./agent-write-locks.js";
+import { configuredCompactionReserveTokens, contextBudgetReached, contextBudgetReserveTokens } from "./context-budget.js";
 import {
   AgentMessageParameters,
   attemptSeparator,
@@ -552,12 +553,17 @@ export class ExplorerService {
       ...parent.settingsManager.getGlobalSettings(),
       ...parent.settingsManager.getProjectSettings(),
     };
+    const configuredReserve = configuredCompactionReserveTokens(
+      parent.settingsManager.getGlobalSettings(),
+      parent.settingsManager.getProjectSettings(),
+    );
+    const percentageReserve = agent.compactionThresholdPercent === null
+      ? configuredReserve
+      : compactionReserveTokens(contextWindow, agent.compactionThresholdPercent);
     const compaction = {
       ...inherited.compaction,
       enabled: agent.autoCompactionEnabled,
-      ...(agent.compactionThresholdPercent === null ? {} : {
-        reserveTokens: compactionReserveTokens(contextWindow, agent.compactionThresholdPercent),
-      }),
+      reserveTokens: contextBudgetReserveTokens(contextWindow, Math.max(configuredReserve, percentageReserve)),
     };
     return SettingsManager.inMemory({ ...inherited, compaction });
   }
@@ -565,9 +571,11 @@ export class ExplorerService {
   private async compactChildIfNeeded(task: ExplorerTask, child: AgentSession, nativeCompaction: NativeCompaction): Promise<void> {
     const agent = this.taskAgents.get(task.id);
     const threshold = agent?.compactionThresholdPercent;
-    if (!agent?.autoCompactionEnabled || threshold === null || threshold === undefined || child.isCompacting) return;
+    if (!agent?.autoCompactionEnabled || child.isCompacting) return;
     const usage = child.getContextUsage();
-    if (usage?.percent === null || usage?.percent === undefined || usage.percent < threshold) return;
+    const percentageReached = threshold !== null && threshold !== undefined
+      && usage?.percent !== null && usage?.percent !== undefined && usage.percent >= threshold;
+    if (!contextBudgetReached(usage?.tokens) && !percentageReached) return;
     task.compactionMethod = nativeCompaction.supports(child.model) ? "native" : "summary";
     this.touch(task, `正在压缩上下文 · ${task.compactionMethod === "native" ? "远程" : "摘要"}`, true);
     try {

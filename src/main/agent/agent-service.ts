@@ -56,6 +56,7 @@ import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.j
 import { ExplorerService } from "./explorer-service.js";
 import { AgentCatalogService } from "./agent-catalog-service.js";
 import { ValidationToolService } from "./validation-tool.js";
+import { configuredCompactionReserveTokens, contextBudgetReserveTokens } from "./context-budget.js";
 
 const HISTORY_PAGE_TURNS = 25;
 
@@ -559,6 +560,7 @@ export class AgentService {
     const model = session.modelRuntime.getModel(provider, modelId);
     if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
     await session.setModel(model, { persist: true });
+    this.applyContextBudget(session);
     this.emitModelState(session);
   }
 
@@ -753,8 +755,20 @@ export class AgentService {
     return this.runtime;
   }
 
+  private applyContextBudget(session: AgentSession): void {
+    if (!session.model) return;
+    const configuredReserve = configuredCompactionReserveTokens(
+      session.settingsManager.getGlobalSettings(),
+      session.settingsManager.getProjectSettings(),
+    );
+    session.settingsManager.applyOverrides({
+      compaction: { reserveTokens: contextBudgetReserveTokens(session.model.contextWindow, configuredReserve) },
+    });
+  }
+
   private async bindSession(session: AgentSession): Promise<void> {
     this.unsubscribe?.();
+    this.applyContextBudget(session);
     this.visibleTimelineTurns = HISTORY_PAGE_TURNS;
     this.extensionUi.cancelPending();
     this.contextEstimate = this.nativeCompaction.storedEstimatedTokensAfter(session);
