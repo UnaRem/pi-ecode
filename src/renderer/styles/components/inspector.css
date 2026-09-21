@@ -11,7 +11,8 @@
 .inspector-tabs button { position: relative; padding: 0; border: 0; color: var(--color-text-muted); background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
 .inspector-tabs button[aria-selected="true"] { color: var(--color-accent); }
 .inspector-tabs button[aria-selected="true"]::after { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; border-radius: var(--radius-pill); content: ""; background: var(--color-accent); }
-.inspector-tabs button > span { min-width: 17px; margin-left: 4px; padding: 1px 5px; border-radius: var(--radius-pill); color: var(--color-text-faint); background: var(--color-surface-muted); font-size: 9px; }
+.inspector-tabs .inspector-tab-with-badge { padding-right: 8px; }
+.inspector-tabs .inspector-tab-with-badge::before { position: absolute; top: 5px; right: -8px; display: grid; min-width: 16px; height: 16px; padding: 0 4px; place-items: center; border-radius: var(--radius-pill); color: var(--color-text-muted); content: attr(data-count); background: var(--color-surface-muted); font-size: 9px; line-height: 1; }
 .inspector-scroll { min-height: 0; flex: 1; overflow-y: auto; }
 .inspector-tab-stack { position: relative; min-height: 100%; }
 .inspector-tab-panel.entering { animation: inspector-tab-enter var(--duration-fast) var(--ease-standard) both; }

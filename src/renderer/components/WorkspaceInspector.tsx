@@ -175,6 +175,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const [leavingTab, setLeavingTab] = useState<InspectorTab | null>(null);
   const [managingAgents, setManagingAgents] = useState(false);
   const explorers = props.explorers ?? [];
+  const agentCount = props.agentCatalog?.agents.length ?? 0;
   const availableTabs: InspectorTab[] = ["tools", ...(props.validation.supported ? ["validation" as const] : []), "agents"];
   const activeTab = availableTabs.includes(tab) ? tab : "tools";
   const selectTab = (nextTab: InspectorTab): void => {
@@ -220,7 +221,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
         <button id="inspector-tab-tools" type="button" role="tab" aria-selected={activeTab === "tools"} aria-controls="inspector-panel-tools" tabIndex={activeTab === "tools" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "tools")} onClick={() => selectTab("tools")}>{t("tool.panelTitle")}</button>
         {props.validation.supported && <button id="inspector-tab-validation" type="button" role="tab" aria-selected={activeTab === "validation"} aria-controls="inspector-panel-validation" tabIndex={activeTab === "validation" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "validation")} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
-        <button id="inspector-tab-agents" type="button" role="tab" aria-selected={activeTab === "agents"} aria-controls="inspector-panel-agents" tabIndex={activeTab === "agents" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "agents")} onClick={() => selectTab("agents")}>{t("explorer.tab")}<span>{explorers.length}</span></button>
+        <button id="inspector-tab-agents" className="inspector-tab-with-badge" data-count={agentCount} type="button" role="tab" aria-label={`${t("explorer.tab")}: ${agentCount}`} aria-selected={activeTab === "agents"} aria-controls="inspector-panel-agents" tabIndex={activeTab === "agents" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "agents")} onClick={() => selectTab("agents")}>{t("explorer.tab")}</button>
       </div>
       <div className="inspector-scroll">
         <div className="inspector-tab-stack">

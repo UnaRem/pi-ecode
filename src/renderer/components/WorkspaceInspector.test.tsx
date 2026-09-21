@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ProjectAgentCatalog } from "@shared/agent-contracts";
 import type { CandidateState, ChangeReview, ValidationState } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
 import { ValidationLogs, WorkspaceInspector } from "./WorkspaceInspector";
@@ -15,6 +16,26 @@ const review: ChangeReview = {
   message: null,
 };
 const candidate: CandidateState = { status: "idle", candidateId: null, candidatePath: null, preparedAt: null, message: null, history: [] };
+const agentCatalog: ProjectAgentCatalog = {
+  version: 1,
+  projectPath: "C:/workspace",
+  maxConcurrent: 3,
+  updatedAt: 1,
+  agents: [{
+    id: "explorer-1",
+    name: "探索者 1",
+    role: "explorer",
+    builtIn: true,
+    enabled: true,
+    model: { mode: "inherit" },
+    thinkingLevel: "high",
+    autoCompaction: { enabled: true, thresholdPercent: null },
+    prompt: "只读",
+    disabledTools: [],
+    createdAt: 1,
+    updatedAt: 1,
+  }],
+};
 
 describe("WorkspaceInspector", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -32,6 +53,7 @@ describe("WorkspaceInspector", () => {
           candidate={candidate}
           projectPath="C:/workspace"
           isStreaming={false}
+          agentCatalog={agentCatalog}
           onSelectTool={vi.fn()}
           onRunValidation={vi.fn()}
           onStopValidation={vi.fn()}
@@ -50,7 +72,9 @@ describe("WorkspaceInspector", () => {
     expect(markup).toContain('aria-selected="false" aria-controls="inspector-panel-validation"');
     expect(markup).not.toContain("PiECode project verification");
     expect(markup).toContain('id="inspector-tab-agents"');
-    expect(markup).toContain("Agents<span>0</span>");
+    expect(markup).toContain('class="inspector-tab-with-badge" data-count="1"');
+    expect(markup).toContain('aria-label="Agents: 1"');
+    expect(markup).not.toContain("Agents<span>");
   });
 
   it("shows output from the selected non-command tool", () => {

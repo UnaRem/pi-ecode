@@ -128,12 +128,17 @@ export function ExplorerPanel({
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [tasks]);
-  const active = tasks.filter((task) => task.status === "running").length;
-  const queued = tasks.filter((task) => task.status === "queued").length;
-  const completed = tasks.filter((task) => task.status === "completed").length;
   const persistentAgents = agentCatalog?.agents ?? [];
   const knownAgentIds = new Set(persistentAgents.map((agent) => agent.id));
-  const orphanTasks = tasks.filter((task) => !task.agentId || !knownAgentIds.has(task.agentId));
+  const visibleTasks = agentCatalog
+    ? tasks.filter((task) => task.status === "running" || task.status === "queued" || (task.agentId && knownAgentIds.has(task.agentId)))
+    : tasks;
+  const unassignedActiveTasks = agentCatalog
+    ? visibleTasks.filter((task) => !task.agentId || !knownAgentIds.has(task.agentId))
+    : [];
+  const active = visibleTasks.filter((task) => task.status === "running").length;
+  const queued = visibleTasks.filter((task) => task.status === "queued").length;
+  const completed = visibleTasks.filter((task) => task.status === "completed").length;
   return (
     <section className="inspector-section explorer-panel" aria-label={t("explorer.tab")}>
       <header>
@@ -147,7 +152,7 @@ export function ExplorerPanel({
           ? persistentAgents.map((agent) => <AgentRow
             key={agent.id}
             agent={agent}
-            tasks={tasks.filter((task) => task.agentId === agent.id)}
+            tasks={visibleTasks.filter((task) => task.agentId === agent.id)}
             selectedTaskId={selectedTaskId}
             now={now}
             t={t}
@@ -155,9 +160,9 @@ export function ExplorerPanel({
             onStop={onStop}
           />)
           : null}
-        {persistentAgents.length > 0 && orphanTasks.map((task) => taskButton(task, selectedTaskId, now, t, onSelect, onStop))}
-        {persistentAgents.length === 0 && tasks.length === 0 && <p>{t("explorer.empty")}</p>}
-        {persistentAgents.length === 0 && tasks.length > 0 && tasks.map((task) => taskButton(task, selectedTaskId, now, t, onSelect, onStop))}
+        {unassignedActiveTasks.map((task) => taskButton(task, selectedTaskId, now, t, onSelect, onStop))}
+        {persistentAgents.length === 0 && visibleTasks.length === 0 && <p>{t("explorer.empty")}</p>}
+        {!agentCatalog && visibleTasks.length > 0 && visibleTasks.map((task) => taskButton(task, selectedTaskId, now, t, onSelect, onStop))}
       </div>
     </section>
   );

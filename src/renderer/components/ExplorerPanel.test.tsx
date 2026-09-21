@@ -113,4 +113,42 @@ describe("ExplorerPanel", () => {
     expect(markup).toContain("历史任务");
     expect(markup).toContain("核查上下文");
   });
+
+  it("does not render legacy tasks that are not owned by a configured agent", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "zh-CN", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ExplorerPanel
+          tasks={[task({ id: "legacy-task", title: "旧版孤儿记录", status: "completed", endedAt: 2 })]}
+          agentCatalog={catalog}
+          selectedTaskId={null}
+          onSelect={vi.fn()}
+          onStop={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(markup).toContain("探索者 1");
+    expect(markup).not.toContain("旧版孤儿记录");
+    expect(markup).toContain("0 个运行中 · 0 个排队 · 0 个完成");
+  });
+
+  it("keeps an unassigned active task visible so it can still be stopped", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "zh-CN", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ExplorerPanel
+          tasks={[task({ id: "active-legacy-task", title: "兼容运行任务" })]}
+          agentCatalog={catalog}
+          selectedTaskId={null}
+          onSelect={vi.fn()}
+          onStop={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(markup).toContain("兼容运行任务");
+    expect(markup).toContain("停止 Explorer: 兼容运行任务");
+    expect(markup).toContain("1 个运行中 · 0 个排队 · 0 个完成");
+  });
 });
