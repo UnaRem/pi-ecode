@@ -21,11 +21,12 @@ import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, t
 import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
 
 const EXPLORER_STATE_ENTRY = "pi-ecode.explorer-state";
-const EXPLORER_RESULT_MESSAGE = "pi-ecode.explorer-result";
+const EXPLORER_COMPLETION_MESSAGE = "pi-ecode.explorer-completion";
 const MAX_CONCURRENT_EXPLORERS = 3;
 const MAX_DISPATCH_TASKS = 8;
 const MAX_FINAL_TEXT_LENGTH = 16 * 1024;
 const TIMELINE_THROTTLE_MS = 33;
+const COMPLETION_COALESCE_MS = 50;
 const TERMINAL_STATUSES = new Set<ExplorerTask["status"]>(["completed", "failed", "interrupted"]);
 export const EXPLORER_TOOL_NAMES = ["read", "ffgrep", "fffind"] as const;
 
@@ -51,11 +52,19 @@ interface ExplorerLocator {
   sessionFile: string;
 }
 
+interface ExplorerCompletionNotice {
+  id: string;
+  taskId: string;
+  createdAt: number;
+  deliveredAt?: number;
+  acknowledgedAt?: number;
+}
+
 interface ExplorerStateEntry {
-  version: 2;
+  version: 3;
   tasks: ExplorerTask[];
   locators: ExplorerLocator[];
-  deliveredToolCallIds: string[];
+  completions: ExplorerCompletionNotice[];
 }
 
 interface ExplorerRequest {
@@ -93,6 +102,14 @@ interface ExplorerServiceOptions {
   now?: () => number;
 }
 
+const ExplorerTaskIdParameters = Type.Object({
+  task_id: Type.String({ minLength: 1, maxLength: 200, description: "任务 ID" }),
+});
+
+const ExplorerStatusParameters = Type.Object({
+  task_id: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "可选任务 ID；省略时返回全部任务" })),
+});
+
 const ExplorerParameters = Type.Object({
   description: Type.String({ minLength: 1, maxLength: 160, description: "Short reason for this parallel investigation" }),
   thinking_level: Type.Optional(Type.Union([Type.Literal("low"), Type.Literal("medium")], {
@@ -126,12 +143,12 @@ function restoredState(entries: readonly SessionEntry[]): ExplorerStateEntry | n
   for (const entry of entries) {
     if (entry.type !== "custom" || entry.customType !== EXPLORER_STATE_ENTRY) continue;
     const state = entry.data as Partial<ExplorerStateEntry> | undefined;
-    if (!state || !Array.isArray(state.tasks) || !Array.isArray(state.deliveredToolCallIds)) continue;
+    if (!state || !Array.isArray(state.tasks)) continue;
     restored = {
-      version: 2,
+      version: 3,
       tasks: state.tasks.map((task) => normalizeTask(task)),
       locators: Array.isArray(state.locators) ? state.locators.map((locator) => ({ ...locator })) : [],
-      deliveredToolCallIds: [...state.deliveredToolCallIds],
+      completions: Array.isArray(state.completions) ? state.completions.map((notice) => ({ ...notice })) : [],
     };
   }
   return restored;
@@ -194,11 +211,12 @@ export class ExplorerService {
   private readonly queue: string[] = [];
   private readonly controllers = new Map<string, AbortController>();
   private readonly operations = new Set<Promise<void>>();
-  private readonly deliveredToolCallIds = new Set<string>();
+  private readonly completions = new Map<string, ExplorerCompletionNotice>();
   private readonly locators = new Map<string, ExplorerLocator[]>();
   private readonly liveSessions = new Map<string, AgentSession>();
   private readonly timelines = new Map<string, ExplorerTimelineSnapshot>();
   private readonly timelineTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private completionTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
   private readonly watchdog: WatchdogOptions;
   private readonly runExplorer: ExplorerServiceOptions["runExplorer"] extends infer T ? NonNullable<T> : never;
@@ -270,21 +288,17 @@ export class ExplorerService {
     if (queuedIndex >= 0) this.queue.splice(queuedIndex, 1);
     this.publish();
     await this.operationsForTask(taskId);
-    this.notifyBatchIfReady(task.originToolCallId);
   }
 
   async interruptAll(): Promise<void> {
-    const interruptedBatches = new Set<string>();
     for (const task of this.tasks.values()) {
       if (task.status !== "queued" && task.status !== "running") continue;
       task.status = "interrupted";
       task.activity = "Stopped by user";
       task.endedAt = this.now();
       this.bump(task);
-      interruptedBatches.add(task.originToolCallId);
       this.controllers.get(task.id)?.abort();
     }
-    for (const toolCallId of interruptedBatches) this.deliveredToolCallIds.add(toolCallId);
     this.queue.length = 0;
     this.publish();
     await Promise.allSettled([...this.operations]);
@@ -295,13 +309,15 @@ export class ExplorerService {
     this.generation += 1;
     await this.interruptAll();
     for (const timer of this.timelineTimers.values()) clearTimeout(timer);
+    if (this.completionTimer) clearTimeout(this.completionTimer);
+    this.completionTimer = undefined;
     this.tasks.clear();
     this.controllers.clear();
     this.locators.clear();
     this.liveSessions.clear();
     this.timelines.clear();
     this.timelineTimers.clear();
-    this.deliveredToolCallIds.clear();
+    this.completions.clear();
     this.extensionApi = undefined;
     this.disposed = false;
     this.options.onChange([]);
@@ -314,13 +330,13 @@ export class ExplorerService {
     pi.registerTool({
       name: "dispatch_explorers",
       label: "Dispatch explorers",
-      description: "Dispatch independent read-only repository investigations in parallel. Returns immediately; one hidden batch result is delivered after every Explorer finishes.",
+      description: "并行派发独立的只读仓库调查。工具立即返回；每个任务结束时只通知状态，报告需通过 agent_result 显式获取。",
       promptSnippet: "Dispatch up to eight independent read-only investigations; at most three run concurrently",
       promptGuidelines: [
         "Use dispatch_explorers only when a task has at least two independent, non-overlapping repository questions that each require substantial reading or searching.",
         "Give every Explorer one objective, an exact read-only scope, and a concrete evidence-based deliverable. Explorers cannot edit files or execute shell commands.",
         "Explorer thinking defaults to low. Use medium only for complex cross-module synthesis; high and above are unavailable.",
-        "Do not call wait tools or repeatedly poll after dispatch. Continue independent work or end the turn; the completed batch is delivered automatically.",
+        "派发后不要轮询。每个任务结束时会收到不含正文的完成通知；收到通知后调用 agent_result 按 task_id 获取已保存报告。",
       ],
       executionMode: "sequential",
       parameters: ExplorerParameters,
@@ -331,6 +347,61 @@ export class ExplorerService {
           content: [{ type: "text", text: `Dispatched ${snapshots.length} read-only Explorer(s) at ${params.thinking_level ?? "low"} thinking. Up to ${MAX_CONCURRENT_EXPLORERS} run concurrently.` }],
           details: { kind: "pi-ecode.explorer-dispatch", version: 2, explorers: snapshots },
         };
+      },
+    });
+    this.registerBusTools(pi);
+  }
+
+  private registerBusTools(pi: ExtensionAPI): void {
+    pi.registerTool({
+      name: "agent_status",
+      label: "检查子代理状态",
+      description: "检查当前主会话所属子代理任务的状态、活动和未读完成通知，不读取报告正文。",
+      parameters: ExplorerStatusParameters,
+      execute: async (_toolCallId, params) => {
+        const tasks = params.task_id ? [this.requireTask(params.task_id)] : this.current;
+        const notices = [...this.completions.values()];
+        const status = tasks.map((task) => ({
+          taskId: task.id,
+          agent: task.taskName,
+          title: task.title,
+          status: task.status,
+          activity: task.activity,
+          resultAvailable: Boolean(task.finalText || task.errorMessage),
+          resultUnread: notices.some((notice) => notice.taskId === task.id && !notice.acknowledgedAt),
+        }));
+        return { content: [{ type: "text", text: JSON.stringify(status, null, 2) }], details: { status } };
+      },
+    });
+    pi.registerTool({
+      name: "agent_result",
+      label: "获取子代理结果",
+      description: "按 task_id 读取子代理已经保存的最终报告；不会再次调用子代理模型。",
+      parameters: ExplorerTaskIdParameters,
+      execute: async (_toolCallId, params) => {
+        const task = this.requireTask(params.task_id);
+        if (!TERMINAL_STATUSES.has(task.status)) throw new Error("子代理任务尚未结束，请稍后检查状态。");
+        const report = task.finalText ?? task.errorMessage ?? "子代理未生成报告。";
+        const acknowledgedAt = this.now();
+        for (const notice of this.completions.values()) {
+          if (notice.taskId === task.id && !notice.acknowledgedAt) notice.acknowledgedAt = acknowledgedAt;
+        }
+        this.persist();
+        return {
+          content: [{ type: "text", text: report }],
+          details: { taskId: task.id, agent: task.taskName, status: task.status, saved: true },
+        };
+      },
+    });
+    pi.registerTool({
+      name: "agent_stop",
+      label: "停止子代理任务",
+      description: "停止当前主会话所属的一个排队中或运行中的子代理任务。",
+      parameters: ExplorerTaskIdParameters,
+      execute: async (_toolCallId, params) => {
+        const task = this.requireTask(params.task_id);
+        await this.interrupt(task.id);
+        return { content: [{ type: "text", text: `已停止子代理任务：${task.title}` }], details: { taskId: task.id, status: "interrupted" } };
       },
     });
   }
@@ -426,7 +497,7 @@ export class ExplorerService {
       this.controllers.delete(task.id);
       if (generation === this.generation) {
         this.publish();
-        this.notifyBatchIfReady(task.originToolCallId);
+        this.notifyTaskIfReady(task);
         this.drainQueue();
       }
     }
@@ -586,28 +657,55 @@ export class ExplorerService {
     if (persist) this.publish();
   }
 
-  private notifyBatchIfReady(toolCallId: string): void {
-    if (this.disposed || this.deliveredToolCallIds.has(toolCallId)) return;
-    const batch = this.current.filter((task) => task.originToolCallId === toolCallId);
-    if (batch.length === 0 || batch.some((task) => !TERMINAL_STATUSES.has(task.status))) return;
-    this.deliveredToolCallIds.add(toolCallId);
-    this.publish();
-    const body = batch.map((task) => {
-      const result = task.finalText ?? task.errorMessage ?? "No result was produced.";
-      return `<explorer task_name="${task.taskName}" status="${task.status}">\n${result}\n</explorer>`;
-    }).join("\n\n");
-    this.extensionApi?.sendMessage({
-      customType: EXPLORER_RESULT_MESSAGE,
-      content: [{ type: "text", text: `<explorer_batch origin_tool_call_id="${toolCallId}">\n${body}\n</explorer_batch>` }],
-      display: false,
-      details: { originToolCallId: toolCallId, explorers: batch },
-    }, { triggerTurn: true, deliverAs: "followUp" });
+  private notifyTaskIfReady(task: ExplorerTask): void {
+    if (this.disposed || (task.status !== "completed" && task.status !== "failed")) return;
+    if ([...this.completions.values()].some((notice) => notice.taskId === task.id)) return;
+    const notice: ExplorerCompletionNotice = { id: randomUUID(), taskId: task.id, createdAt: this.now() };
+    this.completions.set(notice.id, notice);
+    this.persist();
+    this.scheduleCompletionDelivery();
+  }
+
+  private scheduleCompletionDelivery(): void {
+    if (this.disposed || this.completionTimer || ![...this.completions.values()].some((notice) => !notice.deliveredAt)) return;
+    this.completionTimer = setTimeout(() => {
+      this.completionTimer = undefined;
+      this.deliverPendingCompletions();
+    }, COMPLETION_COALESCE_MS);
+  }
+
+  private deliverPendingCompletions(): void {
+    const pending = [...this.completions.values()].filter((notice) => !notice.deliveredAt);
+    if (!this.extensionApi || pending.length === 0) return;
+    const summaries = pending.flatMap((notice) => {
+      const task = this.tasks.get(notice.taskId);
+      return task ? [{ notice, task }] : [];
+    });
+    if (summaries.length === 0) return;
+    const text = summaries.map(({ notice, task }) =>
+      `<agent_completion completion_id="${notice.id}" task_id="${task.id}" agent="${task.taskName}" status="${task.status}" />`,
+    ).join("\n");
+    try {
+      this.extensionApi.sendMessage({
+        customType: EXPLORER_COMPLETION_MESSAGE,
+        content: [{ type: "text", text: `${text}\n子代理任务已结束。请使用 agent_result 按 task_id 获取已保存结果；通知中不包含报告正文。` }],
+        display: false,
+        details: { completions: summaries.map(({ notice, task }) => ({ completionId: notice.id, taskId: task.id, status: task.status })) },
+      }, { triggerTurn: true, deliverAs: "followUp" });
+      const deliveredAt = this.now();
+      for (const { notice } of summaries) notice.deliveredAt = deliveredAt;
+      this.persist();
+    } catch {
+      this.scheduleCompletionDelivery();
+    }
   }
 
   private restore(context: ExtensionContext): void {
     this.generation += 1;
     for (const controller of this.controllers.values()) controller.abort();
     for (const timer of this.timelineTimers.values()) clearTimeout(timer);
+    if (this.completionTimer) clearTimeout(this.completionTimer);
+    this.completionTimer = undefined;
     this.tasks.clear();
     this.queue.length = 0;
     this.controllers.clear();
@@ -615,7 +713,7 @@ export class ExplorerService {
     this.liveSessions.clear();
     this.timelines.clear();
     this.timelineTimers.clear();
-    this.deliveredToolCallIds.clear();
+    this.completions.clear();
     const state = restoredState(context.sessionManager.getBranch());
     let changed = false;
     if (state) {
@@ -627,16 +725,16 @@ export class ExplorerService {
           task.errorMessage = "Explorer was interrupted when the parent session closed.";
           task.activity = "Interrupted when parent session closed";
           this.bump(task);
-          this.deliveredToolCallIds.add(task.originToolCallId);
           changed = true;
         }
         this.tasks.set(task.id, task);
       }
       for (const locator of state.locators) this.addLocator(locator);
-      for (const id of state.deliveredToolCallIds) this.deliveredToolCallIds.add(id);
+      for (const notice of state.completions) this.completions.set(notice.id, { ...notice });
     }
     this.options.onChange(this.current);
     if (changed) this.persist();
+    this.scheduleCompletionDelivery();
   }
 
   private publish(persist = true): void {
@@ -647,10 +745,10 @@ export class ExplorerService {
   private persist(): void {
     if (!this.extensionApi) return;
     this.extensionApi.appendEntry<ExplorerStateEntry>(EXPLORER_STATE_ENTRY, {
-      version: 2,
+      version: 3,
       tasks: this.current,
       locators: [...this.locators.values()].flat().map((locator) => ({ ...locator })),
-      deliveredToolCallIds: [...this.deliveredToolCallIds],
+      completions: [...this.completions.values()].map((notice) => ({ ...notice })),
     });
   }
 

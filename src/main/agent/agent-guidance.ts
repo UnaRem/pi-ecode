@@ -10,7 +10,7 @@ export const EXPLORER_ORCHESTRATION_GUIDANCE = `## Read-only Explorer subagents
 - Each Explorer task must define one objective, an exact read-only scope, and a concrete evidence-based deliverable. Explorers use the parent's read, ffgrep, and fffind tools and cannot edit files or execute commands.
 - Explorer thinking defaults to low. Set the batch to medium only for genuinely complex cross-module synthesis; high and above are unavailable.
 - Dispatch all independent Explorer tasks in one call. At most three run concurrently; additional tasks queue automatically.
-- After dispatch, do not poll or wait. Continue work that does not depend on the results, or end the turn; one batch result will be delivered automatically after every Explorer reaches a terminal state.
+- After dispatch, do not poll. Each Explorer sends a lightweight completion notice without its report. When notified, call agent_result with that task_id to retrieve the saved report; use agent_status only for an intentional status check.
 - Explorers warn after 60 seconds without activity, retry once after 3 minutes without activity, and stop after 10 minutes total. Do not create your own retry loop.
 - Do not dispatch sequential questions, duplicate scopes, simple lookups, or work that a few parallel root read/search calls can finish efficiently.
 - Treat Explorer reports as evidence to review, not authority to claim implementation or validation.`;

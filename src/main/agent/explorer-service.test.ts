@@ -15,7 +15,7 @@ function deferredResult(): DeferredResult {
 
 function harness(runExplorer: NonNullable<ConstructorParameters<typeof ExplorerService>[0]["runExplorer"]>) {
   let branch: SessionEntry[] = [];
-  let tool: ToolDefinition | undefined;
+  const tools = new Map<string, ToolDefinition>();
   const sent: Array<{ content: unknown; options: unknown }> = [];
   const appended: Array<{ customType: string; data: unknown }> = [];
   const handlers = new Map<string, (event: unknown, context: ExtensionContext) => void>();
@@ -23,7 +23,7 @@ function harness(runExplorer: NonNullable<ConstructorParameters<typeof ExplorerS
   const service = new ExplorerService({ getParentSession: () => parent, onChange: vi.fn(), runExplorer });
   const pi = {
     on: (event: string, handler: (event: unknown, context: ExtensionContext) => void) => handlers.set(event, handler),
-    registerTool: (definition: ToolDefinition) => { tool = definition; },
+    registerTool: (definition: ToolDefinition) => { tools.set(definition.name, definition); },
     appendEntry: (customType: string, data: unknown) => appended.push({ customType, data }),
     sendMessage: (message: { content: unknown }, options: unknown) => sent.push({ content: message.content, options }),
   } as unknown as ExtensionAPI;
@@ -37,7 +37,13 @@ function harness(runExplorer: NonNullable<ConstructorParameters<typeof ExplorerS
     appended,
     setBranch: (entries: SessionEntry[]) => { branch = entries; },
     restore: () => handlers.get("session_tree")?.({}, context),
+    call: async (name: string, params: Record<string, unknown>) => {
+      const tool = tools.get(name);
+      if (!tool) throw new Error(`${name} tool was not registered.`);
+      return tool.execute(`call-${name}`, params, undefined, undefined, context);
+    },
     dispatch: async (explorers: Array<Record<string, string>>, thinkingLevel?: "low" | "medium") => {
+      const tool = tools.get("dispatch_explorers");
       if (!tool) throw new Error("Explorer tool was not registered.");
       return tool.execute("dispatch-1", {
         description: "parallel research",
@@ -109,24 +115,51 @@ describe("ExplorerService", () => {
         return new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }));
       },
     });
-    let tool: ToolDefinition | undefined;
+    const tools = new Map<string, ToolDefinition>();
     const extension = service.asExtension();
     const pi = {
       on: vi.fn(),
-      registerTool: (definition: ToolDefinition) => { tool = definition; },
+      registerTool: (definition: ToolDefinition) => { tools.set(definition.name, definition); },
       appendEntry: vi.fn(),
       sendMessage: vi.fn(),
     } as unknown as ExtensionAPI;
     void (typeof extension === "function" ? extension(pi) : extension.factory(pi));
-    if (!tool) throw new Error("Explorer tool was not registered.");
+    const dispatchTool = tools.get("dispatch_explorers");
+    if (!dispatchTool) throw new Error("Explorer tool was not registered.");
 
-    await tool.execute("dispatch-retry", { description: "retry", thinking_level: "medium", explorers: [request(1)] }, undefined, undefined, {} as ExtensionContext);
-    await vi.advanceTimersByTimeAsync(25);
+    await dispatchTool.execute("dispatch-retry", { description: "retry", thinking_level: "medium", explorers: [request(1)] }, undefined, undefined, {} as ExtensionContext);
+    await vi.advanceTimersByTimeAsync(75);
     await vi.waitFor(() => expect(service.current[0]?.status).toBe("completed"));
 
     expect(attempts).toBe(2);
     expect(service.current[0]).toMatchObject({ attempt: 2, maxAttempts: 2, thinkingLevel: "medium", finalText: "recovered" });
     vi.useRealTimers();
+  });
+
+  it("notifies the parent when one task finishes and returns the saved report only on request", async () => {
+    const first = deferredResult();
+    const second = deferredResult();
+    const test = harness((task) => task.taskName === "task_1" ? first.promise : second.promise);
+    await test.dispatch([request(1), request(2)]);
+
+    first.resolve({ sessionId: "child-1", finalText: "private result 1" });
+    await vi.waitFor(() => expect(test.sent).toHaveLength(1));
+    expect(JSON.stringify(test.sent[0]?.content)).toContain("agent_completion");
+    expect(JSON.stringify(test.sent[0]?.content)).not.toContain("private result 1");
+    expect(test.sent[0]?.options).toEqual({ triggerTurn: true, deliverAs: "followUp" });
+
+    const taskId = test.service.current.find((task) => task.taskName === "task_1")?.id;
+    if (!taskId) throw new Error("Completed task is missing.");
+    const statusBefore = await test.call("agent_status", { task_id: taskId });
+    expect(JSON.stringify(statusBefore)).toContain('\"resultUnread\":true');
+    const result = await test.call("agent_result", { task_id: taskId });
+    expect(JSON.stringify(result)).toContain("private result 1");
+    const statusAfter = await test.call("agent_status", { task_id: taskId });
+    expect(JSON.stringify(statusAfter)).toContain('\"resultUnread\":false');
+
+    const stop = test.service.interruptAll();
+    second.resolve({ sessionId: "child-2", finalText: "stopped" });
+    await stop;
   });
 
   it("runs at most three Explorers and starts queued work in FIFO order", async () => {
@@ -150,6 +183,7 @@ describe("ExplorerService", () => {
     deferred[3]!.resolve({ sessionId: "child-4", finalText: "result 4" });
     await vi.waitFor(() => expect(test.sent).toHaveLength(1));
     expect(test.service.current.every((task) => task.status === "completed")).toBe(true);
+    expect(JSON.stringify(test.sent[0]?.content)).not.toContain("result 1");
     expect(test.sent[0]?.options).toEqual({ triggerTurn: true, deliverAs: "followUp" });
   });
 
@@ -165,6 +199,29 @@ describe("ExplorerService", () => {
     expect(test.sent).toHaveLength(0);
     expect(test.service.current[0]?.status).toBe("interrupted");
     expect(test.service.current[0]?.finalText).toBeUndefined();
+  });
+
+  it("redelivers a persisted pending completion after restoring the parent session", async () => {
+    const test = harness(vi.fn(async () => ({ sessionId: "unused", finalText: "unused" })));
+    const completed = {
+      id: "child-complete", taskName: "inspect", title: "Inspect", objective: "Find behavior", scope: "src/",
+      deliverable: "Evidence", status: "completed", originToolCallId: "dispatch-old", thinkingLevel: "low",
+      attempt: 1, maxAttempts: 2, revision: 2, queuedAt: 1, startedAt: 2, endedAt: 3, finalText: "saved result",
+    };
+    test.setBranch([{
+      type: "custom", id: "entry-pending", parentId: null, timestamp: new Date().toISOString(),
+      customType: "pi-ecode.explorer-state", data: {
+        version: 3,
+        tasks: [completed],
+        locators: [],
+        completions: [{ id: "completion-1", taskId: "child-complete", createdAt: 3 }],
+      },
+    } as SessionEntry]);
+
+    test.restore();
+    await vi.waitFor(() => expect(test.sent).toHaveLength(1));
+    expect(JSON.stringify(test.sent[0]?.content)).toContain("completion-1");
+    expect(JSON.stringify(test.sent[0]?.content)).not.toContain("saved result");
   });
 
   it("restores unfinished parent state as interrupted without rerunning children", () => {
