@@ -1,11 +1,13 @@
 import { FileCode2, Play, Square, TerminalSquare } from "lucide-react";
 import { useState, type AnimationEvent, type KeyboardEvent } from "react";
-import type { CandidateState, ChangeReview, ExplorerTask, ToolActivity, ValidationState } from "@shared/contracts";
+import type { CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition } from "@shared/agent-contracts";
+import type { CandidateState, ChangeReview, ExplorerTask, ModelOption, ToolActivity, ValidationState } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
 import { GitPushButton } from "./GitPushButton";
 import { ValidationStepList, ValidationStepStatusIcon } from "./ValidationSteps";
 import { ExplorerPanel } from "./ExplorerPanel";
+import { AgentManager } from "./AgentManager";
 
 interface WorkspaceInspectorProps {
   tools: ToolActivity[];
@@ -16,9 +18,15 @@ interface WorkspaceInspectorProps {
   projectPath: string;
   isStreaming: boolean;
   explorers?: ExplorerTask[];
+  agentCatalog?: ProjectAgentCatalog | null;
+  models?: ModelOption[];
   selectedExplorerId?: string | null;
   onSelectExplorer?: (taskId: string) => void;
   onStopExplorer?: (taskId: string) => void;
+  onSaveProjectAgent?: (agent: ProjectAgentDefinition) => Promise<void>;
+  onCreateProjectAgent?: (request: CreateProjectAgentRequest) => Promise<void>;
+  onRemoveProjectAgent?: (agentId: string) => Promise<void>;
+  onSetAgentConcurrency?: (value: number) => Promise<void>;
   onSelectTool: (toolId: string) => void;
   onRunValidation: () => void;
   onStopValidation: () => void;
@@ -165,6 +173,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const { t } = useI18n();
   const [tab, setTab] = useState<InspectorTab>("tools");
   const [leavingTab, setLeavingTab] = useState<InspectorTab | null>(null);
+  const [managingAgents, setManagingAgents] = useState(false);
   const explorers = props.explorers ?? [];
   const availableTabs: InspectorTab[] = ["tools", ...(props.validation.supported ? ["validation" as const] : []), "agents"];
   const activeTab = availableTabs.includes(tab) ? tab : "tools";
@@ -177,11 +186,20 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     <ToolQueue {...props} onSelect={props.onSelectTool} />
     <OutputPanel {...props} />
     <ChangeFiles {...props} />
-  </> : target === "validation" ? <ValidationControls {...props} /> : <ExplorerPanel
+  </> : target === "validation" ? <ValidationControls {...props} /> : managingAgents && props.agentCatalog ? <AgentManager
+    catalog={props.agentCatalog}
+    models={props.models ?? []}
+    onBack={() => setManagingAgents(false)}
+    onSave={props.onSaveProjectAgent ?? (async () => undefined)}
+    onCreate={props.onCreateProjectAgent ?? (async () => undefined)}
+    onRemove={props.onRemoveProjectAgent ?? (async () => undefined)}
+    onSetConcurrency={props.onSetAgentConcurrency ?? (async () => undefined)}
+  /> : <ExplorerPanel
     tasks={explorers}
     selectedTaskId={props.selectedExplorerId ?? null}
     onSelect={props.onSelectExplorer ?? (() => undefined)}
     onStop={props.onStopExplorer ?? (() => undefined)}
+    {...(props.agentCatalog ? { onManage: () => setManagingAgents(true) } : {})}
   />;
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, target: InspectorTab): void => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;

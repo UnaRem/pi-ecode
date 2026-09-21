@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import type { CreateProjectAgentRequest, ProjectAgentDefinition } from "@shared/agent-contracts";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "@shared/contracts";
 import { INITIAL_AGENT_STATE, optimisticTimeline, reduceAgentEvent } from "@renderer/lib/agent-state";
 
@@ -103,6 +104,26 @@ export function useAgent() {
     run(() => window.piDesktop.getExplorerToolOutput(taskId, toolCallId))
   ), [run]);
 
+  const saveProjectAgent = useCallback(async (agent: ProjectAgentDefinition) => {
+    const catalog = await run(() => window.piDesktop.saveProjectAgent(agent));
+    if (catalog) dispatch({ type: "agent-catalog", catalog });
+  }, [run]);
+
+  const createProjectAgent = useCallback(async (request: CreateProjectAgentRequest) => {
+    const catalog = await run(() => window.piDesktop.createProjectAgent(request));
+    if (catalog) dispatch({ type: "agent-catalog", catalog });
+  }, [run]);
+
+  const removeProjectAgent = useCallback(async (agentId: string) => {
+    const catalog = await run(() => window.piDesktop.removeProjectAgent(agentId));
+    if (catalog) dispatch({ type: "agent-catalog", catalog });
+  }, [run]);
+
+  const setAgentConcurrency = useCallback(async (value: number) => {
+    const catalog = await run(() => window.piDesktop.setAgentConcurrency(value));
+    if (catalog) dispatch({ type: "agent-catalog", catalog });
+  }, [run]);
+
   const continueAfterError = useCallback(async () => {
     dispatch({ type: "state", patch: { error: null, canContinue: false } });
     await run(() => window.piDesktop.continueAfterError());
@@ -196,6 +217,10 @@ export function useAgent() {
       loadExplorerTimeline,
       stopExplorer,
       getExplorerToolOutput,
+      saveProjectAgent,
+      createProjectAgent,
+      removeProjectAgent,
+      setAgentConcurrency,
       continueAfterError,
       send,
       editorRestored,

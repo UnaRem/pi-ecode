@@ -12,6 +12,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import type { CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, ProviderStatus } from "../../shared/settings-contracts.js";
 import type {
   AgentEvent,
@@ -101,6 +102,7 @@ export class AgentService {
     getAgentDefinitions: () => this.agentCatalog?.enabled() ?? [],
     getMaxConcurrent: () => this.agentCatalog?.current?.maxConcurrent ?? 3,
     getSessionRoot: (parent) => this.agentCatalog.sessionRoot(parent.sessionId),
+    runValidation: () => this.runValidation(),
     onChange: (explorers) => {
       this.emit({ type: "explorers", explorers });
       const session = this.runtime?.session;
@@ -253,6 +255,33 @@ export class AgentService {
 
   getExplorerTimeline(taskId: string) {
     return this.explorers.getTimeline(taskId);
+  }
+
+  async saveProjectAgent(agent: ProjectAgentDefinition): Promise<ProjectAgentCatalog> {
+    const catalog = await this.agentCatalog.save(agent);
+    this.emit({ type: "agent-catalog", catalog });
+    return catalog;
+  }
+
+  async createProjectAgent(request: CreateProjectAgentRequest): Promise<ProjectAgentCatalog> {
+    const catalog = await this.agentCatalog.create(request);
+    this.emit({ type: "agent-catalog", catalog });
+    return catalog;
+  }
+
+  async removeProjectAgent(agentId: string): Promise<ProjectAgentCatalog> {
+    if (this.explorers.current.some((task) => task.agentId === agentId && (task.status === "queued" || task.status === "running"))) {
+      throw new Error("运行中的代理不能删除。");
+    }
+    const catalog = await this.agentCatalog.remove(agentId);
+    this.emit({ type: "agent-catalog", catalog });
+    return catalog;
+  }
+
+  async setAgentConcurrency(value: number): Promise<ProjectAgentCatalog> {
+    const catalog = await this.agentCatalog.setMaxConcurrent(value);
+    this.emit({ type: "agent-catalog", catalog });
+    return catalog;
   }
 
   getExplorerToolOutput(taskId: string, toolCallId: string): Promise<string> {
@@ -441,7 +470,7 @@ export class AgentService {
       await this.trashItem(explorerDirectory);
     }
     const agentDirectory = this.agentCatalog.parentSessionRoot(target.id);
-    if (await stat(agentDirectory).then((details) => details.isDirectory()).catch(() => false)) {
+    if (agentDirectory && await stat(agentDirectory).then((details) => details.isDirectory()).catch(() => false)) {
       await this.trashItem(agentDirectory);
     }
     await this.refreshSessions();
@@ -664,6 +693,16 @@ export class AgentService {
     });
   }
 
+  private agentCatalogPrompt(): string {
+    const catalog = this.agentCatalog.current;
+    if (!catalog) return "";
+    const agents = catalog.agents.filter((agent) => agent.enabled).map((agent) => {
+      const model = agent.model.mode === "inherit" ? "继承主会话模型" : `${agent.model.provider}/${agent.model.modelId}`;
+      return `- ${agent.id}｜${agent.name}｜${agent.role}｜${model}｜thinking=${agent.thinkingLevel}`;
+    }).join("\n");
+    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：探索者、审查者只读；验证者只能运行宿主固定验证；编辑者可用受锁 edit/write 和固定验证，且每个编辑任务必须声明 write_scope。`;
+  }
+
   private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
     return async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
       const services = await createAgentSessionServices({
@@ -683,6 +722,7 @@ export class AgentService {
             EDIT_TOOL_COMPATIBILITY_GUIDANCE,
             PARALLEL_TOOL_EXECUTION_GUIDANCE,
             EXPLORER_ORCHESTRATION_GUIDANCE,
+            this.agentCatalogPrompt(),
             VALIDATION_ORCHESTRATION_GUIDANCE,
           ],
           extensionsOverride: (base) => ({

@@ -1,4 +1,4 @@
-import type { AgentRole, ProjectAgentCatalog } from "./agent-contracts.js";
+import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition } from "./agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
 
@@ -12,6 +12,10 @@ export const IPC_CHANNELS = {
   getExplorerTimeline: "agent:get-explorer-timeline",
   getExplorerToolOutput: "agent:get-explorer-tool-output",
   stopExplorer: "agent:stop-explorer",
+  saveProjectAgent: "agent:save-project-agent",
+  createProjectAgent: "agent:create-project-agent",
+  removeProjectAgent: "agent:remove-project-agent",
+  setAgentConcurrency: "agent:set-agent-concurrency",
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
   deleteSession: "agent:delete-session",
@@ -158,6 +162,7 @@ export interface ExplorerTask {
   errorMessage?: string;
   compactionMethod?: CompactionMethod;
   compactionError?: string;
+  writeScope?: string[];
 }
 
 export interface ExplorerTimelineSnapshot {
@@ -398,6 +403,10 @@ export interface DesktopApi {
   getExplorerTimeline(taskId: string): Promise<ExplorerTimelineSnapshot>;
   getExplorerToolOutput(taskId: string, toolCallId: string): Promise<string>;
   stopExplorer(taskId: string): Promise<void>;
+  saveProjectAgent(agent: ProjectAgentDefinition): Promise<ProjectAgentCatalog>;
+  createProjectAgent(request: CreateProjectAgentRequest): Promise<ProjectAgentCatalog>;
+  removeProjectAgent(agentId: string): Promise<ProjectAgentCatalog>;
+  setAgentConcurrency(value: number): Promise<ProjectAgentCatalog>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   deleteSession(path: string): Promise<void>;

@@ -1,4 +1,4 @@
-import { CircleCheck, CircleX, Clock3, Search, Square } from "lucide-react";
+import { CircleCheck, CircleX, Clock3, Search, SlidersHorizontal, Square } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ExplorerStatus, ExplorerTask } from "@shared/contracts";
 import { useI18n, type Translate } from "../i18n/i18n";
@@ -35,11 +35,13 @@ export function ExplorerPanel({
   selectedTaskId,
   onSelect,
   onStop,
+  onManage,
 }: {
   tasks: ExplorerTask[];
   selectedTaskId: string | null;
   onSelect: (taskId: string) => void;
   onStop: (taskId: string) => void;
+  onManage?: () => void;
 }) {
   const { t } = useI18n();
   const [now, setNow] = useState(() => Date.now());
@@ -56,6 +58,7 @@ export function ExplorerPanel({
       <header>
         <strong>{t("explorer.tab")}</strong>
         <span>{tasks.length}</span>
+        {onManage && <button type="button" className="explorer-manage" onClick={onManage}><SlidersHorizontal size={12} />{t("agent.manage")}</button>}
       </header>
       <p className="explorer-panel-summary">{t("explorer.summary", { active, queued, completed })}</p>
       <div className="explorer-task-list">

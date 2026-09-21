@@ -128,6 +128,16 @@ describe("ExplorerService", () => {
     medium.resolve({ sessionId: "medium", finalText: "stopped" });
   });
 
+  it("registers the main-session bus tools and requires write_scope for editors", async () => {
+    const pending = deferredResult();
+    const editor = agent("editor-1", "editor");
+    const test = harness(() => pending.promise, { getAgentDefinitions: () => [editor] });
+
+    await expect(test.dispatch([{ ...request(1), agent_id: "editor-1" }])).rejects.toThrow("必须声明 write_scope");
+    await expect(test.call("agent_status", {})).resolves.toBeDefined();
+    await expect(test.call("agent_result", { task_id: "missing" })).rejects.toThrow("不属于当前主会话");
+  });
+
   it("assigns configured project agents and refuses to run one agent twice", async () => {
     const pending = deferredResult();
     const definitions = [agent("explorer-1"), agent("explorer-2"), agent("validator-1", "validator")];

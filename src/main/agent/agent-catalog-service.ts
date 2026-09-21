@@ -92,13 +92,19 @@ export class AgentCatalogService {
     return this.catalog ? cloneCatalog(this.catalog) : null;
   }
 
-  parentSessionRoot(parentSessionId: string): string {
-    if (!this.filePath || !/^[A-Za-z0-9_-]+$/u.test(parentSessionId)) throw new Error("父会话 ID 无效或代理配置尚未加载。");
-    return join(this.filePath, "..", "parents", parentSessionId);
+  parentSessionRoot(parentSessionId: string): string | null {
+    if (!/^[A-Za-z0-9_-]+$/u.test(parentSessionId)) throw new Error("父会话 ID 无效。");
+    return this.filePath ? join(this.filePath, "..", "parents", parentSessionId) : null;
+  }
+
+  requireParentSessionRoot(parentSessionId: string): string {
+    const root = this.parentSessionRoot(parentSessionId);
+    if (!root) throw new Error("代理配置尚未加载。");
+    return root;
   }
 
   sessionRoot(parentSessionId: string): string {
-    return join(this.parentSessionRoot(parentSessionId), "sessions");
+    return join(this.requireParentSessionRoot(parentSessionId), "sessions");
   }
 
   async open(projectPath: string): Promise<ProjectAgentCatalog> {

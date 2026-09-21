@@ -5,9 +5,12 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   createAgentSessionFromServices,
   createAgentSessionServices,
+  createEditToolDefinition,
+  createWriteToolDefinition,
   getAgentDir,
   type AgentSession,
   type AgentSessionEvent,
+  type EditToolInput,
   type ExtensionAPI,
   type ExtensionContext,
   type InlineExtension,
@@ -15,258 +18,58 @@ import {
   SessionManager,
   SettingsManager,
   type ToolDefinition,
+  type WriteToolInput,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
-import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ThinkingLevel } from "../../shared/contracts.js";
+import { Type, type Static } from "typebox";
+import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot } from "../../shared/contracts.js";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
-import { mapTimeline, messageItem, toolItem } from "./timeline-mapper.js";
+import { mapTimeline, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
+import { AgentWriteLockService } from "./agent-write-locks.js";
+import {
+  AgentMessageParameters,
+  attemptSeparator,
+  cloneTasks,
+  compactFinalText,
+  COMPLETION_COALESCE_MS,
+  compactionReserveTokens,
+  DEFAULT_WATCHDOG,
+  EXPLORER_CHILD_GUIDANCE,
+  EXPLORER_COMPLETION_MESSAGE,
+  ExplorerParameters,
+  type ExplorerAgentSnapshot,
+  type ExplorerCompletionNotice,
+  type ExplorerGeneration,
+  type ExplorerLocator,
+  type ExplorerRequest,
+  type ExplorerRunResult,
+  type ExplorerServiceOptions,
+  ExplorerStatusParameters,
+  EXPLORER_STATE_ENTRY,
+  ExplorerTaskIdParameters,
+  EXPLORER_TOOL_NAMES,
+  ExplorerWatchdogError,
+  explorerToolDefinitions,
+  MAX_CONCURRENT_EXPLORERS,
+  messagesForLocator,
+  namespaceTimeline,
+  normalizeTask,
+  rawToolCallId,
+  restoredState,
+  type ExplorerStateEntry,
+  taskPrompt,
+  TERMINAL_STATUSES,
+  TIMELINE_THROTTLE_MS,
+  validationResultText,
+  type WatchdogOptions,
+} from "./explorer-support.js";
 
-const EXPLORER_STATE_ENTRY = "pi-ecode.explorer-state";
-const EXPLORER_COMPLETION_MESSAGE = "pi-ecode.explorer-completion";
-const MAX_CONCURRENT_EXPLORERS = 3;
-const MAX_DISPATCH_TASKS = 8;
-const MAX_FINAL_TEXT_LENGTH = 16 * 1024;
-const TIMELINE_THROTTLE_MS = 33;
-const COMPLETION_COALESCE_MS = 50;
-const TERMINAL_STATUSES = new Set<ExplorerTask["status"]>(["completed", "failed", "interrupted"]);
-export const EXPLORER_TOOL_NAMES = ["read", "ffgrep", "fffind"] as const;
-
-const DEFAULT_WATCHDOG = {
-  warningMs: 60_000,
-  inactivityMs: 3 * 60_000,
-  totalMs: 10 * 60_000,
-  intervalMs: 5_000,
-  maxAttempts: 2,
-} as const;
-
-const EXPLORER_CHILD_GUIDANCE = `## PiECode read-only Explorer
-You are a leaf Explorer working for a parent coding agent.
-- Investigate only the delegated objective and scope.
-- You can only use the parent's read, ffgrep, and fffind tools. Never claim to edit files or execute commands.
-- Other Explorers may be running concurrently. Report only evidence you personally verified.
-- Cite relevant file paths and finish with a concise, actionable result for the parent agent.
-- If the task cannot be answered with the available read-only tools, state the blocker instead of guessing.`;
-
-interface ExplorerLocator {
-  taskId: string;
-  attempt: number;
-  sessionFile: string;
-  startMessageIndex?: number;
-  endMessageIndex?: number;
-}
-
-interface ExplorerCompletionNotice {
-  id: string;
-  taskId: string;
-  createdAt: number;
-  deliveredAt?: number;
-  acknowledgedAt?: number;
-}
-
-interface ExplorerAgentSnapshot {
-  taskId: string;
-  agentId: string;
-  role: ProjectAgentDefinition["role"];
-  prompt: string;
-  disabledTools: string[];
-  provider: string;
-  modelId: string;
-  autoCompactionEnabled: boolean;
-  compactionThresholdPercent: number | null;
-}
-
-interface ExplorerGeneration {
-  id: string;
-  agentId: string;
-  provider: string;
-  modelId: string;
-  sessionFile: string;
-  createdAt: number;
-  lastUsedAt: number;
-}
-
-interface ExplorerStateEntry {
-  version: 5;
-  tasks: ExplorerTask[];
-  locators: ExplorerLocator[];
-  completions: ExplorerCompletionNotice[];
-  agentSnapshots: ExplorerAgentSnapshot[];
-  generations: ExplorerGeneration[];
-}
-
-interface ExplorerRequest {
-  agent_id?: string;
-  task_name: string;
-  title: string;
-  objective: string;
-  scope: string;
-  deliverable: string;
-}
-
-interface ExplorerRunResult {
-  sessionId: string;
-  finalText: string;
-}
-
-interface WatchdogOptions {
-  warningMs: number;
-  inactivityMs: number;
-  totalMs: number;
-  intervalMs: number;
-  maxAttempts: number;
-}
-
-interface ExplorerServiceOptions {
-  getParentSession: () => AgentSession | undefined;
-  onChange: (tasks: ExplorerTask[]) => void;
-  onTimeline?: (snapshot: ExplorerTimelineSnapshot) => void;
-  runExplorer?: (
-    task: ExplorerTask,
-    request: ExplorerRequest,
-    parent: AgentSession,
-    signal: AbortSignal,
-  ) => Promise<ExplorerRunResult>;
-  watchdog?: Partial<WatchdogOptions>;
-  now?: () => number;
-  getAgentDefinitions?: () => ProjectAgentDefinition[];
-  getMaxConcurrent?: () => number;
-  getSessionRoot?: (parent: AgentSession) => string;
-}
-
-const ExplorerTaskIdParameters = Type.Object({
-  task_id: Type.String({ minLength: 1, maxLength: 200, description: "任务 ID" }),
-});
-
-const AgentMessageParameters = Type.Object({
-  agent_id: Type.String({ minLength: 1, maxLength: 80, description: "项目代理 ID" }),
-  message: Type.String({ minLength: 1, maxLength: 4000, description: "发送给空闲代理的后续任务或追问" }),
-  deliverable: Type.Optional(Type.String({ minLength: 1, maxLength: 800, description: "期望报告格式" })),
-});
-
-const ExplorerStatusParameters = Type.Object({
-  task_id: Type.Optional(Type.String({ minLength: 1, maxLength: 200, description: "可选任务 ID；省略时返回全部任务" })),
-});
-
-const ExplorerParameters = Type.Object({
-  description: Type.String({ minLength: 1, maxLength: 160, description: "Short reason for this parallel investigation" }),
-  thinking_level: Type.Optional(Type.Union([Type.Literal("low"), Type.Literal("medium")], {
-    description: "Explorer reasoning level. Defaults to low; use medium only for complex cross-module synthesis.",
-  })),
-  explorers: Type.Array(Type.Object({
-    agent_id: Type.Optional(Type.String({ minLength: 1, maxLength: 80, description: "项目代理 ID；省略时自动选择空闲探索者" })),
-    task_name: Type.String({ minLength: 1, maxLength: 40, pattern: "^[a-z][a-z0-9_]*$", description: "Unique snake_case task identifier" }),
-    title: Type.String({ minLength: 1, maxLength: 100, description: "Short user-visible task title" }),
-    objective: Type.String({ minLength: 1, maxLength: 800, description: "One concrete question this Explorer must answer" }),
-    scope: Type.String({ minLength: 1, maxLength: 800, description: "Exact files, directories, or modules this Explorer may inspect" }),
-    deliverable: Type.String({ minLength: 1, maxLength: 800, description: "Evidence and result the parent needs back" }),
-  }), { minItems: 1, maxItems: MAX_DISPATCH_TASKS }),
-});
-
-function cloneTasks(tasks: Iterable<ExplorerTask>): ExplorerTask[] {
-  return [...tasks].map((task) => ({ ...task }));
-}
-
-function normalizeTask(task: ExplorerTask): ExplorerTask {
-  return {
-    ...task,
-    thinkingLevel: (["off", "minimal", "low", "medium", "high", "xhigh", "max"] as ThinkingLevel[]).includes(task.thinkingLevel) ? task.thinkingLevel : "low",
-    attempt: Number.isInteger(task.attempt) && task.attempt > 0 ? task.attempt : 1,
-    maxAttempts: Number.isInteger(task.maxAttempts) && task.maxAttempts > 0 ? task.maxAttempts : DEFAULT_WATCHDOG.maxAttempts,
-    revision: Number.isInteger(task.revision) ? task.revision : 0,
-  };
-}
-
-function restoredState(entries: readonly SessionEntry[]): ExplorerStateEntry | null {
-  let restored: ExplorerStateEntry | null = null;
-  for (const entry of entries) {
-    if (entry.type !== "custom" || entry.customType !== EXPLORER_STATE_ENTRY) continue;
-    const state = entry.data as Partial<ExplorerStateEntry> | undefined;
-    if (!state || !Array.isArray(state.tasks)) continue;
-    restored = {
-      version: 5,
-      tasks: state.tasks.map((task) => normalizeTask(task)),
-      locators: Array.isArray(state.locators) ? state.locators.map((locator) => ({ ...locator })) : [],
-      completions: Array.isArray(state.completions) ? state.completions.map((notice) => ({ ...notice })) : [],
-      agentSnapshots: Array.isArray(state.agentSnapshots) ? state.agentSnapshots.map((snapshot) => ({
-        ...snapshot,
-        disabledTools: [...snapshot.disabledTools],
-        autoCompactionEnabled: snapshot.autoCompactionEnabled ?? true,
-        compactionThresholdPercent: snapshot.compactionThresholdPercent ?? null,
-      })) : [],
-      generations: Array.isArray(state.generations) ? state.generations.map((generation) => ({ ...generation })) : [],
-    };
-  }
-  return restored;
-}
-
-export function explorerToolDefinitions(
-  parent: Pick<AgentSession, "getToolDefinition">,
-  names: readonly string[] = EXPLORER_TOOL_NAMES,
-): ToolDefinition[] {
-  return names.map((name) => {
-    const definition = parent.getToolDefinition(name);
-    if (!definition) throw new Error(`Explorer requires the parent ${name} tool, but it is not available.`);
-    return definition;
-  });
-}
-
-export function compactionReserveTokens(contextWindow: number, thresholdPercent: number): number {
-  return Math.max(1, Math.floor(contextWindow * (1 - thresholdPercent / 100)));
-}
-
-function compactFinalText(text: string): string {
-  if (text.length <= MAX_FINAL_TEXT_LENGTH) return text;
-  return `${text.slice(0, MAX_FINAL_TEXT_LENGTH)}\n…[Explorer result truncated]`;
-}
-
-function taskPrompt(request: ExplorerRequest): string {
-  return `<explorer_task>
-<task_name>${request.task_name}</task_name>
-<objective>${request.objective}</objective>
-<scope>${request.scope}</scope>
-<deliverable>${request.deliverable}</deliverable>
-</explorer_task>`;
-}
-
-function namespaceTimeline(taskId: string, attempt: number, timeline: ConversationItem[]): ConversationItem[] {
-  return timeline.map((item): ConversationItem => item.kind === "message"
-    ? { ...item, id: `${taskId}:${attempt}:${item.id}`, message: { ...item.message, id: `${taskId}:${attempt}:${item.message.id}` } }
-    : { ...item, id: `${taskId}:${attempt}:${item.id}`, tool: { ...item.tool, id: `${taskId}:${attempt}:${item.tool.id}` } });
-}
-
-function attemptSeparator(taskId: string, attempt: number, timestamp: number): ConversationItem {
-  return messageItem({
-    id: `${taskId}:${attempt}:retry`,
-    role: "assistant",
-    text: `Retrying Explorer attempt ${attempt}/${DEFAULT_WATCHDOG.maxAttempts} after extended inactivity.`,
-    timestamp,
-  });
-}
-
-function messagesFromFile(sessionFile: string): AgentMessage[] {
-  return SessionManager.open(sessionFile).getBranch().flatMap((entry) => entry.type === "message" ? [entry.message] : []);
-}
-
-function messagesForLocator(locator: ExplorerLocator): AgentMessage[] {
-  const messages = messagesFromFile(locator.sessionFile);
-  return messages.slice(locator.startMessageIndex ?? 0, locator.endMessageIndex ?? messages.length);
-}
-
-function rawToolCallId(namespacedId: string): { attempt: number; toolCallId: string } | null {
-  const match = /^[^:]+:(\d+):(.*)$/u.exec(namespacedId);
-  return match ? { attempt: Number(match[1]), toolCallId: match[2] ?? "" } : null;
-}
-
-class ExplorerWatchdogError extends Error {
-  constructor(readonly reason: "inactivity" | "total") {
-    super(reason === "inactivity" ? "Explorer had no activity for 3 minutes." : "Explorer exceeded the 10 minute time limit.");
-  }
-}
+export { compactionReserveTokens, EXPLORER_TOOL_NAMES, explorerToolDefinitions } from "./explorer-support.js";
 
 export class ExplorerService {
   private readonly tasks = new Map<string, ExplorerTask>();
+  private readonly writeLocks = new AgentWriteLockService();
   private readonly queue: string[] = [];
   private readonly controllers = new Map<string, AbortController>();
   private readonly operations = new Set<Promise<void>>();
@@ -350,6 +153,7 @@ export class ExplorerService {
     if (queuedIndex >= 0) this.queue.splice(queuedIndex, 1);
     this.publish();
     await this.operationsForTask(taskId);
+    this.writeLocks.release(taskId);
   }
 
   async interruptAll(): Promise<void> {
@@ -364,6 +168,7 @@ export class ExplorerService {
     this.queue.length = 0;
     this.publish();
     await Promise.allSettled([...this.operations]);
+    this.writeLocks.clear();
   }
 
   async reset(): Promise<void> {
@@ -382,6 +187,7 @@ export class ExplorerService {
     this.completions.clear();
     this.taskAgents.clear();
     this.generations.clear();
+    this.writeLocks.clear();
     this.extensionApi = undefined;
     this.disposed = false;
     this.options.onChange([]);
@@ -391,27 +197,35 @@ export class ExplorerService {
     this.extensionApi = pi;
     pi.on("session_start", (_event, context) => this.restore(context));
     pi.on("session_tree", (_event, context) => this.restore(context));
+    const executeDispatch = async (toolCallId: string, params: Static<typeof ExplorerParameters>, signal?: AbortSignal) => {
+      signal?.throwIfAborted();
+      const snapshots = this.dispatch(toolCallId, params.explorers, params.thinking_level);
+      return {
+        content: [{ type: "text" as const, text: `已派发 ${snapshots.length} 个子代理任务；每个任务结束时会发送轻量通知，使用 agent_result 获取报告。` }],
+        details: { kind: "pi-ecode.agent-dispatch", version: 1, explorers: snapshots },
+      };
+    };
     pi.registerTool({
-      name: "dispatch_explorers",
-      label: "Dispatch explorers",
-      description: "并行派发独立的只读仓库调查。工具立即返回；每个任务结束时只通知状态，报告需通过 agent_result 显式获取。",
-      promptSnippet: "Dispatch up to eight independent read-only investigations; at most three run concurrently",
+      name: "agent_dispatch",
+      label: "派发代理任务",
+      description: "向项目代理派发一个或多个任务。代理可长期复用会话；编辑者必须声明 write_scope。",
+      promptSnippet: "按稳定 agent_id 指挥项目代理；完成通知不携带报告正文",
       promptGuidelines: [
-        "Use dispatch_explorers only when a task has at least two independent, non-overlapping repository questions that each require substantial reading or searching.",
-        "Give every Explorer one objective, an exact read-only scope, and a concrete evidence-based deliverable. Explorers cannot edit files or execute shell commands.",
-        "Explorer thinking defaults to low. Use medium only for complex cross-module synthesis; high and above are unavailable.",
-        "派发后不要轮询。每个任务结束时会收到不含正文的完成通知；收到通知后调用 agent_result 按 task_id 获取已保存报告。",
+        "根据项目代理目录选择 agent_id；一个代理同一时刻只能执行一个任务。",
+        "探索者和审查者只读；验证者只能运行固定验证；编辑者写入前必须声明精确 write_scope。",
+        "派发后不要轮询。收到完成通知后调用 agent_result；需要后续任务时调用 agent_message。",
       ],
       executionMode: "sequential",
       parameters: ExplorerParameters,
-      execute: async (toolCallId, params, signal) => {
-        signal?.throwIfAborted();
-        const snapshots = this.dispatch(toolCallId, params.explorers, params.thinking_level);
-        return {
-          content: [{ type: "text", text: `已派发 ${snapshots.length} 个子代理任务；每个任务结束时会发送轻量通知，使用 agent_result 获取报告。` }],
-          details: { kind: "pi-ecode.explorer-dispatch", version: 2, explorers: snapshots },
-        };
-      },
+      execute: executeDispatch,
+    });
+    pi.registerTool({
+      name: "dispatch_explorers",
+      label: "派发只读探索者",
+      description: "兼容入口：并行派发独立的只读仓库调查；省略 agent_id 时自动选择空闲探索者。",
+      executionMode: "sequential",
+      parameters: ExplorerParameters,
+      execute: executeDispatch,
     });
     this.registerBusTools(pi);
   }
@@ -470,6 +284,7 @@ export class ExplorerService {
           objective: params.message,
           scope: "沿用该代理既有项目范围，并只处理本次消息明确涉及的文件。",
           deliverable: params.deliverable ?? "用中文给出自包含结论，并引用本次重新核实的文件路径。",
+          ...(params.write_scope ? { write_scope: params.write_scope } : {}),
         }]);
         return { content: [{ type: "text", text: `已向代理 ${params.agent_id} 发送后续任务，task_id=${snapshots[0]!.id}` }], details: { task: snapshots[0] } };
       },
@@ -515,38 +330,57 @@ export class ExplorerService {
       if (names.has(request.task_name)) throw new Error(`子代理任务名重复：${request.task_name}`);
       names.add(request.task_name);
     }
-    const created = requests.map((request): ExplorerTask => {
-      const definition = definitions.length > 0 ? this.selectAgentDefinition(request.agent_id, definitions, occupiedAgentIds) : undefined;
-      const model = definition?.model.mode === "fixed"
-        ? { provider: definition.model.provider, id: definition.model.modelId }
-        : parent.model!;
-      const task: ExplorerTask = {
-        id: randomUUID(), taskName: request.task_name, title: request.title.trim(), objective: request.objective.trim(),
-        scope: request.scope.trim(), deliverable: request.deliverable.trim(), status: "queued", originToolCallId: toolCallId,
-        ...(definition ? { agentId: definition.id, agentRole: definition.role } : {}),
-        provider: model.provider, modelId: model.id,
-        thinkingLevel: thinkingOverride ?? definition?.thinkingLevel ?? "low",
-        attempt: 1, maxAttempts: this.watchdog.maxAttempts, revision: 1, queuedAt: this.now(),
-        lastActivityAt: this.now(), activity: "Queued",
-      };
-      if (definition) {
-        occupiedAgentIds.add(definition.id);
-        this.taskAgents.set(task.id, {
-          taskId: task.id,
-          agentId: definition.id,
-          role: definition.role,
-          prompt: definition.prompt,
-          disabledTools: [...definition.disabledTools],
-          provider: model.provider,
-          modelId: model.id,
-          autoCompactionEnabled: definition.autoCompaction.enabled,
-          compactionThresholdPercent: definition.autoCompaction.thresholdPercent,
-        });
+    const created: ExplorerTask[] = [];
+    try {
+      for (const request of requests) {
+        const definition = definitions.length > 0 ? this.selectAgentDefinition(request.agent_id, definitions, occupiedAgentIds) : undefined;
+        const model = definition?.model.mode === "fixed"
+          ? { provider: definition.model.provider, id: definition.model.modelId }
+          : parent.model!;
+        const task: ExplorerTask = {
+          id: randomUUID(), taskName: request.task_name, title: request.title.trim(), objective: request.objective.trim(),
+          scope: request.scope.trim(), deliverable: request.deliverable.trim(), status: "queued", originToolCallId: toolCallId,
+          ...(definition ? { agentId: definition.id, agentRole: definition.role } : {}),
+          ...(request.write_scope ? { writeScope: [...request.write_scope] } : {}),
+          provider: model.provider, modelId: model.id,
+          thinkingLevel: thinkingOverride ?? definition?.thinkingLevel ?? "low",
+          attempt: 1, maxAttempts: this.watchdog.maxAttempts, revision: 1, queuedAt: this.now(),
+          lastActivityAt: this.now(), activity: "Queued",
+        };
+        if (definition?.role === "editor") {
+          if (!request.write_scope?.length) throw new Error("编辑者任务必须声明 write_scope。");
+          this.writeLocks.acquire(parent.sessionManager.getCwd(), task.id, definition.id, request.write_scope);
+        } else if (request.write_scope) {
+          throw new Error(`只有编辑者任务可以声明 write_scope：${definition?.name ?? request.task_name}`);
+        }
+        if (definition) {
+          occupiedAgentIds.add(definition.id);
+          this.taskAgents.set(task.id, {
+            taskId: task.id,
+            agentId: definition.id,
+            role: definition.role,
+            prompt: definition.prompt,
+            disabledTools: [...definition.disabledTools],
+            provider: model.provider,
+            modelId: model.id,
+            autoCompactionEnabled: definition.autoCompaction.enabled,
+            compactionThresholdPercent: definition.autoCompaction.thresholdPercent,
+          });
+        }
+        this.tasks.set(task.id, task);
+        this.queue.push(task.id);
+        created.push(task);
       }
-      this.tasks.set(task.id, task);
-      this.queue.push(task.id);
-      return task;
-    });
+    } catch (error) {
+      for (const task of created) {
+        this.writeLocks.release(task.id);
+        this.taskAgents.delete(task.id);
+        this.tasks.delete(task.id);
+        const queuedIndex = this.queue.indexOf(task.id);
+        if (queuedIndex >= 0) this.queue.splice(queuedIndex, 1);
+      }
+      throw error;
+    }
     this.publish();
     this.drainQueue();
     return cloneTasks(created);
@@ -579,6 +413,7 @@ export class ExplorerService {
   private async executeTask(task: ExplorerTask, controller: AbortController, generation: number): Promise<void> {
     const request: ExplorerRequest = {
       task_name: task.taskName, title: task.title, objective: task.objective, scope: task.scope, deliverable: task.deliverable,
+      ...(task.writeScope ? { write_scope: [...task.writeScope] } : {}),
     };
     const parent = this.options.getParentSession();
     try {
@@ -618,6 +453,7 @@ export class ExplorerService {
       this.bump(task);
     } finally {
       this.controllers.delete(task.id);
+      this.writeLocks.release(task.id);
       if (generation === this.generation) {
         this.publish();
         this.notifyTaskIfReady(task);
@@ -656,6 +492,53 @@ export class ExplorerService {
     } finally {
       clearInterval(interval);
     }
+  }
+
+  private roleToolDefinitions(
+    task: ExplorerTask,
+    parent: AgentSession,
+    cwd: string,
+    agent: ExplorerAgentSnapshot | undefined,
+  ): ToolDefinition[] {
+    const readOnlyNames = EXPLORER_TOOL_NAMES.filter((name) => !agent?.disabledTools.includes(name));
+    const definitions = explorerToolDefinitions(parent, readOnlyNames);
+    if (agent?.role === "editor") {
+      const edit = createEditToolDefinition(cwd);
+      const write = createWriteToolDefinition(cwd);
+      const lockedEdit = {
+        ...edit,
+        label: "受锁编辑",
+        description: "在当前编辑任务已声明并锁定的 write_scope 内执行精确文本替换。",
+        execute: async (toolCallId: string, params: EditToolInput, signal: AbortSignal | undefined, onUpdate: Parameters<typeof edit.execute>[3], context: Parameters<typeof edit.execute>[4]) => {
+          this.writeLocks.assertPath(cwd, task.id, params.path);
+          return edit.execute(toolCallId, params, signal, onUpdate, context);
+        },
+      };
+      const lockedWrite = {
+        ...write,
+        label: "受锁写入",
+        description: "只在当前编辑任务已声明并锁定的 write_scope 内新建或完整覆盖文件。",
+        execute: async (toolCallId: string, params: WriteToolInput, signal: AbortSignal | undefined, onUpdate: Parameters<typeof write.execute>[3], context: Parameters<typeof write.execute>[4]) => {
+          this.writeLocks.assertPath(cwd, task.id, params.path);
+          return write.execute(toolCallId, params, signal, onUpdate, context);
+        },
+      };
+      definitions.push(lockedEdit as unknown as ToolDefinition, lockedWrite as unknown as ToolDefinition);
+    }
+    if ((agent?.role === "editor" || agent?.role === "validator") && this.options.runValidation) {
+      definitions.push({
+        name: "run_validation",
+        label: "运行固定验证",
+        description: "运行宿主固定的 typecheck、test、build 检查；不能指定或执行任意命令。",
+        parameters: Type.Object({}),
+        execute: async (_toolCallId, _params, signal) => {
+          signal?.throwIfAborted();
+          const state = await this.options.runValidation!();
+          return { content: [{ type: "text", text: validationResultText(state) }], details: state };
+        },
+      });
+    }
+    return definitions.filter((definition) => !agent?.disabledTools.includes(definition.name));
   }
 
   private rotateAgentGeneration(task: ExplorerTask): void {
@@ -738,14 +621,15 @@ export class ExplorerService {
     const sessionManager = reusable
       ? SessionManager.open(generation.sessionFile)
       : SessionManager.create(cwd, sessionRoot, { ...(parent.sessionFile ? { parentSession: parent.sessionFile } : {}) });
-    const toolNames = EXPLORER_TOOL_NAMES.filter((name) => !agent?.disabledTools.includes(name));
+    const toolDefinitions = this.roleToolDefinitions(task, parent, cwd, agent);
+    const toolNames = toolDefinitions.map((definition) => definition.name);
     const created = await createAgentSessionFromServices({
       services,
       sessionManager,
       model,
       thinkingLevel: task.thinkingLevel,
-      tools: [...toolNames],
-      customTools: explorerToolDefinitions(parent, toolNames),
+      tools: toolNames,
+      customTools: toolDefinitions,
       ...(toolNames.length === 0 ? { noTools: "all" as const } : {}),
     });
     const child = created.session;
@@ -979,9 +863,9 @@ export class ExplorerService {
   }
 
   private requireTask(taskId: string): ExplorerTask {
-    if (!taskId || taskId.length > 200) throw new Error("Invalid Explorer task id.");
+    if (!taskId || taskId.length > 200) throw new Error("子代理任务 ID 无效。");
     const task = this.tasks.get(taskId);
-    if (!task) throw new Error("Explorer task does not belong to the active parent session.");
+    if (!task) throw new Error("子代理任务不属于当前主会话。");
     return task;
   }
 

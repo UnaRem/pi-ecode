@@ -214,9 +214,15 @@ export default function App() {
         projectPath={state.projectPath}
         isStreaming={state.isStreaming}
         explorers={state.explorers}
+        agentCatalog={state.agentCatalog}
+        models={state.models}
         selectedExplorerId={selectedExplorerId}
         onSelectExplorer={selectExplorer}
         onStopExplorer={(taskId) => void actions.stopExplorer(taskId)}
+        onSaveProjectAgent={async (agent) => { await actions.saveProjectAgent(agent); }}
+        onCreateProjectAgent={async (request) => { await actions.createProjectAgent(request); }}
+        onRemoveProjectAgent={async (agentId) => { await actions.removeProjectAgent(agentId); }}
+        onSetAgentConcurrency={async (value) => { await actions.setAgentConcurrency(value); }}
         onSelectTool={workspaceTools.selectTool}
         onRunValidation={() => void actions.runValidation()}
         onStopValidation={() => void actions.stopValidation()}
