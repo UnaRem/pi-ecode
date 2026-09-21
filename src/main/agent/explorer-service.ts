@@ -103,6 +103,7 @@ export class ExplorerService {
   private extensionApi: ExtensionAPI | undefined;
   private generation = 0;
   private disposed = false;
+  private parentAgentActive = false;
 
   constructor(private readonly options: ExplorerServiceOptions) {
     this.now = options.now ?? Date.now;
@@ -216,6 +217,7 @@ export class ExplorerService {
     this.generations.clear();
     this.writeLocks.clear();
     this.extensionApi = undefined;
+    this.parentAgentActive = false;
     this.disposed = false;
     this.options.onChange([]);
   }
@@ -224,6 +226,11 @@ export class ExplorerService {
     this.extensionApi = pi;
     pi.on("session_start", (_event, context) => this.restore(context));
     pi.on("session_tree", (_event, context) => this.restore(context));
+    pi.on("agent_start", () => { this.parentAgentActive = true; });
+    pi.on("agent_settled", () => {
+      this.parentAgentActive = false;
+      this.scheduleCompletionDelivery();
+    });
     const executeDispatch = async (toolCallId: string, params: Static<typeof ExplorerParameters>, signal?: AbortSignal) => {
       signal?.throwIfAborted();
       const snapshots = this.dispatch(toolCallId, params.explorers, params.thinking_level);
@@ -312,11 +319,7 @@ export class ExplorerService {
         const task = this.requireTask(params.task_id);
         if (!TERMINAL_STATUSES.has(task.status)) throw new Error("子代理任务尚未结束，请稍后检查状态。");
         const report = task.finalText ?? task.errorMessage ?? "子代理未生成报告。";
-        const acknowledgedAt = this.now();
-        for (const notice of this.completions.values()) {
-          if (notice.taskId === task.id && !notice.acknowledgedAt) notice.acknowledgedAt = acknowledgedAt;
-        }
-        this.persist();
+        this.acknowledgeCompletions([task]);
         return {
           content: [{ type: "text", text: report }],
           details: { taskId: task.id, agent: task.taskName, status: task.status, saved: true },
@@ -826,6 +829,7 @@ export class ExplorerService {
       : tasks.some((task) => TERMINAL_STATUSES.has(task.status));
     if (isReady) {
       const readyTasks = tasks.filter((task) => mode === "all" || TERMINAL_STATUSES.has(task.status));
+      this.acknowledgeCompletions(readyTasks);
       return Promise.resolve({ tasks: readyTasks.map((task) => ({ ...task })), attention: false });
     }
     return new Promise<ExplorerWaitResult>((resolve, reject) => {
@@ -858,10 +862,23 @@ export class ExplorerService {
         waiter.resolve({ tasks: attentionTasks.map((task) => ({ ...task })), attention: true });
         continue;
       }
-      for (const task of tasks) if (TERMINAL_STATUSES.has(task.status)) this.suppressedCompletionTaskIds.add(task.id);
       const readyTasks = tasks.filter((task) => waiter.mode === "all" || TERMINAL_STATUSES.has(task.status));
+      this.acknowledgeCompletions(readyTasks);
       waiter.resolve({ tasks: readyTasks.map((task) => ({ ...task })), attention: false });
     }
+  }
+
+  private acknowledgeCompletions(tasks: ExplorerTask[]): void {
+    const taskIds = new Set(tasks.map((task) => task.id));
+    const notices = [...this.completions.values()].filter((notice) => taskIds.has(notice.taskId));
+    for (const task of tasks) {
+      if (!notices.some((notice) => notice.taskId === task.id)) this.suppressedCompletionTaskIds.add(task.id);
+    }
+    const unacknowledged = notices.filter((notice) => !notice.acknowledgedAt);
+    if (unacknowledged.length === 0) return;
+    const acknowledgedAt = this.now();
+    for (const notice of unacknowledged) notice.acknowledgedAt = acknowledgedAt;
+    this.persist();
   }
 
   private notifyAttention(task: ExplorerTask): void {
@@ -890,7 +907,7 @@ export class ExplorerService {
   }
 
   private scheduleCompletionDelivery(): void {
-    if (this.disposed || this.completionTimer || ![...this.completions.values()].some((notice) => !notice.deliveredAt && !notice.acknowledgedAt)) return;
+    if (this.disposed || this.parentAgentActive || this.completionTimer || ![...this.completions.values()].some((notice) => !notice.deliveredAt && !notice.acknowledgedAt)) return;
     this.completionTimer = setTimeout(() => {
       this.completionTimer = undefined;
       this.deliverPendingCompletions();
@@ -898,6 +915,7 @@ export class ExplorerService {
   }
 
   private deliverPendingCompletions(): void {
+    if (this.parentAgentActive) return;
     const pending = [...this.completions.values()].filter((notice) => !notice.deliveredAt && !notice.acknowledgedAt);
     if (!this.extensionApi || pending.length === 0) return;
     const summaries = pending.flatMap((notice) => {

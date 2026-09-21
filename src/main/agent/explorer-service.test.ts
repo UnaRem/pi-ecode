@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
@@ -8,6 +11,13 @@ interface DeferredResult {
   promise: Promise<{ sessionId: string; finalText: string }>;
   resolve: (value: { sessionId: string; finalText: string }) => void;
 }
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  vi.useRealTimers();
+  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+});
 
 function deferredResult(): DeferredResult {
   let resolve = (_value: { sessionId: string; finalText: string }): void => {};
@@ -42,6 +52,7 @@ function harness(
     appended,
     setBranch: (entries: SessionEntry[]) => { branch = entries; },
     restore: () => handlers.get("session_tree")?.({}, context),
+    emit: (event: string) => handlers.get(event)?.({}, context),
     call: async (name: string, params: Record<string, unknown>) => {
       const tool = tools.get(name);
       if (!tool) throw new Error(`${name} tool was not registered.`);
@@ -193,6 +204,58 @@ describe("ExplorerService", () => {
     await expect(anyWait).resolves.toMatchObject({ details: { mode: "any", status: [{ taskId: secondId, status: "completed" }] } });
   });
 
+  it("suppresses a pending completion when agent_wait starts after the task finished", async () => {
+    vi.useFakeTimers();
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+    const taskId = test.service.current[0]!.id;
+
+    pending.resolve({ sessionId: "child-1", finalText: "完成" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.service.current[0]?.status).toBe("completed");
+    await expect(test.call("agent_wait", { task_ids: [taskId], mode: "all" })).resolves.toBeDefined();
+    await vi.advanceTimersByTimeAsync(75);
+
+    expect(test.sent).toHaveLength(0);
+  });
+
+  it("does not queue a completion consumed by agent_result during the parent turn", async () => {
+    vi.useFakeTimers();
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    test.emit("agent_start");
+    await test.dispatch([request(1)]);
+    const taskId = test.service.current[0]!.id;
+
+    pending.resolve({ sessionId: "child-1", finalText: "完成" });
+    await vi.waitFor(() => expect(test.service.current[0]?.status).toBe("completed"));
+    await vi.advanceTimersByTimeAsync(75);
+    expect(test.sent).toHaveLength(0);
+
+    await expect(test.call("agent_result", { task_id: taskId })).resolves.toBeDefined();
+    test.emit("agent_settled");
+    await vi.advanceTimersByTimeAsync(75);
+    expect(test.sent).toHaveLength(0);
+  });
+
+  it("delivers an unconsumed completion after the parent turn settles", async () => {
+    vi.useFakeTimers();
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    test.emit("agent_start");
+    await test.dispatch([request(1)]);
+
+    pending.resolve({ sessionId: "child-1", finalText: "完成" });
+    await vi.waitFor(() => expect(test.service.current[0]?.status).toBe("completed"));
+    await vi.advanceTimersByTimeAsync(75);
+    expect(test.sent).toHaveLength(0);
+
+    test.emit("agent_settled");
+    await vi.advanceTimersByTimeAsync(75);
+    expect(JSON.stringify(test.sent)).toContain("agent_completion");
+  });
+
   it("assigns configured project agents and refuses to run one agent twice", async () => {
     const pending = deferredResult();
     const definitions = [agent("explorer-1"), agent("explorer-2"), agent("validator-1", "validator")];
@@ -301,6 +364,40 @@ describe("ExplorerService", () => {
     const stop = test.service.interruptAll();
     pending.resolve({ sessionId: "child-late", finalText: "late" });
     await stop;
+  });
+
+  it("loads persisted tool output from a locator after restoring the parent session", async () => {
+    const sessionDirectory = await mkdtemp(join(tmpdir(), "pi-ecode-explorer-session-"));
+    temporaryDirectories.push(sessionDirectory);
+    const sessionFile = join(sessionDirectory, "child.jsonl");
+    const timestamp = new Date().toISOString();
+    const entries = [
+      { type: "session", version: 3, id: "child-session", timestamp, cwd: "C:/project" },
+      { type: "message", id: "11111111", parentId: null, timestamp, message: { role: "user", content: "inspect", timestamp: 1 } },
+      { type: "message", id: "22222222", parentId: "11111111", timestamp, message: { role: "toolResult", toolCallId: "call-old", toolName: "read", content: [{ type: "text", text: "historic output" }], isError: false, timestamp: 2 } },
+    ];
+    await writeFile(sessionFile, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`, "utf8");
+
+    const test = harness(vi.fn(async () => ({ sessionId: "unused", finalText: "unused" })));
+    const taskId = "task-persisted";
+    test.setBranch([{
+      type: "custom", id: "entry-persisted", parentId: null, timestamp,
+      customType: "pi-ecode.explorer-state", data: {
+        version: 5,
+        tasks: [{
+          id: taskId, taskName: "inspect", title: "Inspect", objective: "Find behavior", scope: "src/",
+          deliverable: "Evidence", status: "completed", originToolCallId: "dispatch-old", thinkingLevel: "low",
+          attempt: 1, maxAttempts: 2, revision: 2, queuedAt: 1, startedAt: 2, endedAt: 3, finalText: "saved",
+        }],
+        locators: [{ taskId, attempt: 1, sessionFile, startMessageIndex: 0, endMessageIndex: 2 }],
+        completions: [], agentSnapshots: [], generations: [],
+      },
+    } as SessionEntry]);
+
+    test.restore();
+
+    await expect(test.service.getToolOutput(taskId, `${taskId}:1:call-old`)).resolves.toBe("historic output");
+    await expect(test.service.getToolOutput(taskId, `${taskId}:1:missing-call`)).rejects.toThrow("Explorer tool output is not available");
   });
 
   it("wakes agent_wait with attention when a child has no activity", async () => {
