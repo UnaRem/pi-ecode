@@ -17,7 +17,11 @@ type ConfirmationTool = {
     signal: AbortSignal,
     onUpdate: undefined,
     context: ExtensionContext,
-  ) => Promise<{ content: Array<{ type: string; text: string }>; details: { confirmed: boolean } }>;
+  ) => Promise<{
+    content: Array<{ type: string; text: string }>;
+    details: { confirmed: boolean };
+    terminate?: boolean;
+  }>;
 };
 
 function harness() {
@@ -58,8 +62,13 @@ describe("ConfirmationService", () => {
 
     expect(test.tool.executionMode).toBe("sequential");
     expect(test.tool.promptGuidelines.join(" ")).toContain("only tool");
-    expect(confirm).toHaveBeenCalledWith("Apply changes?", "Update two files.");
+    expect(confirm).toHaveBeenCalledWith(
+      "Apply changes?",
+      "Update two files.\n\n60 秒内未确认将自动结束本轮。",
+      { timeout: 60_000 },
+    );
     expect(result).toMatchObject({ details: { confirmed: true } });
+    expect(result.terminate).toBeUndefined();
     expect(result.content[0]?.text).toContain("user confirmed");
   });
 
@@ -75,8 +84,8 @@ describe("ConfirmationService", () => {
       context,
     );
 
-    expect(result).toMatchObject({ details: { confirmed: false } });
-    expect(result.content[0]?.text).toContain("Do not perform it");
+    expect(result).toMatchObject({ details: { confirmed: false }, terminate: true });
+    expect(result.content[0]?.text).toContain("do not perform it or produce further output");
   });
 
   it("blocks sibling tools when a response requests confirmation", () => {
