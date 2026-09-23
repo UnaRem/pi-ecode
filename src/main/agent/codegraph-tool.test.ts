@@ -6,6 +6,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   assertExploreQuery,
   codegraphExploreInvocation,
+  codegraphSyncInvocation,
   CODEGRAPH_TOOL_NAME,
   CodegraphError,
   CodegraphToolService,
@@ -84,6 +85,19 @@ async function localPackageFixture(projectPath: string, shimSource: string): Pro
   await writeFile(join(packageRoot, "npm-shim.js"), shimSource, "utf8");
 }
 
+/** 只有真的被执行才会留下标记文件的 fixture：用来证明「没有启动进程」。 */
+async function markerFixture(): Promise<{ script: string; marker: string }> {
+  const root = await projectDirectory(false);
+  const marker = join(root, "spawned.txt");
+  const script = join(root, "cli.mjs");
+  await writeFile(
+    script,
+    `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "spawned");\nprocess.stdout.write("ran");\n`,
+    "utf8",
+  );
+  return { script, marker };
+}
+
 /** 隔离本机真实安装：PATH 与 npm 前缀都指向受控目录。 */
 async function isolateInstall(options: { npmPrefix?: string; pathDirectory?: string } = {}): Promise<void> {
   const empty = await projectDirectory(false);
@@ -104,8 +118,11 @@ function harness(projectPath: string | undefined) {
   if (!tool) throw new Error("codegraph_explore 工具未注册。");
   return {
     tool,
+    toolNames: [...tools.keys()],
     explore: async (query: unknown, signal?: AbortSignal): Promise<ToolResult> =>
       await tool.execute("codegraph-call", { query: query as string }, signal),
+    // 宿主侧入口：不是模型工具，只能由主进程直接调用。
+    syncIndex: (path: string, signal?: AbortSignal) => service.syncIndex(path, signal),
   };
 }
 
@@ -114,6 +131,8 @@ describe("codegraph 工具注册与参数边界", () => {
     const test = harness(undefined);
 
     expect(test.tool.name).toBe("codegraph_explore");
+    // 宿主侧 syncIndex 不是模型工具：扩展只注册 explore 一个入口。
+    expect(test.toolNames).toEqual([CODEGRAPH_TOOL_NAME]);
     expect(test.tool.executionMode).toBe("sequential");
     expect(test.tool.parameters?.required).toEqual(["query"]);
     expect(Object.keys(test.tool.parameters?.properties ?? {})).toEqual(["query"]);
@@ -319,5 +338,91 @@ describe("codegraph 进程边界", () => {
     await expect(pending).rejects.toThrow();
     // fixture 只有在真的被执行时才会写这个标记文件。
     await expect(readFile(marker, "utf8")).rejects.toThrow();
+  });
+});
+
+describe("codegraph 宿主侧 syncIndex", () => {
+  it("keeps the sync invocation on the same fixed process boundary", async () => {
+    const projectPath = await projectDirectory(true);
+    const invocation = codegraphSyncInvocation("C:/tools/codegraph/cli.js", projectPath);
+
+    expect(invocation.command).toBe(process.execPath);
+    expect(invocation.args).toEqual(["C:/tools/codegraph/cli.js", "sync"]);
+    expect(invocation.cwd).toBe(projectPath);
+    expect(invocation.env.ELECTRON_RUN_AS_NODE).toBe("1");
+    expect(invocation.env.CODEGRAPH_NO_DOWNLOAD).toBe("1");
+  });
+
+  it("runs the fixed sync subcommand inside the captured project directory", async () => {
+    const projectPath = await projectDirectory(true);
+    // 相对路径写出报告：只有子进程 cwd 就是该项目目录时，文件才会出现在项目根。
+    vi.stubEnv("PI_ECODE_CODEGRAPH_CLI", await fixtureScript(
+      "import { writeFileSync } from 'node:fs';"
+      + "writeFileSync('sync-report.json', JSON.stringify({"
+      + " argv: process.argv.slice(2),"
+      + " electronAsNode: process.env.ELECTRON_RUN_AS_NODE ?? null,"
+      + " noDownload: process.env.CODEGRAPH_NO_DOWNLOAD ?? null"
+      + " }));",
+    ));
+    const test = harness(projectPath);
+
+    await expect(test.syncIndex(projectPath)).resolves.toBe(true);
+
+    expect(JSON.parse(await readFile(join(projectPath, "sync-report.json"), "utf8"))).toEqual({
+      argv: ["sync"],
+      electronAsNode: "1",
+      noDownload: "1",
+    });
+  });
+
+  it("reports false and never starts the CLI when the project has no index", async () => {
+    const projectPath = await projectDirectory(false);
+    const install = await markerFixture();
+    vi.stubEnv("PI_ECODE_CODEGRAPH_CLI", install.script);
+    const test = harness(projectPath);
+
+    await expect(test.syncIndex(projectPath)).resolves.toBe(false);
+    await expect(readFile(install.marker, "utf8")).rejects.toThrow();
+  });
+
+  it("treats an index directory without codegraph.db as no index", async () => {
+    const projectPath = await projectDirectory(false);
+    await mkdir(join(projectPath, ".codegraph"), { recursive: true });
+    await isolateInstall();
+    const test = harness(projectPath);
+
+    await expect(test.syncIndex(projectPath)).resolves.toBe(false);
+  });
+
+  it("labels a failing sync run instead of blaming explore", async () => {
+    const projectPath = await projectDirectory(true);
+    vi.stubEnv("PI_ECODE_CODEGRAPH_CLI", await fixtureScript("process.stderr.write('索引写入失败'); process.exit(4);"));
+    const test = harness(projectPath);
+
+    await expect(test.syncIndex(projectPath)).rejects.toThrow("codegraph sync 以退出码 4 结束");
+  });
+
+  it("reports a cancelled sync with the sync label", async () => {
+    const projectPath = await projectDirectory(true);
+    vi.stubEnv("PI_ECODE_CODEGRAPH_CLI", await fixtureScript("setInterval(() => {}, 1000);"));
+    const test = harness(projectPath);
+    const controller = new AbortController();
+    const pending = test.syncIndex(projectPath, controller.signal);
+    await new Promise((resolveWait) => setTimeout(resolveWait, 400));
+    controller.abort();
+
+    await expect(pending).rejects.toThrow("codegraph sync 已取消");
+  });
+
+  it("does not spawn when the sync signal is already aborted", async () => {
+    const projectPath = await projectDirectory(true);
+    const install = await markerFixture();
+    vi.stubEnv("PI_ECODE_CODEGRAPH_CLI", install.script);
+    const test = harness(projectPath);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(test.syncIndex(projectPath, controller.signal)).rejects.toThrow();
+    await expect(readFile(install.marker, "utf8")).rejects.toThrow();
   });
 });

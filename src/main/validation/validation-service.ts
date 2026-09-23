@@ -13,6 +13,8 @@ const MAX_STEP_OUTPUT = 160_000;
 const WATCH_IGNORES = new Set([
   ".git",
   ".pi",
+  // codegraph sync 成功后重写 .codegraph/ 索引；索引不是源码，它的变化不能让已通过的验证变成 stale。
+  ".codegraph",
   "node_modules",
   "out",
   "dist",

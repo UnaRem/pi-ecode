@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -174,6 +174,43 @@ describe("ValidationService", () => {
 
     expect(service.getState().supported).toBe(true);
     expect(service.getState().steps.map((step) => step.status)).toEqual(["skipped", "pending", "skipped"]);
+    await service.dispose();
+  });
+
+  it("keeps a passed result when only the CodeGraph index changes", async () => {
+    const cwd = await project({ scripts: { typecheck: "node -e \"process.exit(0)\"" } });
+    const service = new ValidationService(() => undefined);
+    await service.configure(cwd);
+    await service.run();
+    expect(service.getState().status).toBe("passed");
+
+    await mkdir(join(cwd, ".codegraph"), { recursive: true });
+    await writeFile(join(cwd, ".codegraph", "codegraph.db"), "index\n", "utf8");
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(service.getState().status).toBe("passed");
+
+    // watcher 仍然在监视真实源码：证明上面的 passed 不是 watcher 失效导致的假阳性。
+    await writeFile(join(cwd, "changed.ts"), "export {};\n", "utf8");
+    await vi.waitFor(() => expect(service.getState().status).toBe("stale"), { timeout: 2_000 });
+    await service.dispose();
+  });
+
+  it("ignores a CodeGraph index written while validation runs", async () => {
+    const cwd = await project({
+      scripts: {
+        typecheck:
+          "node -e \"require('node:fs').mkdirSync('.codegraph', { recursive: true });"
+          + " require('node:fs').writeFileSync('.codegraph/codegraph.db', 'index')\"",
+      },
+    });
+    const service = new ValidationService(() => undefined);
+    await service.configure(cwd);
+
+    const result = await service.run({ sourceRevision: "tree-a", readSourceRevision: async () => "tree-a" });
+
+    expect(result.status).toBe("passed");
+    expect(service.getState().status).toBe("passed");
+    expect(result.sourceRevision).toBe("tree-a");
     await service.dispose();
   });
 

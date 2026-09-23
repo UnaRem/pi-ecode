@@ -13,6 +13,226 @@ interface PromptOptions {
   preflightResult?: (accepted: boolean) => void;
 }
 
+function validationState(status: ValidationState["status"], runId: string | null): ValidationState {
+  return {
+    supported: true,
+    isSelfProject: true,
+    status,
+    runId,
+    activeStep: null,
+    steps: [],
+    sourceRevision: "revision-1",
+    originToolCallId: null,
+    startedAt: 1,
+    verifiedAt: status === "passed" ? 2 : null,
+    message: null,
+  };
+}
+
+/**
+ * AgentService 在构造时把 onChange 闭包交给 ValidationService；这里直接取回那个闭包，
+ * 以便在不真正跑验证的前提下验证「验证状态 → 宿主侧同步」这条真实接线。
+ */
+function validationPublisher(service: AgentService): (state: ValidationState) => void {
+  const validation = (service as unknown as { validation: { onChange: (state: ValidationState) => void } }).validation;
+  if (typeof validation?.onChange !== "function") throw new Error("未取到 ValidationService 的 onChange。");
+  return (state) => validation.onChange(state);
+}
+
+describe("AgentService codegraph 索引同步", () => {
+  interface SyncHarness {
+    projectPath: string;
+    codegraphTool: { syncIndex: (path: string, signal: AbortSignal) => Promise<boolean> };
+    codegraphSync: { controller: AbortController } | undefined;
+    codegraphSyncIntent: { runId: string; projectPath: string } | undefined;
+    codegraphSyncDraining: boolean;
+    cancelCodegraphSync: () => Promise<void>;
+    disposeRuntime: () => Promise<void>;
+  }
+
+  function syncHarness(syncIndex: SyncHarness["codegraphTool"]["syncIndex"]): { service: AgentService; internal: SyncHarness } {
+    const service = new AgentService();
+    const internal = service as unknown as SyncHarness;
+    internal.projectPath = "C:/project";
+    internal.codegraphTool = { syncIndex };
+    return { service, internal };
+  }
+
+  it("starts one refresh per passing validation run without blocking it", async () => {
+    let releaseSync: (() => void) | undefined;
+    const syncIndex = vi.fn((_path: string, _signal: AbortSignal) => new Promise<boolean>((resolve) => {
+      releaseSync = () => resolve(true);
+    }));
+    const { service, internal } = syncHarness(syncIndex);
+    const publish = validationPublisher(service);
+
+    publish(validationState("passed", "run-1"));
+    // 同一次验证重复发布不再同步。
+    publish(validationState("passed", "run-1"));
+
+    await vi.waitFor(() => expect(syncIndex).toHaveBeenCalledTimes(1));
+    // publish 已经返回而同步仍在进行：它是后台副作用，不可能阻塞已通过的验证结果。
+    expect(internal.codegraphSync).toBeDefined();
+    expect(syncIndex).toHaveBeenCalledWith("C:/project", expect.any(AbortSignal));
+
+    releaseSync?.();
+    await vi.waitFor(() => expect(internal.codegraphSync).toBeUndefined());
+    publish(validationState("passed", "run-2"));
+    await vi.waitFor(() => expect(syncIndex).toHaveBeenCalledTimes(2));
+    releaseSync?.();
+    await vi.waitFor(() => expect(internal.codegraphSync).toBeUndefined());
+  });
+
+  it("starts the new run's refresh right after a cancelled sync finishes cleanup", async () => {
+    const calls: Array<{ signal: AbortSignal; release: () => void }> = [];
+    const syncIndex = vi.fn((_path: string, signal: AbortSignal) => new Promise<boolean>((resolve) => {
+      calls.push({ signal, release: () => resolve(true) });
+    }));
+    const { service, internal } = syncHarness(syncIndex);
+    const publish = validationPublisher(service);
+
+    publish(validationState("passed", "run-1"));
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+
+    // 新一轮验证开始：旧同步被取消，但它的进程还没有真正结束。
+    publish(validationState("running", "run-2"));
+    await vi.waitFor(() => expect(calls[0]?.signal.aborted).toBe(true));
+
+    // 竞态时序：新 passed 在旧同步清理完成之前发布；此时不能因为「已有在途同步」就静默丢弃它。
+    publish(validationState("passed", "run-2"));
+    expect(syncIndex).toHaveBeenCalledTimes(1);
+
+    calls[0]?.release();
+    await vi.waitFor(() => expect(syncIndex).toHaveBeenCalledTimes(2));
+    // 第二次同步是新一次启动：signal 未被取消，cwd 仍是捕获的项目。
+    expect(syncIndex.mock.calls[1]?.[0]).toBe("C:/project");
+    expect(calls[1]?.signal.aborted).toBe(false);
+
+    calls[1]?.release();
+    await vi.waitFor(() => expect(internal.codegraphSync).toBeUndefined());
+  });
+
+  it("drops the queued refresh when the next validation phase starts before cleanup finishes", async () => {
+    const calls: Array<{ signal: AbortSignal; release: () => void }> = [];
+    const syncIndex = vi.fn((_path: string, signal: AbortSignal) => new Promise<boolean>((resolve) => {
+      calls.push({ signal, release: () => resolve(true) });
+    }));
+    const { service, internal } = syncHarness(syncIndex);
+    const publish = validationPublisher(service);
+
+    publish(validationState("passed", "run-1"));
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    publish(validationState("running", "run-2"));
+    await vi.waitFor(() => expect(calls[0]?.signal.aborted).toBe(true));
+
+    // run-2 的同步先排队，随后又被 run-3 的 running 作废。
+    publish(validationState("passed", "run-2"));
+    publish(validationState("running", "run-3"));
+    calls[0]?.release();
+
+    await vi.waitFor(() => expect(internal.codegraphSyncDraining).toBe(false));
+    // 旧进程结束后不得滞后启动已作废的同步。
+    expect(syncIndex).toHaveBeenCalledTimes(1);
+    expect(internal.codegraphSyncIntent).toBeUndefined();
+    expect(internal.codegraphSync).toBeUndefined();
+  });
+
+  it("does not start a stale refresh after the project changed", async () => {
+    const calls: Array<{ signal: AbortSignal; release: () => void }> = [];
+    const syncIndex = vi.fn((_path: string, signal: AbortSignal) => new Promise<boolean>((resolve) => {
+      calls.push({ signal, release: () => resolve(true) });
+    }));
+    const { service, internal } = syncHarness(syncIndex);
+    const publish = validationPublisher(service);
+
+    publish(validationState("passed", "run-1"));
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    publish(validationState("running", "run-2"));
+    await vi.waitFor(() => expect(calls[0]?.signal.aborted).toBe(true));
+    publish(validationState("passed", "run-2"));
+
+    // 项目切换：在途同步与排队意图都必须留在旧目录，不能在切换后补偿启动。
+    internal.projectPath = "C:/other";
+    calls[0]?.release();
+
+    await vi.waitFor(() => expect(internal.codegraphSyncDraining).toBe(false));
+    expect(syncIndex).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels an in-flight refresh on a new validation phase and waits for cleanup", async () => {
+    let syncSignal: AbortSignal | undefined;
+    let releaseSync: (() => void) | undefined;
+    const syncIndex = vi.fn((_path: string, signal: AbortSignal) => new Promise<boolean>((resolve) => {
+      syncSignal = signal;
+      releaseSync = () => resolve(true);
+    }));
+    const { service, internal } = syncHarness(syncIndex);
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const publish = validationPublisher(service);
+
+    publish(validationState("passed", "run-1"));
+    await vi.waitFor(() => expect(syncIndex).toHaveBeenCalledTimes(1));
+
+    publish(validationState("running", "run-2"));
+    await vi.waitFor(() => expect(syncSignal?.aborted).toBe(true));
+
+    // 取消必须等到清理完成，否则旧项目目录仍可能被继续写入。
+    let cleaned = false;
+    const cleanup = internal.cancelCodegraphSync().then(() => { cleaned = true; });
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    expect(cleaned).toBe(false);
+    releaseSync?.();
+    await cleanup;
+    expect(cleaned).toBe(true);
+    // 主动取消不是失败，不向用户报错。
+    expect(events.filter((event) => event.type === "notice")).toEqual([]);
+  });
+
+  it("surfaces a failed refresh as a notice without touching the validation result", async () => {
+    const syncIndex = vi.fn(async () => { throw new Error("codegraph sync 以退出码 4 结束。"); });
+    const { service } = syncHarness(syncIndex);
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const publish = validationPublisher(service);
+    const passed = validationState("passed", "run-1");
+
+    publish(passed);
+
+    await vi.waitFor(() => expect(events.some((event) => event.type === "notice")).toBe(true));
+    expect(events.find((event) => event.type === "notice")).toEqual({
+      type: "notice",
+      message: expect.stringContaining("codegraph sync 以退出码 4 结束。"),
+    });
+    // 同步失败不改变验证状态：唯一的 validation 事件就是刚发布的 passed。
+    expect(events.filter((event) => event.type === "validation")).toEqual([{ type: "validation", validation: passed }]);
+  });
+
+  it("stops an in-flight refresh before the runtime is disposed", async () => {
+    let syncSignal: AbortSignal | undefined;
+    let releaseSync: (() => void) | undefined;
+    const syncIndex = vi.fn((_path: string, signal: AbortSignal) => new Promise<boolean>((resolve) => {
+      syncSignal = signal;
+      releaseSync = () => resolve(true);
+    }));
+    const { service, internal } = syncHarness(syncIndex);
+    const publish = validationPublisher(service);
+
+    publish(validationState("passed", "run-1"));
+    await vi.waitFor(() => expect(syncIndex).toHaveBeenCalledTimes(1));
+
+    let disposed = false;
+    const disposal = internal.disposeRuntime().then(() => { disposed = true; });
+    await new Promise((resolveWait) => setTimeout(resolveWait, 20));
+    // 项目切换与关闭必须等到在途同步真正结束。
+    expect(syncSignal?.aborted).toBe(true);
+    expect(disposed).toBe(false);
+    releaseSync?.();
+    await disposal;
+    expect(disposed).toBe(true);
+  });
+});
+
 describe("AgentService prompt lifecycle", () => {
   afterEach(() => {
     sessionSummaryState.sessions = [];

@@ -133,10 +133,20 @@ export class AgentService {
   private readonly codegraphTool = new CodegraphToolService({
     getProjectPath: () => this.projectPath,
   });
+  /**
+   * 验证通过触发的宿主侧索引同步：同一时刻最多一个在途进程，外加一个待启动意图。
+   * 意图会在新的验证阶段、结果失效、项目切换或窗口关闭时被丢弃，drain 启动前还会再核对一次，
+   * 因此缓存的同步请求既不会在旧进程清理期间被丢弃，也不会在换项目之后滞后启动。
+   */
+  private codegraphSync: { projectPath: string; controller: AbortController; operation: Promise<void> } | undefined;
+  private codegraphSyncIntent: { runId: string; projectPath: string } | undefined;
+  private codegraphSyncDraining = false;
+  private readonly codegraphSyncedRunIds = new Set<string>();
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
     this.validationTool.onValidationChanged(validation);
     this.emit({ type: "validation", validation });
+    this.scheduleCodegraphSync(validation);
     const session = this.runtime?.session;
     if (session) this.emit({ type: "state", patch: {
       isStreaming: this.isAgentActive(session),
@@ -638,6 +648,76 @@ export class AgentService {
     return operation;
   }
 
+  /**
+   * 验证通过后刷新 CodeGraph 索引只是后台副作用：只异步启动，绝不阻塞已经落定的验证结果。
+   */
+  private scheduleCodegraphSync(validation: ValidationState): void {
+    if (validation.status === "running" || validation.status === "stale") {
+      // 新的验证阶段或失效结果：待启动的意图必须作废，在途进程也必须停掉（否则会按旧源码写索引）。
+      this.codegraphSyncIntent = undefined;
+      void this.cancelCodegraphSync();
+      return;
+    }
+    const runId = validation.status === "passed" ? validation.runId : null;
+    const projectPath = this.projectPath;
+    if (!runId || !projectPath) return;
+    // 同一次验证只同步一次：onChange 可能对同一个终态重复发布。
+    if (this.codegraphSyncedRunIds.has(runId) || this.codegraphSyncIntent?.runId === runId) return;
+    this.codegraphSyncIntent = { runId, projectPath };
+    void this.drainCodegraphSync();
+  }
+
+  /**
+   * 串行消费同步意图。启动前先等旧的在途同步真正清理完，因此「新 passed 已发布、旧同步被取消但尚未
+   * 结束」时不会静默丢同步；若等待期间意图被新的验证阶段作废或被更新的 passed 替换，则重新判断，
+   * 绝不在换项目或新的 running 之后滞后启动。
+   */
+  private async drainCodegraphSync(): Promise<void> {
+    if (this.codegraphSyncDraining) return;
+    this.codegraphSyncDraining = true;
+    try {
+      for (;;) {
+        const intent = this.codegraphSyncIntent;
+        if (!intent) return;
+        await this.cancelCodegraphSync();
+        // 身份比较同时覆盖两种情况：意图被 running/stale/关闭清除，或被更新的 passed 替换。
+        if (this.codegraphSyncIntent !== intent) continue;
+        this.codegraphSyncIntent = undefined;
+        if (intent.projectPath !== this.projectPath) return;
+        this.codegraphSyncedRunIds.add(intent.runId);
+        const controller = new AbortController();
+        const operation = this.runCodegraphSync(intent.projectPath, controller.signal);
+        const active = { projectPath: intent.projectPath, controller, operation };
+        this.codegraphSync = active;
+        // 失败已在 runCodegraphSync 里转成用户可见提示，这里只负责回收在途状态。
+        await operation;
+        if (this.codegraphSync === active) this.codegraphSync = undefined;
+      }
+    } finally {
+      this.codegraphSyncDraining = false;
+    }
+  }
+
+  private async runCodegraphSync(projectPath: string, signal: AbortSignal): Promise<void> {
+    try {
+      // 返回 false 表示项目没有索引：宿主只刷新已有索引，绝不代替用户执行 init。
+      await this.codegraphTool.syncIndex(projectPath, signal);
+    } catch (error) {
+      // 主动取消不是失败，用户不需要因此看到提示。
+      if (signal.aborted) return;
+      this.emit({ type: "notice", message: `CodeGraph 索引同步失败：${errorText(error)}` });
+    }
+  }
+
+  /** 取消在途同步并等它真正结束，防止旧项目目录上的尾部写入落到新项目或已关闭的窗口上。 */
+  private async cancelCodegraphSync(): Promise<void> {
+    const active = this.codegraphSync;
+    if (!active) return;
+    active.controller.abort();
+    await active.operation;
+    if (this.codegraphSync === active) this.codegraphSync = undefined;
+  }
+
   async stopValidation(): Promise<void> {
     await this.validation.stop();
   }
@@ -1030,6 +1110,9 @@ export class AgentService {
     this.validationTool.reset();
     await this.explorers.reset();
     await this.validation.stop();
+    // 项目切换与窗口关闭都必须先丢弃待启动意图，再停掉在途同步，否则旧目录可能被继续写入。
+    this.codegraphSyncIntent = undefined;
+    await this.cancelCodegraphSync();
     this.unsubscribe?.();
     this.unsubscribe = undefined;
     if (this.runtime) await this.runtime.dispose();

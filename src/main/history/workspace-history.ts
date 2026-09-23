@@ -15,8 +15,14 @@ const execFileAsync = promisify(execFile);
 const TURN_ENTRY = "pi-ecode.workspace-turn";
 const CHECKPOINT_ENTRY = "pi-ecode.workspace-checkpoint";
 const MAX_PATCH_LENGTH = 400_000;
+// codegraph sync 会重写项目里的 .codegraph/ 索引；它只是索引而不是源码。
+const CODEGRAPH_INDEX_DIRECTORY = ".codegraph";
+// 只读过滤（评审列表、脏工作区检查）用这个 pathspec 排除索引目录：
+// 既不把索引算进评审，也不让迁移留下的暂存删除被当成工作区改动。
+const CODEGRAPH_INDEX_EXCLUSION = `:(exclude)${CODEGRAPH_INDEX_DIRECTORY}`;
 const DEFAULT_EXCLUDES = [
   ".git/",
+  `${CODEGRAPH_INDEX_DIRECTORY}/`,
   ".pi/workspace-history/",
   "node_modules/",
   "out/",
@@ -181,14 +187,19 @@ export class WorkspaceHistory {
       ["rev-parse", "HEAD"],
     )).trim();
     const [nameStatus, numStat, rawPatch] = await Promise.all([
+      // 评审列表是 reject 唯一可写的目标，所以这里同样排除索引目录：
+      // 升级前的影子历史可能已经带着 .codegraph/ 条目。
       this.execGit(session.sessionManager.getCwd(), session.sessionId, [
         "diff", "--name-status", "--find-renames", record.beforeCommit, headCommit,
+        "--", ".", CODEGRAPH_INDEX_EXCLUSION,
       ]),
       this.execGit(session.sessionManager.getCwd(), session.sessionId, [
         "diff", "--numstat", "--find-renames", record.beforeCommit, headCommit,
+        "--", ".", CODEGRAPH_INDEX_EXCLUSION,
       ]),
       this.execGit(session.sessionManager.getCwd(), session.sessionId, [
         "diff", "--no-ext-diff", "--unified=3", "--find-renames", record.beforeCommit, headCommit,
+        "--", ".", CODEGRAPH_INDEX_EXCLUSION,
       ]),
     ]);
     const counts = new Map<string, { additions: number | null; deletions: number | null }>();
@@ -272,7 +283,7 @@ export class WorkspaceHistory {
     return this.runExclusive(async () => {
       const cwd = session.sessionManager.getCwd();
       await this.ensureRepo(cwd, session.sessionId);
-      await this.execGit(cwd, session.sessionId, ["add", "-A", "--", "."]);
+      await this.stageWorkspaceWithoutCodegraph(cwd, session.sessionId);
       return (await this.execGit(cwd, session.sessionId, ["write-tree"])).trim();
     });
   }
@@ -454,11 +465,56 @@ export class WorkspaceHistory {
       await mkdir(join(gitDir, "info"), { recursive: true });
       await writeFile(join(gitDir, "info", "exclude"), `${DEFAULT_EXCLUDES.join("\n")}\n`, "utf8");
     }
+    await this.backfillCodegraphExclusion(cwd, sessionId);
+  }
+
+  /**
+   * 升级前建立的影子仓库既没有忽略 .codegraph/，还可能已经把索引提交进历史。
+   * 这里补写 info/exclude（幂等）并把已跟踪的索引项撤出索引：只用 --cached，
+   * 既不删除也不改写工作区里真实的索引文件，也不碰用户自己的 Git 仓库。
+   */
+  private async backfillCodegraphExclusion(cwd: string, sessionId: string): Promise<void> {
+    const excludePath = join(this.gitDir(cwd, sessionId), "info", "exclude");
+    let configured: string | undefined;
+    try {
+      configured = await readFile(excludePath, "utf8");
+    } catch {
+      configured = undefined;
+    }
+    await mkdir(join(this.gitDir(cwd, sessionId), "info"), { recursive: true });
+    if (configured === undefined) {
+      await writeFile(excludePath, `${DEFAULT_EXCLUDES.join("\n")}\n`, "utf8");
+    } else if (!configured.split("\n").some((line) => line.trim() === `${CODEGRAPH_INDEX_DIRECTORY}/`)) {
+      // 只追加一行，保留用户或旧版影子仓库已有的 ignore 内容。
+      const separator = configured === "" || configured.endsWith("\n") ? "" : "\n";
+      await writeFile(excludePath, `${configured}${separator}${CODEGRAPH_INDEX_DIRECTORY}/\n`, "utf8");
+    }
+    const trackedIndexPaths = await this.execGit(cwd, sessionId, ["ls-files", "--", CODEGRAPH_INDEX_DIRECTORY]);
+    if (trackedIndexPaths.trim()) {
+      await this.execGit(cwd, sessionId, [
+        "rm", "-r", "-f", "--cached", "--ignore-unmatch", "--", CODEGRAPH_INDEX_DIRECTORY,
+      ]);
+    }
+  }
+
+  /**
+   * 暂存工作区改动，并保证 CodeGraph 索引目录不进入影子索引。
+   * 不能把 `:(exclude).codegraph` 直接交给 `git add -A`：该目录存在且被忽略时，
+   * Git 会把它当成显式路径并报 "The following paths are ignored"。因此分两步：
+   * 先用普通 pathspec 暂存（被忽略的目录会被静默跳过），再把索引目录从索引撤出。
+   * `--cached` 只改索引，从不删除或改写工作区里的真实索引；撤出这一步同时覆盖
+   * 用户在 .gitignore 里用 negation 取反 info/exclude 的情况——它不受 ignore 优先级影响。
+   */
+  private async stageWorkspaceWithoutCodegraph(cwd: string, sessionId: string): Promise<void> {
+    await this.execGit(cwd, sessionId, ["add", "-A", "--", "."]);
+    await this.execGit(cwd, sessionId, [
+      "rm", "-r", "-f", "--cached", "--ignore-unmatch", "--", CODEGRAPH_INDEX_DIRECTORY,
+    ]);
   }
 
   private async snapshot(cwd: string, sessionId: string, label: string): Promise<string> {
     await this.ensureRepo(cwd, sessionId);
-    await this.execGit(cwd, sessionId, ["add", "-A", "--", "."]);
+    await this.stageWorkspaceWithoutCodegraph(cwd, sessionId);
     const hasHead = await this.gitSucceeds(cwd, sessionId, ["rev-parse", "--verify", "HEAD"]);
     const changed = !hasHead || !(await this.gitSucceeds(cwd, sessionId, ["diff", "--cached", "--quiet"]));
     if (changed) {
@@ -469,7 +525,11 @@ export class WorkspaceHistory {
 
   private async assertClean(cwd: string, sessionId: string): Promise<void> {
     await this.ensureRepo(cwd, sessionId);
-    const status = await this.execGit(cwd, sessionId, ["status", "--porcelain=v1", "--untracked-files=all"]);
+    // 迁移会用 rm --cached 把索引目录撤出索引，索引与 HEAD 因此相差一个暂存删除；
+    // 它不是用户的工作区改动，必须用同一个 pathspec 排除，否则旧会话首次 undo/redo 会被误判为脏工作区。
+    const status = await this.execGit(cwd, sessionId, [
+      "status", "--porcelain=v1", "--untracked-files=all", "--", ".", CODEGRAPH_INDEX_EXCLUSION,
+    ]);
     if (status.trim()) {
       throw new Error("Workspace has changes that are not in history. Create a checkpoint before undo or redo.");
     }
@@ -477,19 +537,47 @@ export class WorkspaceHistory {
 
   private async restore(cwd: string, sessionId: string, commit: string): Promise<void> {
     await this.ensureRepo(cwd, sessionId);
-    await this.execGit(cwd, sessionId, ["reset", "--hard", commit]);
+    // 升级前的影子历史可能带着 .codegraph/：整仓 reset --hard 会把那些旧索引写回工作区，
+    // 覆盖真实的 CodeGraph 索引。所以先保证索引里没有任何索引目录条目（删掉工作区的索引不可恢复，
+    // 这里必须再确认一次），再对“去掉该目录的提交”做普通 reset --hard。
+    await this.execGit(cwd, sessionId, [
+      "rm", "-r", "-f", "--cached", "--ignore-unmatch", "--", CODEGRAPH_INDEX_DIRECTORY,
+    ]);
+    const tree = await this.writeTreeWithoutCodegraph(cwd, sessionId, commit);
+    const safeCommit = (await this.execGit(cwd, sessionId, [
+      "-c", "commit.gpgsign=false",
+      "commit-tree", tree, "-p", commit, "-m", `restore without ${CODEGRAPH_INDEX_DIRECTORY}`,
+    ])).trim();
+    await this.execGit(cwd, sessionId, ["reset", "--hard", safeCommit]);
   }
 
-  private async execGit(cwd: string, sessionId: string, args: string[]): Promise<string> {
-    return this.execGitRaw([`--git-dir=${this.gitDir(cwd, sessionId)}`, `--work-tree=${cwd}`, ...args], cwd);
+  /** 用临时索引写出“目标提交去掉 CodeGraph 索引目录”的树，不扰动影子仓库的真实索引。 */
+  private async writeTreeWithoutCodegraph(cwd: string, sessionId: string, commit: string): Promise<string> {
+    const indexFile = join(this.sessionRoot(cwd, sessionId), "restore-index");
+    const env = { GIT_INDEX_FILE: indexFile };
+    try {
+      await this.execGit(cwd, sessionId, ["read-tree", commit], env);
+      await this.execGit(cwd, sessionId, [
+        "rm", "-r", "-f", "--cached", "--ignore-unmatch", "--", CODEGRAPH_INDEX_DIRECTORY,
+      ], env);
+      return (await this.execGit(cwd, sessionId, ["write-tree"], env)).trim();
+    } finally {
+      // 任何一步出错都要清掉临时索引，否则残留文件会让下一次 restore 复用脏索引。
+      await rm(indexFile, { force: true });
+    }
   }
 
-  private async execGitRaw(args: string[], cwd: string): Promise<string> {
+  private async execGit(cwd: string, sessionId: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
+    return this.execGitRaw([`--git-dir=${this.gitDir(cwd, sessionId)}`, `--work-tree=${cwd}`, ...args], cwd, env);
+  }
+
+  private async execGitRaw(args: string[], cwd: string, env?: NodeJS.ProcessEnv): Promise<string> {
     const result = await execFileAsync("git", args, {
       cwd,
       windowsHide: true,
       timeout: 60_000,
       maxBuffer: 10 * 1024 * 1024,
+      env: { ...process.env, ...env },
     });
     return result.stdout;
   }

@@ -69,9 +69,21 @@ export function assertExploreQuery(rawQuery: unknown): string {
  * CODEGRAPH_NO_DOWNLOAD：npm-shim.js 在缺少平台包时会自动从 GitHub 下载，只读工具不能隐式联网下载。
  */
 export function codegraphExploreInvocation(entry: string, projectPath: string, query: string): CodegraphInvocation {
+  return codegraphInvocation(entry, projectPath, ["explore", "--max-files", "3", "--", query]);
+}
+
+/**
+ * 宿主侧索引同步的参数固定为 `sync`：没有查询文本，也没有任何受调用方影响的 token。
+ * 它只由主进程在验证通过后调用，不注册为模型工具，也不会代替用户执行 init。
+ */
+export function codegraphSyncInvocation(entry: string, projectPath: string): CodegraphInvocation {
+  return codegraphInvocation(entry, projectPath, ["sync"]);
+}
+
+function codegraphInvocation(entry: string, projectPath: string, args: string[]): CodegraphInvocation {
   return {
     command: process.execPath,
-    args: [entry, "explore", "--max-files", "3", "--", query],
+    args: [entry, ...args],
     cwd: projectPath,
     env: { ELECTRON_RUN_AS_NODE: "1", CODEGRAPH_NO_DOWNLOAD: "1" },
   };
@@ -167,9 +179,12 @@ async function resolveCliEntry(projectPath: string): Promise<string> {
   throw new CodegraphError(`没有找到可用的 codegraph CLI。请全局或在本项目安装 @colbymchenry/codegraph，或把 ${CLI_ENVIRONMENT_VARIABLE} 指向它的 JS 入口。`);
 }
 
+function indexPathOf(projectPath: string): string {
+  return join(projectPath, CODEGRAPH_INDEX_DIRECTORY, CODEGRAPH_INDEX_FILE_NAME);
+}
+
 async function assertIndexPresent(projectPath: string): Promise<void> {
-  const indexPath = join(projectPath, CODEGRAPH_INDEX_DIRECTORY, CODEGRAPH_INDEX_FILE_NAME);
-  if (await isFile(indexPath)) return;
+  if (await isFile(indexPathOf(projectPath))) return;
   throw new CodegraphError(`当前项目没有可用的 CodeGraph 索引（缺少 ${CODEGRAPH_INDEX_DIRECTORY}/${CODEGRAPH_INDEX_FILE_NAME}）。请先手动运行 codegraph init -i；本工具不会自动初始化或同步索引。`);
 }
 
@@ -202,7 +217,7 @@ async function terminate(child: ChildProcess): Promise<void> {
   await closed;
 }
 
-async function runCodegraphProcess(invocation: CodegraphInvocation, signal: AbortSignal | undefined): Promise<CodegraphRunResult> {
+async function runCodegraphProcess(invocation: CodegraphInvocation, label: string, signal: AbortSignal | undefined): Promise<CodegraphRunResult> {
   const child = spawn(invocation.command, invocation.args, {
     cwd: invocation.cwd,
     env: { ...process.env, NO_COLOR: "1", ...invocation.env },
@@ -245,15 +260,15 @@ async function runCodegraphProcess(invocation: CodegraphInvocation, signal: Abor
         return;
       }
       const detail = output.trim();
-      rejectResult(new CodegraphError(`codegraph explore 以退出码 ${code ?? "未知"} 结束。${detail ? `\n${detail}` : ""}`));
+      rejectResult(new CodegraphError(`${label} 以退出码 ${code ?? "未知"} 结束。${detail ? `\n${detail}` : ""}`));
     });
     const interrupt = (message: string): void => {
       if (settled || interruption) return;
       interruption = message;
       void terminate(child).finally(() => finish(null));
     };
-    const timer = setTimeout(() => interrupt(`codegraph explore 超过 ${TIMEOUT_MS / 1000} 秒未结束，进程已终止。`), TIMEOUT_MS);
-    const onAbort = (): void => interrupt("codegraph explore 已取消。");
+    const timer = setTimeout(() => interrupt(`${label} 超过 ${TIMEOUT_MS / 1000} 秒未结束，进程已终止。`), TIMEOUT_MS);
+    const onAbort = (): void => interrupt(`${label} 已取消。`);
     child.once("error", (error) => settle(() => rejectResult(new CodegraphError(`无法启动 codegraph CLI：${error.message}`))));
     child.once("close", (code) => finish(code));
     if (signal?.aborted) onAbort();
@@ -268,6 +283,20 @@ function codegraphResultText(result: CodegraphRunResult): string {
 
 export class CodegraphToolService {
   constructor(private readonly options: CodegraphToolOptions) {}
+
+  /**
+   * 宿主侧刷新已有索引：由主进程在验证通过后调用，不是模型工具，也不会被模型触发。
+   * 约定：没有 .codegraph/codegraph.db 时返回 false 且完全不启动 CLI（绝不自动创建索引）。
+   */
+  async syncIndex(projectPath: string, signal?: AbortSignal): Promise<boolean> {
+    signal?.throwIfAborted();
+    if (!(await isFile(indexPathOf(projectPath)))) return false;
+    signal?.throwIfAborted();
+    const entry = await resolveCliEntry(projectPath);
+    signal?.throwIfAborted();
+    await runCodegraphProcess(codegraphSyncInvocation(entry, projectPath), "codegraph sync", signal);
+    return true;
+  }
 
   asExtension(): InlineExtension {
     return { name: "pi-ecode-codegraph", factory: (pi) => this.register(pi) };
@@ -302,7 +331,7 @@ export class CodegraphToolService {
     const entry = await resolveCliEntry(projectPath);
     // 两次 await 期间都可能已被取消；真正 spawn 前再检查一次，否则取消仍会启动进程。
     signal?.throwIfAborted();
-    const result = await runCodegraphProcess(codegraphExploreInvocation(entry, projectPath, query), signal);
+    const result = await runCodegraphProcess(codegraphExploreInvocation(entry, projectPath, query), "codegraph explore", signal);
     return {
       content: [{ type: "text", text: codegraphResultText(result) }],
       details: { kind: "pi-ecode.codegraph-explore", version: 1, query, truncated: result.truncated },
