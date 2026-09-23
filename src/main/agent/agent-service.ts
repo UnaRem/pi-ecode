@@ -56,6 +56,7 @@ import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
 import { ExplorerService } from "./explorer-service.js";
 import { AgentCatalogService } from "./agent-catalog-service.js";
+import { CodegraphToolService } from "./codegraph-tool.js";
 import { ValidationToolService } from "./validation-tool.js";
 import { configuredCompactionReserveTokens, contextBudgetReserveTokens } from "./context-budget.js";
 
@@ -128,6 +129,9 @@ export class AgentService {
   private readonly validationTool = new ValidationToolService({
     getState: () => this.validation.getState(),
     start: (originToolCallId) => this.startValidationFromTool(originToolCallId),
+  });
+  private readonly codegraphTool = new CodegraphToolService({
+    getProjectPath: () => this.projectPath,
   });
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
@@ -724,6 +728,7 @@ export class AgentService {
             this.taskPlan.asExtension(),
             this.explorers.asExtension(),
             this.validationTool.asExtension(),
+            this.codegraphTool.asExtension(),
           ],
           eventBus: this.extensionEventBus,
           appendSystemPromptOverride: (base) => [

@@ -27,6 +27,7 @@ import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, t
 import { mapTimeline, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { AgentWriteLockService } from "./agent-write-locks.js";
+import { CODEGRAPH_TOOL_NAME } from "./codegraph-tool.js";
 import { configuredCompactionReserveTokens, contextBudgetReached, contextBudgetReserveTokens } from "./context-budget.js";
 import {
   AgentMessageParameters,
@@ -578,6 +579,10 @@ export class ExplorerService {
   ): ToolDefinition[] {
     const readOnlyNames = EXPLORER_TOOL_NAMES.filter((name) => !agent?.disabledTools.includes(name));
     const definitions = explorerToolDefinitions(parent, readOnlyNames);
+    // 只读 CodeGraph 探索只授权给 explorer、reviewer 和 editor；validator 仍然只能运行固定验证。
+    const mayExploreCodegraph = agent?.role !== "validator";
+    const codegraphDefinition = mayExploreCodegraph ? parent.getToolDefinition(CODEGRAPH_TOOL_NAME) : undefined;
+    if (codegraphDefinition && !agent?.disabledTools.includes(CODEGRAPH_TOOL_NAME)) definitions.push(codegraphDefinition);
     if (agent?.role === "editor") {
       const edit = createEditToolDefinition(cwd);
       const write = createWriteToolDefinition(cwd);

@@ -8,6 +8,7 @@ import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ToolActivity } from "../../shared/contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
 import { AgentMessageParameters, EXPLORER_CHILD_GUIDANCE, type ExplorerLocator, ExplorerParameters, ExplorerStatusParameters, taskPrompt } from "./explorer-support.js";
+import { CODEGRAPH_TOOL_NAME } from "./codegraph-tool.js";
 import { mapTimeline } from "./timeline-mapper.js";
 
 interface DeferredResult {
@@ -106,6 +107,12 @@ interface ExplorerInternals {
   liveSessions: Map<string, AgentSession>;
   updateLiveTool: (task: ExplorerTask, rawId: string, name: string, args: unknown, output: string, isError: boolean) => void;
   replaceAttemptTimeline: (task: ExplorerTask, attemptTimeline: ConversationItem[]) => void;
+  roleToolDefinitions: (
+    task: { id: string },
+    parent: Pick<AgentSession, "getToolDefinition">,
+    cwd: string,
+    agent: { role: ProjectAgentDefinition["role"]; disabledTools: string[] } | undefined,
+  ) => Array<{ name: string }>;
 }
 
 /** 回归需要驱动实时时间线与 live 会话状态，沿用既有用例直接断言私有成员的写法。 */
@@ -152,6 +159,40 @@ describe("ExplorerService", () => {
     } as Pick<AgentSession, "getToolDefinition">;
 
     expect(() => explorerToolDefinitions(parent)).toThrow("parent ffgrep tool");
+  });
+
+  it("grants the read-only CodeGraph tool to every role except the validator", () => {
+    const definitions = new Map<string, ToolDefinition>([
+      ...EXPLORER_TOOL_NAMES.map((name) => [name, { name } as ToolDefinition] as const),
+      [CODEGRAPH_TOOL_NAME, { name: CODEGRAPH_TOOL_NAME } as ToolDefinition] as const,
+    ]);
+    const parent = {
+      getToolDefinition: (name: string) => definitions.get(name),
+    } as Pick<AgentSession, "getToolDefinition">;
+    const internals = explorerInternals(harness(() => Promise.resolve({ sessionId: "unused", finalText: "unused" })).service);
+    const roleToolNames = (role: ProjectAgentDefinition["role"], disabledTools: string[] = []): string[] =>
+      internals.roleToolDefinitions({ id: "task-1" }, parent, "C:/project", { role, disabledTools }).map((definition) => definition.name);
+
+    expect(roleToolNames("explorer")).toContain(CODEGRAPH_TOOL_NAME);
+    expect(roleToolNames("reviewer")).toContain(CODEGRAPH_TOOL_NAME);
+    expect(roleToolNames("editor")).toContain(CODEGRAPH_TOOL_NAME);
+    expect(roleToolNames("validator")).not.toContain(CODEGRAPH_TOOL_NAME);
+    expect(roleToolNames("validator")).toEqual([...EXPLORER_TOOL_NAMES]);
+    expect(roleToolNames("explorer", [CODEGRAPH_TOOL_NAME])).not.toContain(CODEGRAPH_TOOL_NAME);
+    expect(internals.roleToolDefinitions({ id: "task-1" }, parent, "C:/project", undefined)
+      .map((definition) => definition.name)).toContain(CODEGRAPH_TOOL_NAME);
+  });
+
+  it("keeps dispatching Explorers when the parent has no CodeGraph definition", () => {
+    const parent = {
+      getToolDefinition: (name: string) => EXPLORER_TOOL_NAMES.includes(name as typeof EXPLORER_TOOL_NAMES[number])
+        ? ({ name } as ToolDefinition)
+        : undefined,
+    } as Pick<AgentSession, "getToolDefinition">;
+    const internals = explorerInternals(harness(() => Promise.resolve({ sessionId: "unused", finalText: "unused" })).service);
+
+    expect(internals.roleToolDefinitions({ id: "task-1" }, parent, "C:/project", { role: "explorer", disabledTools: [] })
+      .map((definition) => definition.name)).toEqual([...EXPLORER_TOOL_NAMES]);
   });
 
   it("defaults Explorer thinking to low and accepts a batch-level medium override", async () => {
