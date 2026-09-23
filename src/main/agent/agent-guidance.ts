@@ -5,6 +5,14 @@ export const VALIDATION_ORCHESTRATION_GUIDANCE = `## Host-owned validation
 - Any source change during validation makes the result stale. A passed result applies only to its recorded source revision.
 - Never describe a validation as passed until the delivered terminal result reports status passed.`;
 
+export const SUBAGENT_ORCHESTRATION_GUIDANCE = `## Subagent orchestration
+- Answer purely conversational questions and simple read-only lookups directly in the main session. Do not dispatch when a few parallel root read, ffgrep, and fffind calls can finish the work.
+- Every editor dispatch requires approval through the project's existing applicable confirmation gates. A small implementation with an already clear scope only skips the exploration step: dispatch a single editor and declare its exact write_scope in that dispatch. The main session must not edit any file inside a subagent's active write_scope.
+- For work with an unknown root cause or a cross-module reach, dispatch an explorer first. Use agent_dispatch for a single investigation direction; use dispatch_explorers only for two independent directions that each require substantial reading. Dispatch an editor only after the explorer evidence is synthesized and the plan passes the same confirmation gates.
+- Use a reviewer when the risk justifies it: correctness, security, persistence, concurrency, or a wide cross-module diff.
+- The main session owns the final validation. After all editing and review work finishes it runs run_validation, then reviews the diff and git status, then commits. A subagent turn never ends with the final repository-wide validation. If source changes afterwards, the result is stale and validation must be rerun before delivery.
+- If no editor is available, or an editor still fails after its retry, state that explicitly before degrading to main-session edits.`;
+
 export const EXPLORER_ORCHESTRATION_GUIDANCE = `## Read-only Explorer subagents
 - Use dispatch_explorers only when a request contains at least two independent, non-overlapping repository investigations that each require substantial reading or searching.
 - Each Explorer task must define one objective, an exact read-only scope, and a concrete evidence-based deliverable. Use a concise Chinese title for task_name/title visible to users; keep snake_case task_name only as the protocol identifier. Explorers use the parent's read, ffgrep, and fffind tools and cannot edit files or execute commands.

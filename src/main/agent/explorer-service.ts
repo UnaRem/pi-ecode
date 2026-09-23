@@ -247,6 +247,10 @@ export class ExplorerService {
       description: "向项目代理派发一个或多个任务。代理可长期复用会话；所有任务都要传 write_scope 数组，编辑者必须传非空范围。",
       promptSnippet: "按稳定 agent_id 指挥项目代理；完成通知不携带报告正文",
       promptGuidelines: [
+        "直接在主会话完成纯问答、简单只读查询，以及少量并行 read/ffgrep/fffind 能解决的定位，不要为此派发子代理。",
+        "任何编辑者派发都必须在项目现有适用确认门禁获批后进行，小任务只是跳过探索：范围明确的小型实现可直接派一个编辑者并在 write_scope 声明精确路径，主会话不得同时编辑该范围。",
+        "根因不明或跨模块时先派探索者：单一调查方向用 agent_dispatch，只有两个相互独立且各需大量阅读的方向才用 dispatch_explorers；综合探索证据并通过同一确认门禁后再派编辑者。审查者按风险使用。",
+        "编辑或审查任务结束后由主会话负责最终 run_validation、审查 diff 与 git status 并提交；若其后源文件再次变更，验证结果失效必须重跑。",
         "根据项目代理目录选择 agent_id；一个代理同一时刻只能执行一个任务。",
         "探索者和审查者只读；验证者只能运行固定验证；非编辑者传空 write_scope，编辑者写入前声明精确范围。",
         "派发后不要轮询。agent_wait 返回 attention 时调用一次 agent_status；任务失败会自动重试一次，仍失败时读取 agent_result，补足依赖、改派空闲同角色代理，或明确告知用户并由主会话降级执行。",

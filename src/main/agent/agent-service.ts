@@ -47,6 +47,7 @@ import {
   EDIT_TOOL_COMPATIBILITY_GUIDANCE,
   EXPLORER_ORCHESTRATION_GUIDANCE,
   PARALLEL_TOOL_EXECUTION_GUIDANCE,
+  SUBAGENT_ORCHESTRATION_GUIDANCE,
   VALIDATION_ORCHESTRATION_GUIDANCE,
 } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
@@ -708,7 +709,7 @@ export class AgentService {
       const model = agent.model.mode === "inherit" ? "继承主会话模型" : `${agent.model.provider}/${agent.model.modelId}`;
       return `- ${agent.id}｜${agent.name}｜${agent.role}｜${model}｜thinking=${agent.thinkingLevel}`;
     }).join("\n");
-    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：探索者、审查者只读；验证者只能运行宿主固定验证；编辑者可用受锁 edit/write 和固定验证，且每个编辑任务必须声明 write_scope。`;
+    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：探索者、审查者只读；验证者只能运行宿主固定验证；编辑者可用受锁 edit/write 和固定验证，且每个编辑任务必须声明 write_scope。\n编排摘要：小任务只跳过探索，仍须经既有确认门禁；复杂任务先探索、综合证据后确认再编辑；编辑与审查完成后由主会话负责最终验证、审查 diff 与提交。完整策略见 Subagent orchestration 章节。`;
   }
 
   private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
@@ -729,6 +730,7 @@ export class AgentService {
             ...base,
             EDIT_TOOL_COMPATIBILITY_GUIDANCE,
             PARALLEL_TOOL_EXECUTION_GUIDANCE,
+            SUBAGENT_ORCHESTRATION_GUIDANCE,
             EXPLORER_ORCHESTRATION_GUIDANCE,
             this.agentCatalogPrompt(),
             VALIDATION_ORCHESTRATION_GUIDANCE,

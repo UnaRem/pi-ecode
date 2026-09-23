@@ -3,6 +3,7 @@ import {
   EDIT_TOOL_COMPATIBILITY_GUIDANCE,
   EXPLORER_ORCHESTRATION_GUIDANCE,
   PARALLEL_TOOL_EXECUTION_GUIDANCE,
+  SUBAGENT_ORCHESTRATION_GUIDANCE,
   VALIDATION_ORCHESTRATION_GUIDANCE,
 } from "./agent-guidance.js";
 
@@ -33,6 +34,19 @@ describe("agent guidance", () => {
     expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("typecheck, test, and build");
     expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("continue only read-only work");
     expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("source revision");
+  });
+
+  it("routes every main-session request to the right subagent role", () => {
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("directly in the main session");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Every editor dispatch requires approval through the project's existing applicable confirmation gates");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("only skips the exploration step");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("must not edit any file inside a subagent's active write_scope");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Use agent_dispatch for a single investigation direction");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("use dispatch_explorers only for two independent directions");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("the plan passes the same confirmation gates");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("The main session owns the final validation");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("validation must be rerun before delivery");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("state that explicitly before degrading to main-session edits");
   });
 
   it("teaches every model the pi-ecode Explorer protocol", () => {
