@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultWorkAnimatorTiming, presetFrames } from "../../shared/work-animator.js";
@@ -14,7 +15,8 @@ import { AppConfigService } from "./app-config-service.js";
 
 const roots: string[] = [];
 async function harness(): Promise<AppConfigService> {
-  mock.root = await mkdtemp(join(process.cwd(), ".pi-ecode-animator-"));
+  // 在系统临时目录下开临时根，避免测试期间在仓库内新建文件触发验证 watcher 的 stale。
+  mock.root = await mkdtemp(join(tmpdir(), ".pi-ecode-animator-"));
   roots.push(mock.root);
   return new AppConfigService({ onChanged: () => undefined, onError: () => undefined });
 }
