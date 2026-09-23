@@ -25,6 +25,27 @@ function message(id: string, role: "user" | "assistant" = "assistant"): Conversa
   return { kind: "message", id, message: { id, role, text: id, timestamp: 1 } };
 }
 
+function explorerTask(id: string, originToolCallId: string, agentRole?: ExplorerTask["agentRole"]): ExplorerTask {
+  return {
+    id, taskName: id, title: `Explorer ${id}`, objective: "Inspect behavior", scope: `src/${id}`,
+    deliverable: "Evidence", status: "running", originToolCallId, thinkingLevel: "low",
+    attempt: 1, maxAttempts: 2, revision: 1, queuedAt: 1,
+    ...(agentRole ? { agentRole } : {}),
+  };
+}
+
+function renderBatch(props: { tools: ToolActivity[]; explorers?: ExplorerTask[] }): string {
+  vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+  return renderToStaticMarkup(
+    createElement(I18nProvider, null, createElement(ToolBatch, {
+      tools: props.tools,
+      ...(props.explorers ? { explorers: props.explorers } : {}),
+      selectedToolId: null,
+      onSelectTool: vi.fn(),
+    })),
+  );
+}
+
 describe("ToolBatch", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -83,24 +104,61 @@ describe("ToolBatch", () => {
 
   it("replaces large Explorer cards with one compact dispatch summary", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
-    const explorer = (id: string, originToolCallId: string): ExplorerTask => ({
-      id, taskName: id, title: `Explorer ${id}`, objective: "Inspect behavior", scope: `src/${id}`,
-      deliverable: "Evidence", status: "running", originToolCallId, thinkingLevel: "low",
-      attempt: 1, maxAttempts: 2, revision: 1, queuedAt: 1,
-    });
     const markup = renderToStaticMarkup(
       createElement(I18nProvider, null, createElement(ToolBatch, {
         tools: [{ ...activity("dispatch-call"), name: "dispatch_explorers" }],
-        explorers: [explorer("linked", "dispatch-call"), explorer("other", "other-call")],
+        explorers: [explorerTask("linked", "dispatch-call"), explorerTask("other", "other-call")],
         selectedToolId: null,
         onSelectTool: vi.fn(),
       })),
     );
 
-    expect(markup).toContain("Explorer · 1 active / 1 total");
+    expect(markup).toContain("Agents · 1 active / 1 total");
     expect(markup).not.toContain("Explorer linked");
     expect(markup).not.toContain("Explorer other");
     expect(markup).not.toContain("explorer-cards");
+  });
+
+  it("labels a single-role batch with the translated role name", () => {
+    const editor = renderBatch({
+      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
+      explorers: [explorerTask("linked", "dispatch-call", "editor")],
+    });
+    expect(editor).toContain("Editor · 1 active / 1 total");
+
+    const explorers = renderBatch({
+      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
+      explorers: [explorerTask("one", "dispatch-call", "explorer"), explorerTask("two", "dispatch-call", "explorer")],
+    });
+    expect(explorers).toContain("Explorer · 2 active / 2 total");
+  });
+
+  it("uses the neutral agent label for mixed roles or a missing role", () => {
+    const mixed = renderBatch({
+      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
+      explorers: [explorerTask("one", "dispatch-call", "editor"), explorerTask("two", "dispatch-call", "explorer")],
+    });
+    expect(mixed).toContain("Agents · 2 active / 2 total");
+    expect(mixed).not.toContain("Editor ·");
+    expect(mixed).not.toContain("Explorer ·");
+
+    const partiallyKnown = renderBatch({
+      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
+      explorers: [explorerTask("one", "dispatch-call", "editor"), explorerTask("legacy", "dispatch-call")],
+    });
+    expect(partiallyKnown).toContain("Agents · 2 active / 2 total");
+    expect(partiallyKnown).not.toContain("Editor ·");
+  });
+
+  it("keeps the original tool title when no task is linked to the batch", () => {
+    const markup = renderBatch({
+      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
+      explorers: [explorerTask("other", "other-call", "editor")],
+    });
+
+    expect(markup).toContain("read · dispatch-call");
+    expect(markup).not.toContain("Agents ·");
+    expect(markup).not.toContain("Editor ·");
   });
 
   it("renders the validation state only under its originating tool call", () => {
