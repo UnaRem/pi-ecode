@@ -150,11 +150,21 @@ export class ExplorerService {
     if (!parsed) throw new Error("Invalid Explorer tool call id.");
     const live = this.liveSessions.get(taskId);
     const locator = this.locators.get(taskId)?.find((candidate) => candidate.attempt === parsed.attempt);
-    const messages = live && task.attempt === parsed.attempt
-      ? this.taskMessages(task, live.messages)
-      : locator ? messagesForLocator(locator) : [];
-    const result = messages.findLast((message) => message.role === "toolResult" && message.toolCallId === parsed.toolCallId);
-    if (result?.role === "toolResult") return textFromContent(result.content);
+    const liveMessages = live && task.attempt === parsed.attempt ? this.taskMessages(task, live.messages) : [];
+    const liveResult = liveMessages.findLast((message) => message.role === "toolResult" && message.toolCallId === parsed.toolCallId);
+    if (liveResult?.role === "toolResult") return textFromContent(liveResult.content);
+    // live 会话内存里的消息可能还没带上已持久化的 toolResult，因此继续查当前 attempt 的 locator，再回退缓存。
+    // locator 指向的临时 JSONL 可能已被清理或不可读：读盘失败不能变成调用方可见的错误，继续回退缓存。
+    let persistedMessages: AgentMessage[] = [];
+    if (locator) {
+      try {
+        persistedMessages = messagesForLocator(locator);
+      } catch {
+        persistedMessages = [];
+      }
+    }
+    const persistedResult = persistedMessages.findLast((message) => message.role === "toolResult" && message.toolCallId === parsed.toolCallId);
+    if (persistedResult?.role === "toolResult") return textFromContent(persistedResult.content);
     const cached = this.timelines.get(taskId)?.timeline.find((item) => item.kind === "tool" && item.id === toolCallId);
     if (cached?.kind === "tool") return cached.tool.output;
     throw new Error("Explorer tool output is not available.");
@@ -777,7 +787,30 @@ export class ExplorerService {
     if (task.attempt > 1 && !prefix.some((item) => item.id === `${task.id}:${task.attempt}:retry`)) {
       prefix.push(attemptSeparator(task.id, task.attempt, this.now()));
     }
-    this.setTimeline(task, [...prefix, ...namespaceTimeline(task.id, task.attempt, attemptTimeline)]);
+    this.setTimeline(task, [...prefix, ...namespaceTimeline(task.id, task.attempt, this.keepLiveToolOutput(task, attemptTimeline))]);
+  }
+
+  /**
+   * mapTimeline 只反映已持久化的消息：tool_execution_update 展示过的临时 output/status 还没有 toolResult，
+   * 直接重建会瞬间退回空白或把运行中的工具伪装成成功。因此仅对当前 attempt 尚未出现 toolResult 的工具条目
+   * 保留此前实时状态，已带上结束时间（真实完成结果）的条目一律以新结果为准。
+   */
+  private keepLiveToolOutput(task: ExplorerTask, attemptTimeline: ConversationItem[]): ConversationItem[] {
+    const previous = this.timelines.get(task.id)?.timeline;
+    if (!previous) return attemptTimeline;
+    return attemptTimeline.map((item) => {
+      if (item.kind !== "tool" || item.tool.endedAt !== undefined) return item;
+      const live = previous.find((candidate) => candidate.kind === "tool" && candidate.id === `${task.id}:${task.attempt}:${item.id}`);
+      if (live?.kind !== "tool") return item;
+      return toolItem({
+        ...item.tool,
+        output: live.tool.output,
+        ...(live.tool.outputTruncated !== undefined ? { outputTruncated: live.tool.outputTruncated } : {}),
+        ...(live.tool.outputLength !== undefined ? { outputLength: live.tool.outputLength } : {}),
+        status: live.tool.status,
+        ...(live.tool.endedAt !== undefined ? { endedAt: live.tool.endedAt } : {}),
+      });
+    });
   }
 
   private updateLiveTool(task: ExplorerTask, rawId: string, name: string, args: unknown, output: string, isError: boolean): void {

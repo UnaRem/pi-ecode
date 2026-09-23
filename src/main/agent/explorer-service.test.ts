@@ -2,10 +2,13 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
+import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ToolActivity } from "../../shared/contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
-import { AgentMessageParameters, EXPLORER_CHILD_GUIDANCE, ExplorerParameters, ExplorerStatusParameters, taskPrompt } from "./explorer-support.js";
+import { AgentMessageParameters, EXPLORER_CHILD_GUIDANCE, type ExplorerLocator, ExplorerParameters, ExplorerStatusParameters, taskPrompt } from "./explorer-support.js";
+import { mapTimeline } from "./timeline-mapper.js";
 
 interface DeferredResult {
   promise: Promise<{ sessionId: string; finalText: string }>;
@@ -95,6 +98,25 @@ function request(index: number): Record<string, unknown> {
     scope: `src/area-${index}`,
     deliverable: `Evidence ${index}`,
   };
+}
+
+interface ExplorerInternals {
+  timelines: Map<string, ExplorerTimelineSnapshot>;
+  locators: Map<string, ExplorerLocator[]>;
+  liveSessions: Map<string, AgentSession>;
+  updateLiveTool: (task: ExplorerTask, rawId: string, name: string, args: unknown, output: string, isError: boolean) => void;
+  replaceAttemptTimeline: (task: ExplorerTask, attemptTimeline: ConversationItem[]) => void;
+}
+
+/** 回归需要驱动实时时间线与 live 会话状态，沿用既有用例直接断言私有成员的写法。 */
+function explorerInternals(service: ExplorerService): ExplorerInternals {
+  return service as unknown as ExplorerInternals;
+}
+
+function toolActivityOf(timeline: ConversationItem[], toolId: string): ToolActivity {
+  const item = timeline.find((candidate) => candidate.kind === "tool" && candidate.id === toolId);
+  if (item?.kind !== "tool") throw new Error(`缺少工具条目：${toolId}`);
+  return item.tool;
 }
 
 describe("ExplorerService", () => {
@@ -360,6 +382,121 @@ describe("ExplorerService", () => {
 
     await expect(test.service.getToolOutput(task.id, toolCallId)).resolves.toBe("缓存输出");
     await expect(test.service.getToolOutput(task.id, `${task.id}:1:missing-call`)).rejects.toThrow("Explorer tool output is not available");
+
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child-late", finalText: "late" });
+    await stop;
+  });
+
+  it("reads the current attempt locator while the live session has not surfaced the tool result", async () => {
+    const sessionDirectory = await mkdtemp(join(tmpdir(), "pi-ecode-explorer-live-"));
+    temporaryDirectories.push(sessionDirectory);
+    const sessionFile = join(sessionDirectory, "child.jsonl");
+    const timestamp = new Date().toISOString();
+    const entries = [
+      { type: "session", version: 3, id: "child-live", timestamp, cwd: "C:/project" },
+      { type: "message", id: "aaaa1111", parentId: null, timestamp, message: { role: "user", content: "inspect", timestamp: 1 } },
+      { type: "message", id: "bbbb2222", parentId: "aaaa1111", timestamp, message: { role: "toolResult", toolCallId: "call-live", toolName: "read", content: [{ type: "text", text: "locator output" }], isError: false, timestamp: 2 } },
+    ];
+    await writeFile(sessionFile, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`, "utf8");
+
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+    const task = test.service.current[0];
+    if (!task) throw new Error("Dispatched task is missing.");
+    const internals = explorerInternals(test.service);
+    const toolCallId = `${task.id}:${task.attempt}:call-live`;
+    internals.locators.set(task.id, [{ taskId: task.id, attempt: task.attempt, sessionFile, startMessageIndex: 0 }]);
+    internals.liveSessions.set(task.id, { messages: [{ role: "user", content: "inspect", timestamp: 1 }] } as unknown as AgentSession);
+    internals.timelines.set(task.id, {
+      taskId: task.id,
+      revision: 1,
+      timeline: [{ kind: "tool", id: toolCallId, tool: { id: toolCallId, name: "read", title: "读取文件", input: "src/file.ts", output: "缓存输出", status: "success" } }],
+    });
+
+    await expect(test.service.getToolOutput(task.id, toolCallId)).resolves.toBe("locator output");
+    await expect(test.service.getToolOutput(task.id, `${task.id}:${task.attempt}:missing-call`)).rejects.toThrow("Explorer tool output is not available");
+    internals.liveSessions.set(task.id, { messages: [{ role: "toolResult", toolCallId: "call-live", toolName: "read", content: [{ type: "text", text: "live output" }], isError: false, timestamp: 3 }] } as unknown as AgentSession);
+    await expect(test.service.getToolOutput(task.id, toolCallId)).resolves.toBe("live output");
+
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child-late", finalText: "late" });
+    await stop;
+  });
+
+  it("falls back to the cached timeline output when the locator session file cannot be read", async () => {
+    const sessionDirectory = await mkdtemp(join(tmpdir(), "pi-ecode-explorer-missing-"));
+    temporaryDirectories.push(sessionDirectory);
+
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+    const task = test.service.current[0];
+    if (!task) throw new Error("Dispatched task is missing.");
+    const internals = explorerInternals(test.service);
+    const toolCallId = `${task.id}:${task.attempt}:call-gone`;
+    internals.locators.set(task.id, [{
+      taskId: task.id,
+      attempt: task.attempt,
+      sessionFile: join(sessionDirectory, "missing.jsonl"),
+      startMessageIndex: 0,
+    }]);
+    internals.liveSessions.set(task.id, { messages: [{ role: "user", content: "inspect", timestamp: 1 }] } as unknown as AgentSession);
+    internals.timelines.set(task.id, {
+      taskId: task.id,
+      revision: 1,
+      timeline: [{ kind: "tool", id: toolCallId, tool: { id: toolCallId, name: "read", title: "读取文件", input: "src/file.ts", output: "临时输出", status: "running" } }],
+    });
+
+    await expect(test.service.getToolOutput(task.id, toolCallId)).resolves.toBe("临时输出");
+    await expect(test.service.getToolOutput(task.id, `${task.id}:${task.attempt}:missing-call`)).rejects.toThrow("Explorer tool output is not available");
+
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child-late", finalText: "late" });
+    await stop;
+  });
+
+  it("keeps live tool output when the persisted timeline rebuilds before the tool result", async () => {
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+    const task = test.service.current[0];
+    if (!task) throw new Error("Dispatched task is missing.");
+    const internals = explorerInternals(test.service);
+    const toolCallId = `${task.id}:${task.attempt}:read-call`;
+    const otherAttemptId = `${task.id}:2:read-call`;
+    const otherTaskId = "other-task:1:read-call";
+    const toolCall = { role: "assistant", timestamp: 10, content: [{ type: "toolCall", id: "read-call", name: "read", arguments: { path: "src/file.ts" } }] } as unknown as AgentMessage;
+    const toolResult = { role: "toolResult", toolCallId: "read-call", toolName: "read", timestamp: 20, isError: false, content: [{ type: "text", text: "完整输出" }] } as unknown as AgentMessage;
+
+    internals.timelines.set(task.id, {
+      taskId: task.id,
+      revision: 1,
+      timeline: [
+        { kind: "tool", id: otherAttemptId, tool: { id: otherAttemptId, name: "read", title: "读取文件", input: "src/other.ts", output: "第二次尝试输出", status: "running" } },
+        { kind: "tool", id: otherTaskId, tool: { id: otherTaskId, name: "read", title: "读取文件", input: "src/third.ts", output: "其他任务输出", status: "running" } },
+      ],
+    });
+    internals.updateLiveTool(task, "read-call", "read", { path: "src/file.ts" }, "部分输出", false);
+    internals.replaceAttemptTimeline(task, mapTimeline([toolCall]));
+
+    let timeline = (await test.service.getTimeline(task.id)).timeline;
+    expect(toolActivityOf(timeline, toolCallId).output).toBe("部分输出");
+    expect(toolActivityOf(timeline, toolCallId).status).toBe("running");
+    expect(toolActivityOf(timeline, otherAttemptId).output).toBe("第二次尝试输出");
+    expect(toolActivityOf(timeline, otherTaskId).output).toBe("其他任务输出");
+
+    internals.updateLiveTool(task, "read-call", "read", undefined, "失败输出", true);
+    internals.replaceAttemptTimeline(task, mapTimeline([toolCall]));
+    timeline = (await test.service.getTimeline(task.id)).timeline;
+    expect(toolActivityOf(timeline, toolCallId).status).toBe("error");
+    expect(toolActivityOf(timeline, toolCallId).output).toBe("失败输出");
+
+    internals.replaceAttemptTimeline(task, mapTimeline([toolCall, toolResult]));
+    timeline = (await test.service.getTimeline(task.id)).timeline;
+    expect(toolActivityOf(timeline, toolCallId).output).toBe("完整输出");
+    expect(toolActivityOf(timeline, toolCallId).status).toBe("success");
 
     const stop = test.service.interruptAll();
     pending.resolve({ sessionId: "child-late", finalText: "late" });
