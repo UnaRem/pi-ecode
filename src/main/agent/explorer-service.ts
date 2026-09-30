@@ -25,6 +25,7 @@ import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot } from ".
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
 import { mapTimeline, toolItem } from "./timeline-mapper.js";
+import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { AgentWriteLockService } from "./agent-write-locks.js";
 import { CODEGRAPH_TOOL_NAME } from "./codegraph-tool.js";
@@ -139,7 +140,7 @@ export class ExplorerService {
     const timeline: ConversationItem[] = [];
     for (const locator of this.locators.get(taskId) ?? []) {
       if (locator.attempt > 1) timeline.push(attemptSeparator(taskId, locator.attempt, task.startedAt ?? task.queuedAt));
-      timeline.push(...namespaceTimeline(taskId, locator.attempt, mapTimeline(messagesForLocator(locator))));
+      timeline.push(...namespaceTimeline(taskId, locator.attempt, mapTimeline(messagesForLocator(locator, task))));
     }
     const snapshot = { taskId, revision: task.revision, timeline };
     this.timelines.set(taskId, snapshot);
@@ -161,7 +162,7 @@ export class ExplorerService {
     let persistedMessages: AgentMessage[] = [];
     if (locator) {
       try {
-        persistedMessages = messagesForLocator(locator);
+        persistedMessages = messagesForLocator(locator, task);
       } catch {
         persistedMessages = [];
       }
@@ -496,8 +497,10 @@ export class ExplorerService {
           result = await this.runAttempt(task, request, parent, controller.signal);
         } catch (error) {
           if (task.status === "interrupted" || controller.signal.aborted) throw error;
-          if (task.attempt < task.maxAttempts) {
-            this.rotateAgentGeneration(task);
+          // 总时限属于整项任务；重开会话不会增加可用时间。模型/权限错误也不会因重试而自愈。
+          const message = error instanceof Error ? error.message : String(error);
+          const configurationFailure = /代理模型不可用|未选择模型|当前不可用|工具.*不可用|write_scope|权限|\b(?:401|403)\b|unauthori[sz]ed|forbidden|authentication|context.{0,30}(?:length|window)/iu.test(message);
+          if (task.attempt < task.maxAttempts && !(error instanceof ExplorerWatchdogError && error.reason === "total") && !configurationFailure) {
             task.attempt += 1;
             task.activity = `正在重试 · ${task.attempt}/${task.maxAttempts}`;
             task.lastActivityAt = this.now();
@@ -505,7 +508,6 @@ export class ExplorerService {
             this.publish();
             continue;
           }
-          this.rotateAgentGeneration(task);
           throw error;
         }
       }
@@ -624,11 +626,6 @@ export class ExplorerService {
     return definitions.filter((definition) => !agent?.disabledTools.includes(definition.name));
   }
 
-  private rotateAgentGeneration(task: ExplorerTask): void {
-    const agent = this.taskAgents.get(task.id);
-    if (agent) this.generations.delete(agent.agentId);
-  }
-
   private childSettings(parent: AgentSession, agent: ExplorerAgentSnapshot | undefined, contextWindow: number): SettingsManager {
     if (!agent) return parent.settingsManager;
     const inherited = {
@@ -731,7 +728,13 @@ export class ExplorerService {
     task.sessionId = child.sessionId;
     const sessionFile = child.sessionFile;
     // 任务边界是会话文件的完整分支索引；压缩会缩短 child.messages，但不会删去历史条目。
-    const startMessageIndex = recordedMessages(child.sessionManager.getBranch()).length;
+    const branchMessages = recordedMessages(child.sessionManager.getBranch());
+    const startMessageIndex = branchMessages.length;
+    const previousAttempt = this.locators.get(task.id)?.find((locator) => locator.attempt === task.attempt - 1);
+    // 上次尝试可能在 bindExtensions 或发送任务前失败；只有该任务的提示词确实写入会话才可续做。
+    const resumePreviousAttempt = reusable && task.attempt > 1 && previousAttempt !== undefined
+      && branchMessages.slice(previousAttempt.startMessageIndex ?? 0, previousAttempt.endMessageIndex ?? startMessageIndex)
+        .some((message) => message.role === "user" && textFromContent(message.content) === taskPrompt(request));
     if (sessionFile) {
       this.addLocator({ taskId: task.id, attempt: task.attempt, sessionFile, startMessageIndex });
       if (agent && !reusable) {
@@ -748,13 +751,7 @@ export class ExplorerService {
     try {
       child.agent.toolExecution = "parallel";
       await child.bindExtensions({ mode: "rpc" });
-      await child.prompt(taskPrompt(request));
-      signal.throwIfAborted();
-      const response = child.messages.findLast((message) => message.role === "assistant");
-      if (!response || response.role !== "assistant") throw new Error("子代理没有返回最终回复。");
-      const text = textFromContent(response.content).trim();
-      if (response.stopReason === "error") throw new Error(response.errorMessage || text || "子代理执行失败。");
-      if (!text) throw new Error("子代理返回了空报告。");
+      const text = await this.promptChild(task, child, request, resumePreviousAttempt, signal);
       await this.compactChildIfNeeded(task, child, nativeCompaction);
       const currentGeneration = agent ? this.generations.get(agent.agentId) : undefined;
       if (currentGeneration) currentGeneration.lastUsedAt = this.now();
@@ -769,12 +766,36 @@ export class ExplorerService {
     }
   }
 
+  private async promptChild(task: ExplorerTask, child: AgentSession, request: ExplorerRequest, resumePreviousAttempt: boolean, signal: AbortSignal): Promise<string> {
+    // 失败后的下一次尝试仅在此前任务提示词已持久化时续做；否则重新发送完整任务。
+    if (resumePreviousAttempt) {
+      await child.sendCustomMessage({ customType: "pi-ecode.explorer-recovery", content: PROVIDER_RECOVERY_PROMPT, display: false }, { triggerTurn: true });
+    } else {
+      await child.prompt(taskPrompt(request));
+    }
+    signal.throwIfAborted();
+    let response = child.messages.findLast((message) => message.role === "assistant");
+    if (!response || response.role !== "assistant") throw new Error("子代理没有返回最终回复。");
+    // 临时上游故障先在原会话继续一次，保留已完成的工具结果和压缩上下文。
+    if (response.stopReason === "error" && providerFailure(child.messages)?.canContinue) {
+      this.touch(task, "上游中断，继续当前会话", true);
+      await child.sendCustomMessage({ customType: "pi-ecode.explorer-recovery", content: PROVIDER_RECOVERY_PROMPT, display: false }, { triggerTurn: true });
+      signal.throwIfAborted();
+      response = child.messages.findLast((message) => message.role === "assistant");
+    }
+    if (!response || response.role !== "assistant") throw new Error("子代理没有返回最终回复。");
+    const text = textFromContent(response.content).trim();
+    if (response.stopReason === "error") throw new Error(response.errorMessage || text || "子代理执行失败。");
+    if (!text) throw new Error("子代理返回了空报告。");
+    return text;
+  }
+
   private onChildEvent(task: ExplorerTask, child: AgentSession, event: AgentSessionEvent): void {
     if (task.status !== "running") return;
     if (event.type === "message_update") {
       this.touch(task, "正在生成回复");
       const messages = recordedMessages(child.sessionManager.getBranch());
-      this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, [...messages, event.message])));
+      this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, messages.includes(event.message) ? messages : [...messages, event.message])));
     } else if (event.type === "message_end" || event.type === "agent_settled") {
       this.touch(task, event.type === "agent_settled" ? "正在收尾" : "等待模型");
       this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, recordedMessages(child.sessionManager.getBranch()))));

@@ -7,7 +7,7 @@ import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDe
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ToolActivity } from "../../shared/contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
-import { AgentMessageParameters, EXPLORER_CHILD_GUIDANCE, type ExplorerLocator, ExplorerParameters, ExplorerStatusParameters, taskPrompt } from "./explorer-support.js";
+import { AgentMessageParameters, EXPLORER_CHILD_GUIDANCE, type ExplorerLocator, ExplorerParameters, ExplorerStatusParameters, messagesForLocator, taskPrompt } from "./explorer-support.js";
 import { CODEGRAPH_TOOL_NAME } from "./codegraph-tool.js";
 import { mapTimeline } from "./timeline-mapper.js";
 
@@ -91,6 +91,11 @@ function agent(id: string, role: ProjectAgentDefinition["role"] = "explorer"): P
   };
 }
 
+function taskRequest(index: number) {
+  return { task_name: `task_${index}`, title: `Task ${index}`, objective: `Answer question ${index}`,
+    scope: `src/area-${index}`, deliverable: `Evidence ${index}` };
+}
+
 function request(index: number): Record<string, unknown> {
   return {
     task_name: `task_${index}`,
@@ -108,6 +113,7 @@ interface ExplorerInternals {
   updateLiveTool: (task: ExplorerTask, rawId: string, name: string, args: unknown, output: string, isError: boolean) => void;
   replaceAttemptTimeline: (task: ExplorerTask, attemptTimeline: ConversationItem[]) => void;
   onChildEvent: (task: ExplorerTask, child: AgentSession, event: { type: "agent_settled" }) => void;
+  promptChild: (task: ExplorerTask, child: AgentSession, request: ReturnType<typeof taskRequest>, reusable: boolean, signal: AbortSignal) => Promise<string>;
   roleToolDefinitions: (
     task: { id: string },
     parent: Pick<AgentSession, "getToolDefinition">,
@@ -128,6 +134,32 @@ function toolActivityOf(timeline: ConversationItem[], toolId: string): ToolActiv
 }
 
 describe("ExplorerService", () => {
+  it("recovers already persisted child turns with legacy compaction boundaries", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pi-ecode-legacy-child-"));
+    temporaryDirectories.push(directory);
+    const sessionFile = join(directory, "child.jsonl");
+    const task = { taskName: "task_1", title: "Task 1", objective: "Answer question 1", scope: "src/area-1", deliverable: "Evidence 1" } as ExplorerTask;
+    const entryTime = new Date().toISOString();
+    const contents = [
+      { type: "session", version: 3, id: "legacy-child", timestamp: entryTime, cwd: "C:/project" },
+      { type: "message", id: "a1111111", parentId: null, timestamp: entryTime, message: { role: "user", content: taskPrompt(taskRequest(0)), timestamp: 1 } },
+      { type: "message", id: "a2222222", parentId: "a1111111", timestamp: entryTime, message: { role: "user", content: taskPrompt(taskRequest(1)), timestamp: 2 } },
+      { type: "message", id: "a3333333", parentId: "a2222222", timestamp: entryTime, message: { role: "assistant", content: [{ type: "text", text: "current answer" }], timestamp: 3 } },
+      { type: "compaction", id: "a4444444", parentId: "a3333333", timestamp: entryTime, summary: "short", firstKeptEntryId: "a3333333", tokensBefore: 100 },
+      { type: "message", id: "a5555555", parentId: "a4444444", timestamp: entryTime, message: { role: "user", content: taskPrompt(taskRequest(2)), timestamp: 4 } },
+    ];
+    await writeFile(sessionFile, `${contents.map((entry) => JSON.stringify(entry)).join("\n")}\n`, "utf8");
+    for (const locator of [
+      { taskId: "legacy", attempt: 1, sessionFile, startMessageIndex: 1, endMessageIndex: 0 },
+      { taskId: "legacy", attempt: 1, sessionFile, startMessageIndex: 0, endMessageIndex: 1 },
+    ]) {
+      expect(messagesForLocator(locator, task).map((message) => "content" in message
+        ? message.role === "user" ? message.content : Array.isArray(message.content) ? message.content[0] : message.content : null)).toEqual([
+        taskPrompt(taskRequest(1)), { type: "text", text: "current answer" },
+      ]);
+    }
+  });
+
   it("keeps current attempt messages after child compaction shrinks runtime context", async () => {
     const pending = deferredResult();
     const test = harness(() => pending.promise);
@@ -424,6 +456,55 @@ describe("ExplorerService", () => {
 
     expect(attempts).toBe(2);
     expect(test.service.current[0]).toMatchObject({ attempt: 2, finalText: "recovered after error" });
+  });
+
+  it("continues a transient provider error within the same child session", async () => {
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+    const task = test.service.current[0]!;
+    const messages: Array<{ role: string; stopReason: string; errorMessage: string; content: Array<{ type: string; text: string }> }> = [
+      { role: "assistant", stopReason: "error", errorMessage: "OpenAI API error (502): upstream_error", content: [] },
+    ];
+    const prompt = vi.fn(async () => undefined);
+    const sendCustomMessage = vi.fn(async () => { messages.push({ role: "assistant", stopReason: "end", errorMessage: "", content: [{ type: "text", text: "finished" }] }); });
+    const child = { messages, prompt, sendCustomMessage } as unknown as AgentSession;
+    const internal = explorerInternals(test.service);
+    await expect(internal.promptChild(task, child, taskRequest(1), false, new AbortController().signal)).resolves.toBe("finished");
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({ display: false }), { triggerTurn: true });
+
+    task.attempt = 2;
+    await expect(internal.promptChild(task, child, taskRequest(1), true, new AbortController().signal)).resolves.toBe("finished");
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(sendCustomMessage).toHaveBeenCalledTimes(2);
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child", finalText: "done" });
+    await stop;
+  });
+
+  it("does not retry deterministic model configuration failures", async () => {
+    const runExplorer = vi.fn(async () => { throw new Error("代理模型不可用或尚未认证：provider/model"); });
+    const test = harness(runExplorer);
+    await test.dispatch([request(1)]);
+    await vi.waitFor(() => expect(test.service.current[0]?.status).toBe("failed"));
+    expect(runExplorer).toHaveBeenCalledTimes(1);
+    expect(test.service.current[0]).toMatchObject({ attempt: 1, errorMessage: expect.stringContaining("模型不可用") });
+  });
+
+  it("does not restart after the total task deadline", async () => {
+    vi.useFakeTimers();
+    const runExplorer = vi.fn((_task: ExplorerTask, _request: unknown, _parent: AgentSession, signal: AbortSignal) =>
+      new Promise<{ sessionId: string; finalText: string }>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      }));
+    const test = harness(runExplorer, {
+      watchdog: { warningMs: 100, inactivityMs: 100, totalMs: 20, intervalMs: 5, maxAttempts: 2 },
+    });
+    await test.dispatch([request(1)]);
+    await vi.advanceTimersByTimeAsync(30);
+    expect(test.service.current[0]).toMatchObject({ status: "failed", attempt: 1, errorMessage: expect.stringContaining("10 分钟") });
+    expect(runExplorer).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to cached timeline output before a tool result is persisted", async () => {

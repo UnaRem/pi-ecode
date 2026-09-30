@@ -3,6 +3,7 @@ import { type AgentSession, type SessionEntry, SessionManager, type ToolDefiniti
 import { Type } from "typebox";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ThinkingLevel, ValidationState } from "../../shared/contracts.js";
+import { textFromContent } from "./message-mapper.js";
 import { messageItem } from "./timeline-mapper.js";
 
 export const EXPLORER_STATE_ENTRY = "pi-ecode.explorer-state";
@@ -232,9 +233,23 @@ export function recordedMessages(entries: SessionEntry[]): AgentMessage[] {
   return entries.flatMap((entry) => entry.type === "message" ? [entry.message] : []);
 }
 
-export function messagesForLocator(locator: ExplorerLocator): AgentMessage[] {
+export function messagesForLocator(locator: ExplorerLocator, task?: ExplorerTask): AgentMessage[] {
   const messages = recordedMessages(SessionManager.open(locator.sessionFile).getBranch());
-  return messages.slice(locator.startMessageIndex ?? 0, locator.endMessageIndex ?? messages.length);
+  const start = locator.startMessageIndex ?? 0;
+  const end = locator.endMessageIndex ?? messages.length;
+  const expected = task && taskPrompt({ task_name: task.taskName, title: task.title, objective: task.objective,
+    scope: task.scope, deliverable: task.deliverable });
+  if (expected && (end < start || locator.attempt === 1 && textFromContent(messages[start]?.role === "user" ? messages[start].content : "") !== expected)) {
+    // 旧版本以压缩后的运行时消息数记录边界，可能 end < start 或指向较早任务；
+    // 从持久化的原任务提示词恢复这段历史，到下一次派发任务的提示词为止。
+    const promptIndex = messages.findIndex((message) => message.role === "user" && textFromContent(message.content) === expected);
+    if (promptIndex >= 0) {
+      const nextTask = messages.findIndex((message, index) => index > promptIndex && message.role === "user"
+        && textFromContent(message.content).startsWith("## 子代理任务\n"));
+      return messages.slice(promptIndex, nextTask < 0 ? undefined : nextTask);
+    }
+  }
+  return messages.slice(start, end);
 }
 
 export function rawToolCallId(namespacedId: string): { attempt: number; toolCallId: string } | null {
