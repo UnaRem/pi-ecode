@@ -952,13 +952,15 @@ export class AgentService {
       case "message_end": {
         this.flushStreamItems();
         if (event.message.role === "user") {
-          const messages = historyMessages(session.sessionManager.getBranch());
-          const storedIndex = messages.indexOf(event.message);
-          const messageIndex = storedIndex >= 0 ? storedIndex : Math.max(0, messages.length - 1);
-          const item = mapTimeline([event.message], messageIndex).at(0);
-          if (item?.kind === "message") {
-            this.emit({ type: "timeline-upsert", item });
-          }
+          // SDK 先通知 message_end 再同步追加会话条目。等落盘后发布，图片引用才能对上完整历史索引。
+          queueMicrotask(() => {
+            if (this.runtime?.session !== session) return;
+            const messages = historyMessages(session.sessionManager.getBranch());
+            const messageIndex = messages.indexOf(event.message);
+            if (messageIndex < 0) return;
+            const item = mapTimeline([event.message], messageIndex).at(0);
+            if (item?.kind === "message") this.emit({ type: "timeline-upsert", item });
+          });
         }
         this.emitContext(session);
         break;

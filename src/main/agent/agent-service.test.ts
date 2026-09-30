@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { SessionManager, type AgentSession, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, SessionSummary, ValidationState } from "../../shared/contracts.js";
 
 const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[] }));
@@ -358,6 +358,97 @@ describe("AgentService prompt lifecycle", () => {
     expect(service.getConversationImage("0:1")?.data).toEqual(Uint8Array.from([104, 101, 108, 108, 111]));
     expect(() => service.getConversationImage("../image.png")).toThrow("Invalid conversation image id");
     expect(service.getConversationImage("0:9")).toBeNull();
+  });
+
+  it("publishes current images after message_end is followed by a synchronous history append", async () => {
+    const sessionManager = SessionManager.inMemory("C:/project");
+    sessionManager.appendMessage({ role: "user", content: "ordinary history", timestamp: 1 });
+    const oldImageId = sessionManager.appendMessage({ role: "user", content: [
+      { type: "text", text: "old image" },
+      { type: "image", mimeType: "image/png", data: "b2xk" },
+    ], timestamp: 2 });
+    sessionManager.appendCompaction("compressed history", oldImageId, 100);
+    const session = {
+      model: null,
+      isCompacting: false,
+      getContextUsage: () => undefined,
+      sessionManager,
+      get messages() { return sessionManager.buildSessionContext().messages; },
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    const internal = service as unknown as {
+      runtime: { session: AgentSession };
+      handleSessionEvent: (activeSession: AgentSession, event: AgentSessionEvent) => void;
+    };
+    internal.runtime = { session };
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const message = { role: "user" as const, content: [
+      { type: "text" as const, text: "current images" },
+      { type: "image" as const, mimeType: "image/png", data: "Zmlyc3Q=" },
+      { type: "image" as const, mimeType: "image/jpeg", data: "c2Vjb25k" },
+    ], timestamp: 3 };
+
+    // 复现 SDK 的通知顺序：先发事件，同一调用栈再追加原消息引用。
+    internal.handleSessionEvent(session, { type: "message_end", message });
+    expect(events.filter((event) => event.type === "timeline-upsert")).toEqual([]);
+    sessionManager.appendMessage(message);
+    await Promise.resolve();
+
+    const upserts = events.filter((event) => event.type === "timeline-upsert");
+    expect(upserts).toHaveLength(1);
+    const published = upserts[0];
+    if (published?.type !== "timeline-upsert" || published.item.kind !== "message") {
+      throw new Error("未收到本次用户消息。");
+    }
+    expect(published.item.message.images?.map((image) => image.sourceId)).toEqual(["3:1", "3:2"]);
+    const payloads = published.item.message.images?.map((image) => {
+      const sourceId = image.sourceId;
+      if (sourceId === undefined) throw new Error("本次图片缺少 sourceId。");
+      return service.getConversationImage(sourceId);
+    });
+    expect(payloads).toEqual([
+      { mimeType: "image/png", data: Uint8Array.from(Buffer.from("first")) },
+      { mimeType: "image/jpeg", data: Uint8Array.from(Buffer.from("second")) },
+    ]);
+    expect(service.getConversationImage("1:1")?.data).toEqual(Uint8Array.from(Buffer.from("old")));
+    expect(session.messages).not.toContainEqual(expect.objectContaining({ content: "ordinary history" }));
+    const page = service.loadOlderTimeline();
+    expect(page.timeline.find((item) => item.id === published.item.id)).toEqual(published.item);
+    expect(page.timeline.at(-1)).toEqual(published.item);
+  });
+
+  it("drops a deferred user upsert when the active session changes before the microtask", async () => {
+    const sessionManager = SessionManager.inMemory("C:/project");
+    const session = {
+      model: null,
+      isCompacting: false,
+      getContextUsage: () => undefined,
+      sessionManager,
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    const internal = service as unknown as {
+      runtime: { session: AgentSession };
+      handleSessionEvent: (activeSession: AgentSession, event: AgentSessionEvent) => void;
+    };
+    internal.runtime = { session };
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const message = { role: "user" as const, content: [
+      { type: "image" as const, mimeType: "image/png", data: "b2xk" },
+    ], timestamp: 1 };
+
+    internal.handleSessionEvent(session, { type: "message_end", message });
+    sessionManager.appendMessage(message);
+    // 同一调用栈切换运行时，旧消息微任务不得向新会话发布。
+    internal.runtime = { session: { sessionManager: SessionManager.inMemory("C:/other") } as unknown as AgentSession };
+    const beforeMicrotask = [...events];
+    await Promise.resolve();
+
+    expect(events).toEqual(beforeMicrotask);
+    expect(events.filter((event) => event.type === "timeline-upsert")).toEqual([]);
+    expect(service.getConversationImage("0:0")).toBeNull();
+    expect(service.loadOlderTimeline().timeline).toEqual([]);
   });
 
   it("pages complete conversation history after runtime compaction", () => {
