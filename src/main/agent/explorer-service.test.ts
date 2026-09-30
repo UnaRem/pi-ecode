@@ -107,6 +107,7 @@ interface ExplorerInternals {
   liveSessions: Map<string, AgentSession>;
   updateLiveTool: (task: ExplorerTask, rawId: string, name: string, args: unknown, output: string, isError: boolean) => void;
   replaceAttemptTimeline: (task: ExplorerTask, attemptTimeline: ConversationItem[]) => void;
+  onChildEvent: (task: ExplorerTask, child: AgentSession, event: { type: "agent_settled" }) => void;
   roleToolDefinitions: (
     task: { id: string },
     parent: Pick<AgentSession, "getToolDefinition">,
@@ -127,6 +128,30 @@ function toolActivityOf(timeline: ConversationItem[], toolId: string): ToolActiv
 }
 
 describe("ExplorerService", () => {
+  it("keeps current attempt messages after child compaction shrinks runtime context", async () => {
+    const pending = deferredResult();
+    const test = harness(() => pending.promise);
+    await test.dispatch([request(1)]);
+    const task = test.service.current[0];
+    if (!task) throw new Error("Dispatched task is missing.");
+    const previous = { role: "user", content: "previous task", timestamp: 1 };
+    const current = { role: "user", content: "current task", timestamp: 2 };
+    const answer = { role: "assistant", content: [{ type: "text", text: "current answer" }], timestamp: 3 };
+    const child = {
+      messages: [{ role: "compactionSummary", summary: "previous task" }, answer],
+      sessionManager: { getBranch: () => [previous, current, answer].map((message) => ({ type: "message", message })) },
+    } as unknown as AgentSession;
+    const internals = explorerInternals(test.service);
+    internals.locators.set(task.id, [{ taskId: task.id, attempt: 1, sessionFile: "unused", startMessageIndex: 1 }]);
+    internals.onChildEvent(task, child, { type: "agent_settled" });
+
+    const timeline = (await test.service.getTimeline(task.id)).timeline;
+    expect(timeline.map((item) => item.kind === "message" ? item.message.text : "")).toEqual(["current task", "current answer"]);
+    const stop = test.service.interruptAll();
+    pending.resolve({ sessionId: "child", finalText: "done" });
+    await stop;
+  });
+
   it("derives an auto-compaction reserve from the selected model window", () => {
     expect(compactionReserveTokens(200_000, 70)).toBe(60_000);
     expect(compactionReserveTokens(1, 90)).toBe(1);
@@ -449,7 +474,7 @@ describe("ExplorerService", () => {
     const internals = explorerInternals(test.service);
     const toolCallId = `${task.id}:${task.attempt}:call-live`;
     internals.locators.set(task.id, [{ taskId: task.id, attempt: task.attempt, sessionFile, startMessageIndex: 0 }]);
-    internals.liveSessions.set(task.id, { messages: [{ role: "user", content: "inspect", timestamp: 1 }] } as unknown as AgentSession);
+    internals.liveSessions.set(task.id, { sessionManager: { getBranch: () => [{ type: "message", message: { role: "user", content: "inspect", timestamp: 1 } }] } } as unknown as AgentSession);
     internals.timelines.set(task.id, {
       taskId: task.id,
       revision: 1,
@@ -458,7 +483,7 @@ describe("ExplorerService", () => {
 
     await expect(test.service.getToolOutput(task.id, toolCallId)).resolves.toBe("locator output");
     await expect(test.service.getToolOutput(task.id, `${task.id}:${task.attempt}:missing-call`)).rejects.toThrow("Explorer tool output is not available");
-    internals.liveSessions.set(task.id, { messages: [{ role: "toolResult", toolCallId: "call-live", toolName: "read", content: [{ type: "text", text: "live output" }], isError: false, timestamp: 3 }] } as unknown as AgentSession);
+    internals.liveSessions.set(task.id, { sessionManager: { getBranch: () => [{ type: "message", message: { role: "toolResult", toolCallId: "call-live", toolName: "read", content: [{ type: "text", text: "live output" }], isError: false, timestamp: 3 } }] } } as unknown as AgentSession);
     await expect(test.service.getToolOutput(task.id, toolCallId)).resolves.toBe("live output");
 
     const stop = test.service.interruptAll();
@@ -483,7 +508,7 @@ describe("ExplorerService", () => {
       sessionFile: join(sessionDirectory, "missing.jsonl"),
       startMessageIndex: 0,
     }]);
-    internals.liveSessions.set(task.id, { messages: [{ role: "user", content: "inspect", timestamp: 1 }] } as unknown as AgentSession);
+    internals.liveSessions.set(task.id, { sessionManager: { getBranch: () => [{ type: "message", message: { role: "user", content: "inspect", timestamp: 1 } }] } } as unknown as AgentSession);
     internals.timelines.set(task.id, {
       taskId: task.id,
       revision: 1,

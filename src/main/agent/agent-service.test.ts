@@ -330,10 +330,11 @@ describe("AgentService prompt lifecycle", () => {
 
   it("reads full tool output only from the active session", () => {
     const session = {
-      messages: [{
+      messages: [],
+      sessionManager: { getBranch: () => [{ type: "message", message: {
         role: "toolResult", toolCallId: "call-1", toolName: "bash",
         content: [{ type: "text", text: "complete output" }], isError: false,
-      }],
+      } }] },
     } as unknown as AgentSession;
     const service = new AgentService();
     Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
@@ -345,10 +346,11 @@ describe("AgentService prompt lifecycle", () => {
 
   it("reads historical images only by active-session indexes", () => {
     const session = {
-      messages: [{ role: "user", content: [
+      messages: [],
+      sessionManager: { getBranch: () => [{ type: "message", message: { role: "user", content: [
         { type: "text", text: "Inspect" },
         { type: "image", mimeType: "image/png", data: "aGVsbG8=" },
-      ] }],
+      ] } }] },
     } as unknown as AgentSession;
     const service = new AgentService();
     Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
@@ -356,6 +358,23 @@ describe("AgentService prompt lifecycle", () => {
     expect(service.getConversationImage("0:1")?.data).toEqual(Uint8Array.from([104, 101, 108, 108, 111]));
     expect(() => service.getConversationImage("../image.png")).toThrow("Invalid conversation image id");
     expect(service.getConversationImage("0:9")).toBeNull();
+  });
+
+  it("pages complete conversation history after runtime compaction", () => {
+    const entries = Array.from({ length: 30 }, (_, index) => ({
+      type: "message", message: { role: "user", content: [{ type: "text", text: `turn-${index}` }], timestamp: index + 1 },
+    }));
+    const session = {
+      messages: [{ role: "compactionSummary", summary: "older turns" }, entries[29]?.message],
+      sessionManager: { getBranch: () => entries },
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+
+    const page = service.loadOlderTimeline();
+    expect(page.timeline.filter((item) => item.kind === "message")).toHaveLength(30);
+    expect(page.timeline[0]).toMatchObject({ kind: "message", message: { text: "turn-0" } });
+    expect(page.timeline.at(-1)).toMatchObject({ kind: "message", message: { text: "turn-29" } });
   });
 
   it("continues a transient provider failure with a hidden control message", async () => {

@@ -228,8 +228,12 @@ export function attemptSeparator(taskId: string, attempt: number, timestamp: num
   return messageItem({ id: `${taskId}:${attempt}:retry`, role: "assistant", text: `长时间无活动，开始第 ${attempt}/${DEFAULT_WATCHDOG.maxAttempts} 次尝试。`, timestamp });
 }
 
+export function recordedMessages(entries: SessionEntry[]): AgentMessage[] {
+  return entries.flatMap((entry) => entry.type === "message" ? [entry.message] : []);
+}
+
 export function messagesForLocator(locator: ExplorerLocator): AgentMessage[] {
-  const messages = SessionManager.open(locator.sessionFile).getBranch().flatMap((entry) => entry.type === "message" ? [entry.message] : []);
+  const messages = recordedMessages(SessionManager.open(locator.sessionFile).getBranch());
   return messages.slice(locator.startMessageIndex ?? 0, locator.endMessageIndex ?? messages.length);
 }
 

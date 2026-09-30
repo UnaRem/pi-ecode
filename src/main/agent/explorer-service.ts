@@ -59,6 +59,7 @@ import {
   namespaceTimeline,
   normalizeTask,
   rawToolCallId,
+  recordedMessages,
   restoredState,
   type ExplorerStateEntry,
   taskPrompt,
@@ -151,7 +152,8 @@ export class ExplorerService {
     if (!parsed) throw new Error("Invalid Explorer tool call id.");
     const live = this.liveSessions.get(taskId);
     const locator = this.locators.get(taskId)?.find((candidate) => candidate.attempt === parsed.attempt);
-    const liveMessages = live && task.attempt === parsed.attempt ? this.taskMessages(task, live.messages) : [];
+    const liveMessages = live && task.attempt === parsed.attempt
+      ? this.taskMessages(task, recordedMessages(live.sessionManager.getBranch())) : [];
     const liveResult = liveMessages.findLast((message) => message.role === "toolResult" && message.toolCallId === parsed.toolCallId);
     if (liveResult?.role === "toolResult") return textFromContent(liveResult.content);
     // live 会话内存里的消息可能还没带上已持久化的 toolResult，因此继续查当前 attempt 的 locator，再回退缓存。
@@ -728,7 +730,8 @@ export class ExplorerService {
     this.liveSessions.set(task.id, child);
     task.sessionId = child.sessionId;
     const sessionFile = child.sessionFile;
-    const startMessageIndex = child.messages.length;
+    // 任务边界是会话文件的完整分支索引；压缩会缩短 child.messages，但不会删去历史条目。
+    const startMessageIndex = recordedMessages(child.sessionManager.getBranch()).length;
     if (sessionFile) {
       this.addLocator({ taskId: task.id, attempt: task.attempt, sessionFile, startMessageIndex });
       if (agent && !reusable) {
@@ -757,7 +760,8 @@ export class ExplorerService {
       if (currentGeneration) currentGeneration.lastUsedAt = this.now();
       return { sessionId: child.sessionId, finalText: text };
     } finally {
-      if (sessionFile) this.addLocator({ taskId: task.id, attempt: task.attempt, sessionFile, startMessageIndex, endMessageIndex: child.messages.length });
+      if (sessionFile) this.addLocator({ taskId: task.id, attempt: task.attempt, sessionFile, startMessageIndex,
+        endMessageIndex: recordedMessages(child.sessionManager.getBranch()).length });
       signal.removeEventListener("abort", abortChild);
       unsubscribe();
       if (this.liveSessions.get(task.id) === child) this.liveSessions.delete(task.id);
@@ -769,11 +773,11 @@ export class ExplorerService {
     if (task.status !== "running") return;
     if (event.type === "message_update") {
       this.touch(task, "正在生成回复");
-      const messages = child.messages.includes(event.message) ? child.messages : [...child.messages, event.message];
-      this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, messages)));
+      const messages = recordedMessages(child.sessionManager.getBranch());
+      this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, [...messages, event.message])));
     } else if (event.type === "message_end" || event.type === "agent_settled") {
       this.touch(task, event.type === "agent_settled" ? "正在收尾" : "等待模型");
-      this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, child.messages)));
+      this.replaceAttemptTimeline(task, mapTimeline(this.taskMessages(task, recordedMessages(child.sessionManager.getBranch()))));
     } else if (event.type === "tool_execution_start") {
       this.touch(task, toolTitle(event.toolName, event.args));
       this.updateLiveTool(task, event.toolCallId, event.toolName, event.args, "", false);

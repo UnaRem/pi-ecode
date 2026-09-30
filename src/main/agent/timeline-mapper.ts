@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { sessionEntryToContextMessages, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { ConversationImagePayload, ConversationItem, ConversationMessage, ImageAttachment, ToolActivity } from "../../shared/contracts.js";
 import { parsePastedTexts } from "../../shared/pasted-text.js";
 import { formatToolInput, textFromContent, toolOutputView, toolTitle } from "./message-mapper.js";
@@ -54,6 +55,11 @@ export function messageItem(message: ConversationMessage): ConversationItem {
 
 export function toolItem(tool: ToolActivity): ConversationItem {
   return { kind: "tool", id: tool.id, tool };
+}
+
+// 压缩仅缩短模型上下文；可见历史仍来自完整会话分支。
+export function historyMessages(entries: SessionEntry[]): AgentMessage[] {
+  return entries.flatMap(sessionEntryToContextMessages);
 }
 
 export interface MessageWindow {

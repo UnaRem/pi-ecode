@@ -37,7 +37,7 @@ import { ValidationService } from "../validation/validation-service.js";
 import { CandidateService } from "../update/candidate-service.js";
 import { ConfirmationService } from "./confirmation.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
-import { conversationImagePayload, mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
+import { conversationImagePayload, historyMessages, mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
 import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
@@ -257,7 +257,7 @@ export class AgentService {
 
   getToolOutput(toolCallId: string): string {
     if (!toolCallId || toolCallId.length > 200) throw new Error("Invalid tool call id.");
-    const message = this.requireRuntime().session.messages.findLast((entry) => (
+    const message = historyMessages(this.requireRuntime().session.sessionManager.getBranch()).findLast((entry) => (
       entry.role === "toolResult" && entry.toolCallId === toolCallId
     ));
     if (!message || message.role !== "toolResult") throw new Error("Tool output is not available in the active session.");
@@ -266,7 +266,7 @@ export class AgentService {
 
   getConversationImage(sourceId: string): ConversationImagePayload | null {
     if (!/^\d+:\d+$/u.test(sourceId)) throw new Error("Invalid conversation image id.");
-    return this.runtime ? conversationImagePayload(this.runtime.session.messages, sourceId) : null;
+    return this.runtime ? conversationImagePayload(historyMessages(this.runtime.session.sessionManager.getBranch()), sourceId) : null;
   }
 
   getExplorerTimeline(taskId: string) {
@@ -309,7 +309,7 @@ export class AgentService {
   }
 
   private timelinePage(session: AgentSession): AgentTimelinePage {
-    const window = recentMessageWindow(session.messages, this.visibleTimelineTurns);
+    const window = recentMessageWindow(historyMessages(session.sessionManager.getBranch()), this.visibleTimelineTurns);
     return { timeline: mapTimeline(window.messages, window.startIndex), hasMore: window.hasMore };
   }
 
@@ -946,8 +946,9 @@ export class AgentService {
       case "message_end": {
         this.flushStreamItems();
         if (event.message.role === "user") {
-          const storedIndex = session.messages.indexOf(event.message);
-          const messageIndex = storedIndex >= 0 ? storedIndex : Math.max(0, session.messages.length - 1);
+          const messages = historyMessages(session.sessionManager.getBranch());
+          const storedIndex = messages.indexOf(event.message);
+          const messageIndex = storedIndex >= 0 ? storedIndex : Math.max(0, messages.length - 1);
           const item = mapTimeline([event.message], messageIndex).at(0);
           if (item?.kind === "message") {
             this.emit({ type: "timeline-upsert", item });
