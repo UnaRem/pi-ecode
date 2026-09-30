@@ -234,6 +234,7 @@ export default function App() {
         onSelectExplorer={selectExplorer}
         onStopExplorer={(taskId) => void actions.stopExplorer(taskId)}
         onSaveProjectAgent={async (agent) => { await actions.saveProjectAgent(agent); }}
+  onSetAllProjectAgentPreferences={actions.setAllProjectAgentPreferences}
         onCreateProjectAgent={async (request) => { await actions.createProjectAgent(request); }}
         onRemoveProjectAgent={async (agentId) => { await actions.removeProjectAgent(agentId); }}
         onSetAgentConcurrency={async (value) => { await actions.setAgentConcurrency(value); }}

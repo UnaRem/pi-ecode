@@ -33,6 +33,7 @@ describe("AgentManager", () => {
       models={[{ id: "model", provider: "provider", name: "模型", reasoning: true, supportsImages: false }]}
       onBack={vi.fn()}
       onSave={vi.fn()}
+      onSetAllPreferences={vi.fn()}
       onCreate={vi.fn()}
       onRemove={vi.fn()}
       onSetConcurrency={vi.fn()}
@@ -40,6 +41,8 @@ describe("AgentManager", () => {
 
     expect(markup).toContain("管理代理");
     expect(markup).toContain("继承主会话");
+    expect(markup).toContain("应用到全部代理");
+    expect(markup).toContain("已派发任务保留原设置");
     expect(markup).toContain("自动压缩");
     expect(markup).toContain("只读调查");
     expect(markup).toContain("write");

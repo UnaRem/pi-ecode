@@ -7,6 +7,7 @@ import type {
   CreateProjectAgentRequest,
   ProjectAgentCatalog,
   ProjectAgentDefinition,
+  SetAllProjectAgentPreferencesRequest,
 } from "../../shared/agent-contracts.js";
 
 const MAX_AGENTS = 16;
@@ -180,6 +181,28 @@ export class AgentCatalogService {
     return cloneCatalog(catalog);
   }
 
+  async setAllPreferences(request: SetAllProjectAgentPreferencesRequest): Promise<ProjectAgentCatalog> {
+    if (!THINKING_LEVELS.has(request.thinkingLevel)) throw new Error("代理思考强度无效。");
+    if (request.model?.mode !== "inherit" && (request.model?.mode !== "fixed"
+      || typeof request.model.provider !== "string" || !request.model.provider.trim()
+      || typeof request.model.modelId !== "string" || !request.model.modelId.trim())) {
+      throw new Error("代理模型配置无效。");
+    }
+    const current = this.requireCatalog();
+    const now = this.now();
+    const next: ProjectAgentCatalog = {
+      ...current,
+      updatedAt: now,
+      agents: current.agents.map((agent) => ({
+        ...agent, model: structuredClone(request.model), thinkingLevel: request.thinkingLevel, updatedAt: now,
+      })),
+    };
+    // 持久化成功后才发布内存状态，避免写入失败时界面误以为已更新。
+    await this.persist(next);
+    this.catalog = next;
+    return cloneCatalog(next);
+  }
+
   async setMaxConcurrent(value: number): Promise<ProjectAgentCatalog> {
     if (!Number.isInteger(value) || value < 1 || value > 7) throw new Error("代理并发上限必须为 1–7。");
     const catalog = this.requireCatalog();
@@ -194,10 +217,10 @@ export class AgentCatalogService {
     return this.catalog;
   }
 
-  private async persist(): Promise<void> {
-    if (!this.filePath || !this.catalog) throw new Error("尚未打开项目代理配置。");
+  private async persist(catalog = this.requireCatalog()): Promise<void> {
+    if (!this.filePath) throw new Error("尚未打开项目代理配置。");
     const temporaryPath = `${this.filePath}.${randomUUID()}.tmp`;
-    await writeFile(temporaryPath, `${JSON.stringify(this.catalog, null, 2)}\n`, "utf8");
+    await writeFile(temporaryPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
     await rename(temporaryPath, this.filePath);
   }
 }

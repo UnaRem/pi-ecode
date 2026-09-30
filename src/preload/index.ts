@@ -15,6 +15,7 @@ const api: DesktopApi = {
   getExplorerToolOutput: (taskId, toolCallId) => ipcRenderer.invoke(IPC_CHANNELS.getExplorerToolOutput, taskId, toolCallId),
   stopExplorer: (taskId) => ipcRenderer.invoke(IPC_CHANNELS.stopExplorer, taskId),
   saveProjectAgent: (agent) => ipcRenderer.invoke(IPC_CHANNELS.saveProjectAgent, agent),
+  setAllProjectAgentPreferences: (request) => ipcRenderer.invoke(IPC_CHANNELS.setAllProjectAgentPreferences, request),
   createProjectAgent: (request) => ipcRenderer.invoke(IPC_CHANNELS.createProjectAgent, request),
   removeProjectAgent: (agentId) => ipcRenderer.invoke(IPC_CHANNELS.removeProjectAgent, agentId),
   setAgentConcurrency: (value) => ipcRenderer.invoke(IPC_CHANNELS.setAgentConcurrency, value),

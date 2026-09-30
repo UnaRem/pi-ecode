@@ -1,4 +1,4 @@
-import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition } from "./agent-contracts.js";
+import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "./agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
 
@@ -13,6 +13,7 @@ export const IPC_CHANNELS = {
   getExplorerToolOutput: "agent:get-explorer-tool-output",
   stopExplorer: "agent:stop-explorer",
   saveProjectAgent: "agent:save-project-agent",
+  setAllProjectAgentPreferences: "agent:set-all-project-agent-preferences",
   createProjectAgent: "agent:create-project-agent",
   removeProjectAgent: "agent:remove-project-agent",
   setAgentConcurrency: "agent:set-agent-concurrency",
@@ -404,6 +405,7 @@ export interface DesktopApi {
   getExplorerToolOutput(taskId: string, toolCallId: string): Promise<string>;
   stopExplorer(taskId: string): Promise<void>;
   saveProjectAgent(agent: ProjectAgentDefinition): Promise<ProjectAgentCatalog>;
+  setAllProjectAgentPreferences(request: SetAllProjectAgentPreferencesRequest): Promise<ProjectAgentCatalog>;
   createProjectAgent(request: CreateProjectAgentRequest): Promise<ProjectAgentCatalog>;
   removeProjectAgent(agentId: string): Promise<ProjectAgentCatalog>;
   setAgentConcurrency(value: number): Promise<ProjectAgentCatalog>;

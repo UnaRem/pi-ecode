@@ -33,6 +33,11 @@ export interface SaveProjectAgentRequest {
   agent: ProjectAgentDefinition;
 }
 
+export interface SetAllProjectAgentPreferencesRequest {
+  model: AgentModelPreference;
+  thinkingLevel: ThinkingLevel;
+}
+
 export interface CreateProjectAgentRequest {
   name: string;
   role: AgentRole;

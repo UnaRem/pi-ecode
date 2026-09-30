@@ -1,8 +1,9 @@
 import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition } from "@shared/agent-contracts";
+import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
 import type { ModelOption, ThinkingLevel } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
+import { AgentBulkPreferences } from "./AgentBulkPreferences";
 
 const ROLES: AgentRole[] = ["explorer", "validator", "reviewer", "editor"];
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -13,6 +14,7 @@ export function AgentManager({
   models,
   onBack,
   onSave,
+  onSetAllPreferences,
   onCreate,
   onRemove,
   onSetConcurrency,
@@ -21,6 +23,7 @@ export function AgentManager({
   models: ModelOption[];
   onBack: () => void;
   onSave: (agent: ProjectAgentDefinition) => Promise<void>;
+  onSetAllPreferences: (request: SetAllProjectAgentPreferencesRequest) => Promise<void>;
   onCreate: (request: CreateProjectAgentRequest) => Promise<void>;
   onRemove: (agentId: string) => Promise<void>;
   onSetConcurrency: (value: number) => Promise<void>;
@@ -31,7 +34,10 @@ export function AgentManager({
   const [draft, setDraft] = useState<ProjectAgentDefinition | null>(() => selected ? structuredClone(selected) : null);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
-    if (selected) setDraft(structuredClone(selected));
+    if (!selected) { setDraft(null); return; }
+    setDraft((current) => current?.id === selected.id
+      ? { ...current, model: structuredClone(selected.model), thinkingLevel: selected.thinkingLevel, updatedAt: selected.updatedAt }
+      : structuredClone(selected));
   }, [selected?.id, selected?.updatedAt]);
 
   const update = (patch: Partial<ProjectAgentDefinition>): void => {
@@ -61,8 +67,10 @@ export function AgentManager({
         {[1, 2, 3, 4, 5, 6, 7].map((value) => <option value={value} key={value}>{value}</option>)}
       </select>
     </label>
+    <AgentBulkPreferences count={catalog.agents.length} models={models} saving={saving} setSaving={setSaving}
+      setDraft={setDraft} onSetAllPreferences={onSetAllPreferences} />
     <div className="agent-definition-list">
-      {catalog.agents.map((agent) => <button type="button" key={agent.id} className={agent.id === selected?.id ? "selected" : ""} onClick={() => setSelectedId(agent.id)}>
+      {catalog.agents.map((agent) => <button type="button" key={agent.id} disabled={saving} className={agent.id === selected?.id ? "selected" : ""} onClick={() => setSelectedId(agent.id)}>
         <strong>{agent.name}</strong><small>{t(`agent.role.${agent.role}`)}</small>
       </button>)}
       <button type="button" className="agent-add" disabled={saving} onClick={() => void add()}><Plus size={12} />{t("agent.add")}</button>

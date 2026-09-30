@@ -52,6 +52,37 @@ describe("AgentCatalogService", () => {
     expect((await readFile(join(test.root, "projects"), { encoding: "utf8" }).catch(() => "directory"))).toBe("directory");
   });
 
+  it("updates model and thinking once for all existing agents while retaining other fields", async () => {
+    const test = await service(2_000);
+    const initial = await test.service.open("C:/work/demo");
+    const custom = await test.service.create({ name: "自建代理", role: "reviewer" });
+    const disabled = custom.agents[0]!;
+    disabled.enabled = false;
+    disabled.prompt = "特别说明";
+    await test.service.save(disabled);
+    const before = test.service.current!;
+    const result = await test.service.setAllPreferences({
+      model: { mode: "fixed", provider: "provider", modelId: "model" }, thinkingLevel: "high",
+    });
+    expect(result.agents).toHaveLength(initial.agents.length + 1);
+    expect(result.agents.every((agent) => agent.model.mode === "fixed" && agent.thinkingLevel === "high")).toBe(true);
+    expect(result.agents.map((agent) => ({ id: agent.id, role: agent.role, enabled: agent.enabled, prompt: agent.prompt })))
+      .toEqual(before.agents.map((agent) => ({ id: agent.id, role: agent.role, enabled: agent.enabled, prompt: agent.prompt })));
+    const restored = await new AgentCatalogService(test.root).open("C:/work/demo");
+    expect(restored.agents).toEqual(result.agents);
+    await expect(test.service.setAllPreferences({ model: { mode: "fixed", provider: "", modelId: "bad" }, thinkingLevel: "high" }))
+      .rejects.toThrow("模型配置无效");
+    expect(test.service.current).toEqual(result);
+  });
+
+  it("keeps the in-memory catalog unchanged when bulk persistence fails", async () => {
+    const test = await service();
+    const before = await test.service.open("C:/work/demo");
+    await rm(test.root, { recursive: true, force: true });
+    await expect(test.service.setAllPreferences({ model: { mode: "inherit" }, thinkingLevel: "high" })).rejects.toThrow();
+    expect(test.service.current).toEqual(before);
+  });
+
   it("allows user agents to be removed but protects defaults and validates thresholds", async () => {
     const test = await service();
     const catalog = await test.service.open("C:/work/demo");

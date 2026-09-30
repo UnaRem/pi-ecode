@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
-import type { CreateProjectAgentRequest, ProjectAgentDefinition } from "@shared/agent-contracts";
+import type { CreateProjectAgentRequest, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "@shared/contracts";
 import { INITIAL_AGENT_STATE, optimisticTimeline, reduceAgentEvent } from "@renderer/lib/agent-state";
 
@@ -108,6 +108,12 @@ export function useAgent() {
     const catalog = await run(() => window.piDesktop.saveProjectAgent(agent));
     if (catalog) dispatch({ type: "agent-catalog", catalog });
   }, [run]);
+
+  const setAllProjectAgentPreferences = useCallback(async (request: SetAllProjectAgentPreferencesRequest) => {
+    // 管理页需要真实的成功/失败信号，不能用 run() 吞掉 IPC 错误后显示成功。
+    const catalog = await window.piDesktop.setAllProjectAgentPreferences(request);
+    dispatch({ type: "agent-catalog", catalog });
+  }, []);
 
   const createProjectAgent = useCallback(async (request: CreateProjectAgentRequest) => {
     const catalog = await run(() => window.piDesktop.createProjectAgent(request));
@@ -218,6 +224,7 @@ export function useAgent() {
       stopExplorer,
       getExplorerToolOutput,
       saveProjectAgent,
+      setAllProjectAgentPreferences,
       createProjectAgent,
       removeProjectAgent,
       setAgentConcurrency,

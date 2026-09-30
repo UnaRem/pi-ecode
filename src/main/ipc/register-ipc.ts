@@ -1,6 +1,6 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { AppThemeColors, ConversationIdentityRole, ConversationNicknameUpdate } from "../../shared/app-config-contracts.js";
-import type { CreateProjectAgentRequest, ProjectAgentDefinition } from "../../shared/agent-contracts.js";
+import type { CreateProjectAgentRequest, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "../../shared/agent-contracts.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "../../shared/work-animator.js";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
@@ -99,6 +99,17 @@ function isProjectAgentDefinition(value: unknown): value is ProjectAgentDefiniti
     && Array.isArray(agent.disabledTools);
 }
 
+function isSetAllProjectAgentPreferencesRequest(value: unknown): value is SetAllProjectAgentPreferencesRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  if (!request.model || typeof request.model !== "object" || Array.isArray(request.model)) return false;
+  const model = request.model as Record<string, unknown>;
+  return ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(request.thinkingLevel))
+    && (model.mode === "inherit" || (model.mode === "fixed"
+      && typeof model.provider === "string" && Boolean(model.provider.trim())
+      && typeof model.modelId === "string" && Boolean(model.modelId.trim())));
+}
+
 function isCreateProjectAgentRequest(value: unknown): value is CreateProjectAgentRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Partial<CreateProjectAgentRequest>;
@@ -152,6 +163,10 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.saveProjectAgent, (_event, agent: unknown) => {
     if (!isProjectAgentDefinition(agent)) throw new Error("代理配置无效。");
     return service.saveProjectAgent(agent);
+  });
+  ipcMain.handle(IPC_CHANNELS.setAllProjectAgentPreferences, (_event, request: unknown) => {
+    if (!isSetAllProjectAgentPreferencesRequest(request)) throw new Error("批量代理设置无效。");
+    return service.setAllProjectAgentPreferences(request);
   });
   ipcMain.handle(IPC_CHANNELS.createProjectAgent, (_event, request: unknown) => {
     if (!isCreateProjectAgentRequest(request)) throw new Error("新增代理请求无效。");

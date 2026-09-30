@@ -1,6 +1,6 @@
 import { FileCode2, Play, Square, TerminalSquare } from "lucide-react";
 import { useState, type AnimationEvent, type KeyboardEvent } from "react";
-import type { CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition } from "@shared/agent-contracts";
+import type { CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
 import type { CandidateState, ChangeReview, ExplorerTask, ModelOption, ToolActivity, ValidationState } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
@@ -24,6 +24,7 @@ interface WorkspaceInspectorProps {
   onSelectExplorer?: (taskId: string) => void;
   onStopExplorer?: (taskId: string) => void;
   onSaveProjectAgent?: (agent: ProjectAgentDefinition) => Promise<void>;
+  onSetAllProjectAgentPreferences?: (request: SetAllProjectAgentPreferencesRequest) => Promise<void>;
   onCreateProjectAgent?: (request: CreateProjectAgentRequest) => Promise<void>;
   onRemoveProjectAgent?: (agentId: string) => Promise<void>;
   onSetAgentConcurrency?: (value: number) => Promise<void>;
@@ -188,10 +189,12 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     <OutputPanel {...props} />
     <ChangeFiles {...props} />
   </> : target === "validation" ? <ValidationControls {...props} /> : managingAgents && props.agentCatalog ? <AgentManager
+    key={props.agentCatalog.projectPath}
     catalog={props.agentCatalog}
     models={props.models ?? []}
     onBack={() => setManagingAgents(false)}
     onSave={props.onSaveProjectAgent ?? (async () => undefined)}
+    onSetAllPreferences={props.onSetAllProjectAgentPreferences ?? (async () => undefined)}
     onCreate={props.onCreateProjectAgent ?? (async () => undefined)}
     onRemove={props.onRemoveProjectAgent ?? (async () => undefined)}
     onSetConcurrency={props.onSetAgentConcurrency ?? (async () => undefined)}

@@ -12,7 +12,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition } from "../../shared/agent-contracts.js";
+import type { CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "../../shared/agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, ProviderStatus } from "../../shared/settings-contracts.js";
 import type {
   AgentEvent,
@@ -271,6 +271,12 @@ export class AgentService {
 
   getExplorerTimeline(taskId: string) {
     return this.explorers.getTimeline(taskId);
+  }
+
+  async setAllProjectAgentPreferences(request: SetAllProjectAgentPreferencesRequest): Promise<ProjectAgentCatalog> {
+    const catalog = await this.agentCatalog.setAllPreferences(request);
+    this.emit({ type: "agent-catalog", catalog });
+    return catalog;
   }
 
   async saveProjectAgent(agent: ProjectAgentDefinition): Promise<ProjectAgentCatalog> {
