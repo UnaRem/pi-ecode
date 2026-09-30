@@ -67,7 +67,7 @@ export function AgentManager({
         {[1, 2, 3, 4, 5, 6, 7].map((value) => <option value={value} key={value}>{value}</option>)}
       </select>
     </label>
-    <AgentBulkPreferences count={catalog.agents.length} models={models} saving={saving} setSaving={setSaving}
+    <AgentBulkPreferences agents={catalog.agents} models={models} saving={saving} setSaving={setSaving}
       setDraft={setDraft} onSetAllPreferences={onSetAllPreferences} />
     <div className="agent-definition-list">
       {catalog.agents.map((agent) => <button type="button" key={agent.id} disabled={saving} className={agent.id === selected?.id ? "selected" : ""} onClick={() => setSelectedId(agent.id)}>
@@ -79,14 +79,14 @@ export function AgentManager({
       <label><span>{t("agent.name")}</span><input value={draft.name} maxLength={80} onChange={(event) => update({ name: event.target.value })} /></label>
       <label><span>{t("agent.role")}</span><select value={draft.role} onChange={(event) => update({ role: event.target.value as AgentRole })}>{ROLES.map((role) => <option key={role} value={role}>{t(`agent.role.${role}`)}</option>)}</select></label>
       <label className="agent-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => update({ enabled: event.target.checked })} /><span>{t("agent.enabled")}</span></label>
-      <label><span>{t("agent.model")}</span><select value={modelValue} onChange={(event) => {
+      <label><span>{t("agent.model")}</span><select value={modelValue} disabled={saving} onChange={(event) => {
         if (event.target.value === "inherit") update({ model: { mode: "inherit" } });
         else {
           const separator = event.target.value.indexOf("/");
           update({ model: { mode: "fixed", provider: event.target.value.slice(0, separator), modelId: event.target.value.slice(separator + 1) } });
         }
       }}><option value="inherit">{t("agent.model.inherit")}</option>{models.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name} · {model.provider}</option>)}</select></label>
-      <label><span>{t("agent.thinking")}</span><select value={draft.thinkingLevel} onChange={(event) => update({ thinkingLevel: event.target.value as ThinkingLevel })}>{THINKING_LEVELS.map((level) => <option value={level} key={level}>{level}</option>)}</select></label>
+      <label><span>{t("agent.thinking")}</span><select value={draft.thinkingLevel} disabled={saving} onChange={(event) => update({ thinkingLevel: event.target.value as ThinkingLevel })}>{THINKING_LEVELS.map((level) => <option value={level} key={level}>{level}</option>)}</select></label>
       <fieldset><legend>{t("agent.compaction")}</legend>
         <label className="agent-check"><input type="checkbox" checked={draft.autoCompaction.enabled} onChange={(event) => update({ autoCompaction: { ...draft.autoCompaction, enabled: event.target.checked } })} /><span>{t("agent.compaction")}</span></label>
         <label><span>{t("agent.compaction.inherit")}</span><select value={draft.autoCompaction.thresholdPercent ?? "inherit"} disabled={!draft.autoCompaction.enabled} onChange={(event) => update({ autoCompaction: { ...draft.autoCompaction, thresholdPercent: event.target.value === "inherit" ? null : Number(event.target.value) } })}><option value="inherit">{t("agent.compaction.inherit")}</option>{[50, 60, 70, 80, 90].map((value) => <option value={value} key={value}>{value}%</option>)}</select></label>

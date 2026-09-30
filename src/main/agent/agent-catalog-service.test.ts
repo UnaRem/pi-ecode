@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { SetAllProjectAgentPreferencesRequest } from "../../shared/agent-contracts.js";
 import { AgentCatalogService } from "./agent-catalog-service.js";
 
 const temporaryDirectories: string[] = [];
@@ -73,6 +74,22 @@ describe("AgentCatalogService", () => {
     await expect(test.service.setAllPreferences({ model: { mode: "fixed", provider: "", modelId: "bad" }, thinkingLevel: "high" }))
       .rejects.toThrow("模型配置无效");
     expect(test.service.current).toEqual(result);
+  });
+
+  it.each([
+    { model: { mode: "inherit" }, thinkingLevel: "high" },
+    { model: { mode: "fixed", provider: "provider", modelId: "model" }, thinkingLevel: "max" },
+  ] satisfies SetAllProjectAgentPreferencesRequest[])("批量设置真实保存并重载：%j", async (request) => {
+    const test = await service(2_000);
+    await test.service.open("C:/work/demo");
+    const saved = await test.service.setAllPreferences(request);
+
+    const restored = await new AgentCatalogService(test.root).open("C:/work/demo");
+    expect(restored).toEqual(saved);
+    for (const agent of restored.agents) {
+      expect(agent.model).toEqual(request.model);
+      expect(agent.thinkingLevel).toBe(request.thinkingLevel);
+    }
   });
 
   it("keeps the in-memory catalog unchanged when bulk persistence fails", async () => {
