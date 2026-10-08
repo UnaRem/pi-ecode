@@ -779,12 +779,36 @@ export class AgentService {
     await this.candidate.rendererReady();
   }
 
+  private sessionGuard(session: AgentSession): () => boolean {
+    const projectPath = this.projectPath;
+    const sessionId = session.sessionId;
+    const cwd = session.sessionManager?.getCwd?.();
+    // SDK 可以在同一 session 对象上切换会话，不能仅比较对象引用。
+    return () => this.runtime?.session === session && this.projectPath === projectPath
+      && session.sessionId === sessionId && session.sessionManager?.getCwd?.() === cwd;
+  }
+
+  private async refreshInBackground(isCurrent: () => boolean, label: string, refresh: () => Promise<void>): Promise<void> {
+    if (!isCurrent()) return;
+    try {
+      await refresh();
+    } catch (error) {
+      if (isCurrent()) this.emit({ type: "notice", message: `${label}失败，可稍后重试：${errorText(error)}` });
+    }
+  }
+
   private async refreshReview(session: AgentSession): Promise<void> {
-    this.emit({ type: "review", review: await this.history.getReview(session) });
+    const isCurrent = this.sessionGuard(session);
+    if (!isCurrent()) return;
+    const review = await this.history.getReview(session);
+    if (isCurrent()) this.emit({ type: "review", review });
   }
 
   private async emitHistory(session: AgentSession, result?: import("../../shared/contracts.js").HistoryOperationResult): Promise<void> {
+    const isCurrent = this.sessionGuard(session);
+    if (!isCurrent()) return;
     const history = await this.history.getState(session);
+    if (!isCurrent()) return;
     this.emit({
       type: "history",
       history,
@@ -902,10 +926,11 @@ export class AgentService {
           error: failure?.message ?? null, canContinue: failure?.canContinue ?? false,
         } });
         this.emitContext(session);
-        void this.refreshSessions();
+        const isCurrent = this.sessionGuard(session);
+        void this.refreshInBackground(isCurrent, "会话列表刷新", () => this.refreshSessions(session));
         queueMicrotask(() => {
-          void this.emitHistory(session);
-          void this.refreshReview(session);
+          void this.refreshInBackground(isCurrent, "历史状态刷新", () => this.emitHistory(session));
+          void this.refreshInBackground(isCurrent, "变更评审刷新", () => this.refreshReview(session));
         });
         break;
       }
@@ -1057,7 +1082,7 @@ export class AgentService {
         break;
       case "session_info_changed":
         this.emit({ type: "state", patch: { sessionTitle: event.name ?? null } });
-        void this.refreshSessions();
+        void this.refreshInBackground(this.sessionGuard(session), "会话列表刷新", () => this.refreshSessions(session));
         break;
     }
   }
@@ -1104,8 +1129,12 @@ export class AgentService {
     });
   }
 
-  private async refreshSessions(): Promise<void> {
-    this.emit({ type: "sessions", sessions: await listSessionSummaries(this.projectPath) });
+  private async refreshSessions(session = this.runtime?.session): Promise<void> {
+    const projectPath = this.projectPath;
+    const isCurrent = session ? this.sessionGuard(session) : () => this.projectPath === projectPath;
+    if (!isCurrent()) return;
+    const sessions = await listSessionSummaries(projectPath);
+    if (isCurrent()) this.emit({ type: "sessions", sessions });
   }
 
   respondExtensionUi(response: ExtensionUiResponse): boolean {

@@ -234,6 +234,120 @@ describe("AgentService codegraph 索引同步", () => {
   });
 });
 
+describe("AgentService settled 后台刷新", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function harness() {
+    const sessionManager = SessionManager.inMemory("C:/project");
+    const session = {
+      sessionId: "old-session", messages: [], isStreaming: false, isCompacting: false,
+      pendingMessageCount: 0, model: null, getContextUsage: () => undefined, sessionManager,
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    const history = {
+      getState: vi.fn(async () => EMPTY_AGENT_SNAPSHOT.history),
+      getReview: vi.fn(async () => EMPTY_AGENT_SNAPSHOT.review),
+    };
+    const internal = service as unknown as {
+      runtime: { session: AgentSession }; projectPath: string;
+      handleSessionEvent: (activeSession: AgentSession, event: AgentSessionEvent) => void;
+    };
+    Object.assign(service, { runtime: { session }, projectPath: "C:/project", history });
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    return { service, session, internal, history, events };
+  }
+
+  it("catches settled history and review rejections and publishes recoverable notices", async () => {
+    const { session, internal, history, events } = harness();
+    history.getState.mockRejectedValue(new Error("HEAD state missing"));
+    history.getReview.mockRejectedValue(new Error("HEAD review missing"));
+
+    internal.handleSessionEvent(session, { type: "agent_settled" } as AgentSessionEvent);
+
+    await vi.waitFor(() => expect(events.filter((event) => event.type === "notice")).toEqual([
+      { type: "notice", message: "历史状态刷新失败，可稍后重试：HEAD state missing" },
+      { type: "notice", message: "变更评审刷新失败，可稍后重试：HEAD review missing" },
+    ]));
+    expect(events.filter((event) => event.type === "history" || event.type === "review")).toEqual([]);
+  });
+
+  it.each(["runtime", "sessionId", "cwd"])("skips queued reads after %s changes", async (change) => {
+    const { session, internal, history, events } = harness();
+    internal.handleSessionEvent(session, { type: "agent_settled" } as AgentSessionEvent);
+    if (change === "runtime") internal.runtime = { session: {} as AgentSession };
+    if (change === "sessionId") Object.defineProperty(session, "sessionId", { value: "new-session" });
+    if (change === "cwd") vi.spyOn(session.sessionManager, "getCwd").mockReturnValue("C:/other");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(history.getState).not.toHaveBeenCalled();
+    expect(history.getReview).not.toHaveBeenCalled();
+    expect(events.filter((event) => ["sessions", "history", "review", "notice"].includes(event.type))).toEqual([]);
+  });
+
+  it.each([
+    { change: "runtime", reject: false }, { change: "runtime", reject: true },
+    { change: "sessionId", reject: false }, { change: "sessionId", reject: true },
+    { change: "cwd", reject: false }, { change: "cwd", reject: true },
+  ])("discards in-flight results or errors after $change changes (reject=$reject)", async ({ change, reject }) => {
+    const { session, internal, history, events } = harness();
+    let finishState!: () => void;
+    let finishReview!: () => void;
+    history.getState.mockImplementation(() => new Promise((resolve, fail) => {
+      finishState = () => reject ? fail(new Error("old HEAD state")) : resolve(EMPTY_AGENT_SNAPSHOT.history);
+    }));
+    history.getReview.mockImplementation(() => new Promise((resolve, fail) => {
+      finishReview = () => reject ? fail(new Error("old HEAD review")) : resolve(EMPTY_AGENT_SNAPSHOT.review);
+    }));
+    internal.handleSessionEvent(session, { type: "agent_settled" } as AgentSessionEvent);
+    await Promise.resolve();
+    expect(history.getState).toHaveBeenCalledTimes(1);
+    expect(history.getReview).toHaveBeenCalledTimes(1);
+    if (change === "runtime") {
+      internal.runtime = { session: {} as AgentSession };
+      internal.projectPath = "C:/other";
+    }
+    if (change === "sessionId") Object.defineProperty(session, "sessionId", { value: "new-session" });
+    if (change === "cwd") vi.spyOn(session.sessionManager, "getCwd").mockReturnValue("C:/other");
+    const beforeCompletion = [...events];
+    finishState();
+    finishReview();
+    // 等待读取及后台 catch 全部完成，Vitest 同时会报告未处理的拒绝。
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(events).toEqual(beforeCompletion);
+  });
+
+  it("keeps switched-session conversation available when history returns unavailable states", async () => {
+    const { service, internal, history } = harness();
+    const sessionManager = SessionManager.inMemory("C:/other");
+    sessionManager.appendMessage({ role: "user", content: "new conversation", timestamp: 1 });
+    const session = {
+      sessionId: "new-session", sessionManager, model: null,
+      messages: sessionManager.buildSessionContext().messages,
+      modelRuntime: { getAvailable: async () => [] },
+      resourceLoader: { getAgentsFiles: () => ({ agentsFiles: [] }) },
+      getContextUsage: () => undefined, getAvailableThinkingLevels: () => ["off"],
+      thinkingLevel: "off", isStreaming: false, isCompacting: false, pendingMessageCount: 0,
+    } as unknown as AgentSession;
+    Object.assign(internal, { runtime: { session, diagnostics: [] }, projectPath: "C:/other" });
+    const unavailableHistory = { ...EMPTY_AGENT_SNAPSHOT.history, message: "HEAD missing" };
+    const unavailableReview = { ...EMPTY_AGENT_SNAPSHOT.review, message: "HEAD missing" };
+    history.getState.mockResolvedValue(unavailableHistory);
+    history.getReview.mockResolvedValue(unavailableReview);
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.sessionId).toBe("new-session");
+    expect(snapshot.timeline).toContainEqual(expect.objectContaining({
+      kind: "message", message: expect.objectContaining({ text: "new conversation" }),
+    }));
+    expect(snapshot.history).toEqual(unavailableHistory);
+    expect(snapshot.review).toEqual(unavailableReview);
+    expect(snapshot.error).toBeNull();
+  });
+});
+
 describe("AgentService prompt lifecycle", () => {
   afterEach(() => {
     sessionSummaryState.sessions = [];

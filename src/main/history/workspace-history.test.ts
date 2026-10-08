@@ -4,12 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHistory } from "./workspace-history.js";
 
 const temporaryPaths: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(temporaryPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
@@ -151,6 +152,171 @@ async function writeNegatedCodegraphFixture(workspace: string): Promise<void> {
 }
 
 describe("WorkspaceHistory", () => {
+  it.each([false, true])("首次快照允许合法空工作区（仅含被忽略 AGENTS：%s）", async (ignoredAgents) => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-empty-workspace-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-empty-history-"));
+    temporaryPaths.push(workspace, storage);
+    const history = new WorkspaceHistory(storage);
+    const captured: CapturedCheckpoint[] = [];
+    const session = fakeSession(workspace, [], captured);
+    if (ignoredAgents) {
+      await history.captureSourceRevision(session);
+      const { gitDir } = await shadowRepository(storage, workspace);
+      const excludePath = join(gitDir, "info", "exclude");
+      await writeFile(excludePath, `${await readFile(excludePath, "utf8")}AGENTS.md\n`, "utf8");
+      await writeFile(join(workspace, "AGENTS.md"), "local instructions\n", "utf8");
+    }
+
+    await history.checkpoint(session, "empty baseline");
+    const { args } = await shadowRepository(storage, workspace);
+    expect(captured).toHaveLength(1);
+    expect((await git(workspace, [...args, "rev-parse", "HEAD"])).trim()).toBe(captured[0]!.commit);
+    expect((await git(workspace, [...args, "ls-tree", "-r", "--name-only", "HEAD"])).trim()).toBe("");
+    if (ignoredAgents) expect(await readFile(join(workspace, "AGENTS.md"), "utf8")).toBe("local instructions\n");
+  });
+
+  it("读取尚未建立历史的新会话不创建仓库", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-new-workspace-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-new-history-"));
+    temporaryPaths.push(workspace, storage);
+    const history = new WorkspaceHistory(storage);
+    const session = fakeSession(workspace, [], []);
+    expect(await history.getState(session)).toMatchObject({ available: true, canUndo: false, canRedo: false });
+    expect(await history.getReview(session)).toMatchObject({ available: false, baseCommit: null });
+    expect(await readdir(storage)).toEqual([]);
+  });
+
+  it.each(["repo", "unborn", "head", "before", "after", "redo", "redo-only"])("已有历史缺失时禁用评审与恢复且不产生副作用：%s", async (missing) => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-missing-workspace-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-missing-history-"));
+    temporaryPaths.push(workspace, storage);
+    const history = new WorkspaceHistory(storage);
+    const captured: CapturedCheckpoint[] = [];
+    await writeFile(join(workspace, "app.txt"), "preserve workspace\n", "utf8");
+    await history.checkpoint(fakeSession(workspace, [], captured), "baseline");
+    const commit = captured[0]!.commit;
+    const absent = "0".repeat(40);
+    const { gitDir, args } = await shadowRepository(storage, workspace);
+    const sessionRoot = join(gitDir, "..", "..");
+    const turn = {
+      type: "custom", id: "turn", parentId: null, timestamp: new Date().toISOString(),
+      customType: "pi-ecode.workspace-turn",
+      data: { version: 1, beforeCommit: missing === "before" ? absent : commit,
+        afterCommit: missing === "after" ? absent : commit, userEntryId: "user", prompt: "task", createdAt: "now" },
+    } satisfies SessionEntry;
+    const entries: SessionEntry[] = missing === "redo-only" ? [] : [turn];
+    const session = fakeSession(workspace, entries, []);
+    let navigations = 0;
+    session.navigateTree = async () => { navigations += 1; return { cancelled: false }; };
+    const redoPath = join(sessionRoot, "redo.json");
+    const redoContents = JSON.stringify({ targetEntryId: "target", commit: missing === "redo" || missing === "redo-only" ? absent : commit, createdAt: "now" });
+    await writeFile(redoPath, redoContents, "utf8");
+    if (missing === "repo") await rm(join(gitDir, ".."), { recursive: true, force: true });
+    if (missing === "unborn") await git(workspace, [...args, "update-ref", "-d", "refs/heads/main"]);
+    if (missing === "head") await rm(join(gitDir, "HEAD"));
+    const storedPaths = await readdir(storage, { recursive: true });
+    const headContents = await readFile(join(gitDir, "HEAD"), "utf8").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+
+    const review = await history.getReview(session);
+    expect(review).toMatchObject({ available: false, files: [], baseCommit: null, headCommit: null });
+    expect(review.message).toContain("required commits are missing");
+    expect(await history.getState(session)).toMatchObject({ available: false, canUndo: false, canRedo: false, message: review.message });
+    await expect(history.undo(session)).rejects.toThrow("Workspace history is unavailable");
+    await expect(history.redo(session)).rejects.toThrow("Workspace history is unavailable");
+    expect(navigations).toBe(0);
+    expect(await readFile(join(workspace, "app.txt"), "utf8")).toBe("preserve workspace\n");
+    expect(await readFile(redoPath, "utf8")).toBe(redoContents);
+    expect(await readdir(storage, { recursive: true })).toEqual(storedPaths);
+    if (headContents !== null) expect(await readFile(join(gitDir, "HEAD"), "utf8")).toBe(headContents);
+    expect(entries).toEqual(missing === "redo-only" ? [] : [turn]);
+  });
+
+  it.each(["review", "state"])("读取期间同一会话对象切换到缺仓库目标仍使用原上下文：%s", async (operation) => {
+    const workspaceA = await mkdtemp(join(tmpdir(), "pi-ecode-read-a-"));
+    const workspaceB = await mkdtemp(join(tmpdir(), "pi-ecode-read-b-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-read-history-"));
+    temporaryPaths.push(workspaceA, workspaceB, storage);
+    const history = new WorkspaceHistory(storage);
+    const { session, beforeCommit, afterCommit } = await seedLegacyTurn(history, storage, workspaceA, "task A");
+    const rootsA = await readdir(storage);
+    const { gitDir } = await shadowRepository(storage, workspaceA);
+    const entriesB: SessionEntry[] = [];
+    const capturedB: CapturedCheckpoint[] = [];
+    const sessionB = fakeSession(workspaceB, entriesB, capturedB);
+    Object.assign(sessionB, { sessionId: "session-b" });
+    await writeFile(join(workspaceB, "app.txt"), "preserve B\n", "utf8");
+    await history.checkpoint(sessionB, "baseline B");
+    const turnB = structuredClone(session.sessionManager.getBranch()[0]!);
+    if (turnB.type !== "custom") throw new Error("Expected turn fixture");
+    turnB.data = { version: 1, beforeCommit: capturedB[0]!.commit, afterCommit: capturedB[0]!.commit, userEntryId: "B-user" };
+    entriesB.push(turnB);
+    const recordsB = structuredClone(entriesB);
+    const rootB = (await readdir(storage)).find((root) => !rootsA.includes(root))!;
+    const storageB = join(storage, rootB, "session-b");
+    await rm(join(storageB, "repo"), { recursive: true, force: true });
+    const redoB = JSON.stringify({ targetEntryId: "B", commit: capturedB[0]!.commit, createdAt: "now" });
+    await writeFile(join(storageB, "redo.json"), redoB, "utf8");
+    const storedPaths = await readdir(storage, { recursive: true });
+    const excludeA = await readFile(join(gitDir, "info", "exclude"), "utf8");
+    const recordsA = session.sessionManager.getBranch();
+    const entriesA = structuredClone(recordsA);
+    const seam = history as unknown as { readRedo: (cwd: string, sessionId: string) => Promise<unknown> };
+    const readRedo = seam.readRedo.bind(history);
+    let resume = (): void => undefined;
+    const gate = new Promise<void>((resolve) => { resume = resolve; });
+    // 仅暂停读取边界，恢复后仍执行真实 redo 读取、Git 校验及评审 diff。
+    const reads = vi.spyOn(seam, "readRedo").mockImplementationOnce(async (cwd, sessionId) => {
+      await gate;
+      return readRedo(cwd, sessionId);
+    });
+    const pending = operation === "review" ? history.getReview(session) : history.getState(session);
+    expect(reads).toHaveBeenCalledWith(workspaceA, "test-session");
+    Object.assign(session, { sessionId: sessionB.sessionId, sessionManager: sessionB.sessionManager });
+    resume();
+    const result = await pending;
+
+    if (operation === "review") {
+      expect(result).toMatchObject({ available: true, baseCommit: beforeCommit, headCommit: afterCommit });
+    } else {
+      expect(result).toMatchObject({ available: true, canUndo: true, canRedo: false });
+    }
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(await readdir(storage, { recursive: true })).toEqual(storedPaths);
+    expect(await readFile(join(storageB, "redo.json"), "utf8")).toBe(redoB);
+    expect(await readFile(join(workspaceB, "app.txt"), "utf8")).toBe("preserve B\n");
+    expect(await readFile(join(gitDir, "info", "exclude"), "utf8")).toBe(excludeA);
+    expect(entriesB).toEqual(recordsB);
+    expect(recordsA).toEqual(entriesA);
+  });
+
+  it("只检查当前 undo 目标，不审计长会话中的旧提交", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-bounded-check-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-bounded-history-"));
+    temporaryPaths.push(workspace, storage);
+    const history = new WorkspaceHistory(storage);
+    const { session } = await seedLegacyTurn(history, storage, workspace, "latest task");
+    const entries = session.sessionManager.getBranch();
+    const current = entries[0]!;
+    const obsolete = structuredClone(current);
+    if (obsolete.type !== "custom") throw new Error("Expected turn fixture");
+    obsolete.data = { version: 1, beforeCommit: "1".repeat(40), afterCommit: "2".repeat(40), userEntryId: "old-user" };
+    entries.unshift(...Array.from({ length: 100 }, (_, index) => ({ ...obsolete, id: `old-${index}` })));
+    const seam = history as unknown as { hasCommit: (cwd: string, sessionId: string, commit: string) => Promise<boolean> };
+    const checks = vi.spyOn(seam, "hasCommit");
+
+    expect(await history.getState(session)).toMatchObject({ available: true, canUndo: true });
+    expect(checks.mock.calls.length).toBeLessThanOrEqual(4);
+    checks.mockClear();
+    expect(await history.getReview(session)).toMatchObject({ available: true });
+    expect(checks.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(checks.mock.calls.map((call) => call[2])).not.toContain("1".repeat(40));
+    entries.pop();
+    expect(await history.getState(session)).toMatchObject({ available: false, canUndo: false, canRedo: false });
+  });
+
   it("coalesces repeated checkpoint requests for the same session", async () => {
     const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-coalesced-workspace-"));
     const storage = await mkdtemp(join(tmpdir(), "pi-ecode-coalesced-history-"));

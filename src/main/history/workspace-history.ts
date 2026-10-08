@@ -61,6 +61,12 @@ interface RedoRecord {
   createdAt: string;
 }
 
+interface HistoryReadContext {
+  cwd: string;
+  sessionId: string;
+  record: TurnRecord | undefined;
+}
+
 interface PendingTurn {
   beforeCommit: string;
   prompt: string;
@@ -168,7 +174,11 @@ export class WorkspaceHistory {
   }
 
   async getReview(session: AgentSession): Promise<ChangeReview> {
-    const record = this.findUndoRecord(session);
+    const context = this.captureHistoryContext(session);
+    const { cwd, sessionId, record } = context;
+    const redo = await this.readRedo(cwd, sessionId);
+    const problem = await this.historyProblem(context, redo);
+    if (problem) return { available: false, baseCommit: null, headCommit: null, files: [], patch: "", truncated: false, message: problem };
     if (!record) {
       return {
         available: false,
@@ -180,24 +190,23 @@ export class WorkspaceHistory {
         message: "No completed agent turn is available for review.",
       };
     }
-    await this.ensureRepo(session.sessionManager.getCwd(), session.sessionId);
     const headCommit = (await this.execGit(
-      session.sessionManager.getCwd(),
-      session.sessionId,
+      cwd,
+      sessionId,
       ["rev-parse", "HEAD"],
     )).trim();
     const [nameStatus, numStat, rawPatch] = await Promise.all([
       // 评审列表是 reject 唯一可写的目标，所以这里同样排除索引目录：
       // 升级前的影子历史可能已经带着 .codegraph/ 条目。
-      this.execGit(session.sessionManager.getCwd(), session.sessionId, [
+      this.execGit(cwd, sessionId, [
         "diff", "--name-status", "--find-renames", record.beforeCommit, headCommit,
         "--", ".", CODEGRAPH_INDEX_EXCLUSION,
       ]),
-      this.execGit(session.sessionManager.getCwd(), session.sessionId, [
+      this.execGit(cwd, sessionId, [
         "diff", "--numstat", "--find-renames", record.beforeCommit, headCommit,
         "--", ".", CODEGRAPH_INDEX_EXCLUSION,
       ]),
-      this.execGit(session.sessionManager.getCwd(), session.sessionId, [
+      this.execGit(cwd, sessionId, [
         "diff", "--no-ext-diff", "--unified=3", "--find-renames", record.beforeCommit, headCommit,
         "--", ".", CODEGRAPH_INDEX_EXCLUSION,
       ]),
@@ -274,8 +283,11 @@ export class WorkspaceHistory {
     if (!session) {
       return { available: false, canUndo: false, canRedo: false, isBusy: this.busy, message: this.statusMessage };
     }
-    const canUndo = this.findUndoRecord(session) !== undefined;
-    const redo = await this.readRedo(session.sessionManager.getCwd(), session.sessionId);
+    const context = this.captureHistoryContext(session);
+    const canUndo = context.record !== undefined;
+    const redo = await this.readRedo(context.cwd, context.sessionId);
+    const problem = await this.historyProblem(context, redo);
+    if (problem) return { available: false, canUndo: false, canRedo: false, isBusy: this.busy, message: problem };
     return { available: true, canUndo, canRedo: redo !== undefined, isBusy: this.busy, message: this.statusMessage };
   }
 
@@ -318,6 +330,7 @@ export class WorkspaceHistory {
   async undo(session: AgentSession): Promise<HistoryOperationResult> {
     return this.runExclusive(async () => {
       await session.waitForIdle();
+      await this.assertHistoryAvailable(session);
       const record = this.findUndoRecord(session);
       if (!record) throw new Error("Nothing to undo in this conversation.");
       const cwd = session.sessionManager.getCwd();
@@ -354,6 +367,7 @@ export class WorkspaceHistory {
   async redo(session: AgentSession): Promise<HistoryOperationResult> {
     return this.runExclusive(async () => {
       await session.waitForIdle();
+      await this.assertHistoryAvailable(session);
       const redo = await this.readRedo(session.sessionManager.getCwd(), session.sessionId);
       if (!redo) throw new Error("Nothing to redo.");
       await this.assertClean(session.sessionManager.getCwd(), session.sessionId);
@@ -428,6 +442,55 @@ export class WorkspaceHistory {
     return undefined;
   }
 
+  private captureHistoryContext(session: AgentSession): HistoryReadContext {
+    const record = this.findUndoRecord(session);
+    // SDK 会原地替换活动会话；在首次 await 前冻结身份及当前恢复记录。
+    return { cwd: session.sessionManager.getCwd(), sessionId: session.sessionId, record: record ? { ...record } : undefined };
+  }
+
+  private async historyProblem(context: HistoryReadContext, redo: RedoRecord | undefined): Promise<string | null> {
+    const { cwd, sessionId, record } = context;
+    if (!record && !redo) return null;
+    const unavailable = "Workspace history is unavailable: its repository or required commits are missing. Restore the original history storage before undo or redo.";
+    // 读取已有历史时绝不初始化仓库，否则会把丢失的历史误当成新会话。
+    try {
+      await readFile(join(this.gitDir(cwd, sessionId), "HEAD"), "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return unavailable;
+      throw error;
+    }
+    const commits = new Set(["HEAD"]);
+    // 只校验本轮可恢复目标；撤销到下一轮后再检查该轮，避免逐次扫描全部历史提交。
+    if (record) {
+      commits.add(record.beforeCommit);
+      commits.add(record.afterCommit);
+    }
+    if (redo) commits.add(redo.commit);
+    for (const commit of commits) {
+      if (!await this.hasCommit(cwd, sessionId, commit)) return unavailable;
+    }
+    return null;
+  }
+
+  private async assertHistoryAvailable(session: AgentSession): Promise<void> {
+    const context = this.captureHistoryContext(session);
+    const redo = await this.readRedo(context.cwd, context.sessionId);
+    const problem = await this.historyProblem(context, redo);
+    if (problem) throw new Error(problem);
+  }
+
+  private async hasCommit(cwd: string, sessionId: string, commit: string): Promise<boolean> {
+    try {
+      await this.execGit(cwd, sessionId, ["rev-parse", "--verify", "--quiet", `${commit}^{commit}`]);
+      return true;
+    } catch (error) {
+      const failure = error as { code?: number; stderr?: string };
+      // --quiet 对不存在的引用返回 1；权限、仓库损坏及其他 Git 错误仍向调用者报告。
+      if (failure.code === 1 && !failure.stderr?.trim()) return false;
+      throw error;
+    }
+  }
+
   private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
     if (this.busy) throw new Error("Workspace history is already working.");
     this.busy = true;
@@ -457,7 +520,8 @@ export class WorkspaceHistory {
     await mkdir(root, { recursive: true });
     try {
       await readFile(join(gitDir, "HEAD"), "utf8");
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       await this.execGitRaw(["init", "--initial-branch=main", root], cwd);
       await this.execGit(cwd, sessionId, ["config", "user.name", "pi ecode"]);
       await this.execGit(cwd, sessionId, ["config", "user.email", "workspace-history@local"]);
@@ -515,10 +579,10 @@ export class WorkspaceHistory {
   private async snapshot(cwd: string, sessionId: string, label: string): Promise<string> {
     await this.ensureRepo(cwd, sessionId);
     await this.stageWorkspaceWithoutCodegraph(cwd, sessionId);
-    const hasHead = await this.gitSucceeds(cwd, sessionId, ["rev-parse", "--verify", "HEAD"]);
+    const hasHead = await this.hasCommit(cwd, sessionId, "HEAD");
     const changed = !hasHead || !(await this.gitSucceeds(cwd, sessionId, ["diff", "--cached", "--quiet"]));
     if (changed) {
-      await this.execGit(cwd, sessionId, ["commit", "--no-gpg-sign", "-m", label]);
+      await this.execGit(cwd, sessionId, ["commit", "--allow-empty", "--no-gpg-sign", "-m", label]);
     }
     return (await this.execGit(cwd, sessionId, ["rev-parse", "HEAD"])).trim();
   }
@@ -586,8 +650,10 @@ export class WorkspaceHistory {
     try {
       await this.execGit(cwd, sessionId, args);
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      const failure = error as { code?: number; stderr?: string };
+      if (failure.code === 1 && !failure.stderr?.trim()) return false;
+      throw error;
     }
   }
 
@@ -602,8 +668,9 @@ export class WorkspaceHistory {
       const record = parsed as Partial<RedoRecord>;
       if (!record.targetEntryId || !record.commit || !record.createdAt) return undefined;
       return record as RedoRecord;
-    } catch {
-      return undefined;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof SyntaxError) return undefined;
+      throw error;
     }
   }
 
