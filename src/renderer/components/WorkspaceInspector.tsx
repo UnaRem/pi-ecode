@@ -20,6 +20,7 @@ interface WorkspaceInspectorProps {
   explorers?: ExplorerTask[];
   agentCatalog?: ProjectAgentCatalog | null;
   models?: ModelOption[];
+  selectedModel?: string | null;
   selectedExplorerId?: string | null;
   onSelectExplorer?: (taskId: string) => void;
   onStopExplorer?: (taskId: string) => void;
@@ -192,6 +193,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     key={props.agentCatalog.projectPath}
     catalog={props.agentCatalog}
     models={props.models ?? []}
+    inheritedModel={props.selectedModel ?? null}
     onBack={() => setManagingAgents(false)}
     onSave={props.onSaveProjectAgent ?? (async () => undefined)}
     onSetAllPreferences={props.onSetAllProjectAgentPreferences ?? (async () => undefined)}

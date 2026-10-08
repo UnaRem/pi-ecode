@@ -230,6 +230,7 @@ export default function App() {
         explorers={state.explorers}
         agentCatalog={state.agentCatalog}
         models={state.models}
+        selectedModel={state.selectedModel}
         selectedExplorerId={selectedExplorerId}
         onSelectExplorer={selectExplorer}
         onStopExplorer={(taskId) => void actions.stopExplorer(taskId)}

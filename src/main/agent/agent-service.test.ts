@@ -8,6 +8,7 @@ vi.mock("./session-summaries.js", () => ({
 }));
 
 import { AgentService } from "./agent-service.js";
+import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 
 interface PromptOptions {
   preflightResult?: (accepted: boolean) => void;
@@ -290,6 +291,53 @@ describe("AgentService prompt lifecycle", () => {
 
     branch = [{ type: "message" }];
     expect(contextState(session).canCompact).toBe(true);
+  });
+
+  it("includes SDK-supported thinking levels for every snapshot model", async () => {
+    const availableModels = [
+      { id: "standard", reasoning: true },
+      { id: "excluded", reasoning: true, thinkingLevelMap: { low: null } },
+      { id: "extended", reasoning: true, thinkingLevelMap: { xhigh: "extra", max: "maximum" } },
+      { id: "plain", reasoning: false, thinkingLevelMap: { xhigh: "extra", max: "maximum" } },
+    ].map((model) => ({ ...model, provider: "provider", name: model.id, input: ["text"] }));
+    const session = {
+      sessionId: "session-models",
+      model: null,
+      modelRuntime: { getAvailable: async () => availableModels },
+      messages: [],
+      sessionManager: SessionManager.inMemory("C:/project"),
+      getContextUsage: () => undefined,
+      resourceLoader: { getAgentsFiles: () => ({ agentsFiles: [] }) },
+      thinkingLevel: "off",
+      getAvailableThinkingLevels: () => ["off"],
+      isStreaming: false,
+      isCompacting: false,
+      pendingMessageCount: 0,
+    } as unknown as AgentSession;
+    const service = new AgentService();
+    // 沿用现有运行时注入方式，仅隔离与模型能力无关的工作区历史读取。
+    Object.assign(service, {
+      projectPath: "C:/project",
+      runtime: { session, diagnostics: [] },
+      history: {
+        getState: async () => EMPTY_AGENT_SNAPSHOT.history,
+        getReview: async () => EMPTY_AGENT_SNAPSHOT.review,
+      },
+    });
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.models).toEqual([
+      { id: "standard", provider: "provider", name: "standard", reasoning: true,
+        thinkingLevels: ["off", "minimal", "low", "medium", "high"], supportsImages: false },
+      { id: "excluded", provider: "provider", name: "excluded", reasoning: true,
+        thinkingLevels: ["off", "minimal", "medium", "high"], supportsImages: false },
+      { id: "extended", provider: "provider", name: "extended", reasoning: true,
+        thinkingLevels: ["off", "minimal", "low", "medium", "high", "xhigh", "max"], supportsImages: false },
+      { id: "plain", provider: "provider", name: "plain", reasoning: false,
+        thinkingLevels: ["off"], supportsImages: false },
+    ]);
+    expect(snapshot.thinkingLevels).toEqual(["off"]);
   });
 
   it("persists model selections and reapplies the 200K context budget", async () => {

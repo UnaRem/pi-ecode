@@ -73,6 +73,7 @@ export interface ModelOption {
   provider: string;
   name: string;
   reasoning: boolean;
+  thinkingLevels: ThinkingLevel[];
   supportsImages: boolean;
 }
 

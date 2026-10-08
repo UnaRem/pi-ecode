@@ -1,5 +1,6 @@
 import { basename, dirname, join, resolve } from "node:path";
 import { stat } from "node:fs/promises";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
   type AgentSession,
   type AgentSessionEvent,
@@ -433,6 +434,7 @@ export class AgentService {
         provider: item.provider,
         name: item.name,
         reasoning: item.reasoning,
+        thinkingLevels: getSupportedThinkingLevels(item),
         supportsImages: item.input.includes("image"),
       })),
       selectedModel: model ? `${model.provider}/${model.id}` : null,
