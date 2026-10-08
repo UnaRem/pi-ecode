@@ -3,15 +3,16 @@ import { useEffect, useState } from "react";
 import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
 import type { ModelOption, ThinkingLevel } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
+import { clampAgentThinkingLevel, resolveAgentThinkingLevels } from "../lib/agent-thinking-levels";
 import { AgentBulkPreferences } from "./AgentBulkPreferences";
 
 const ROLES: AgentRole[] = ["explorer", "validator", "reviewer", "editor"];
-const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 const TOOLS = ["read", "ffgrep", "fffind", "run_validation", "edit", "write"];
 
 export function AgentManager({
   catalog,
   models,
+  inheritedModel,
   onBack,
   onSave,
   onSetAllPreferences,
@@ -21,6 +22,7 @@ export function AgentManager({
 }: {
   catalog: ProjectAgentCatalog;
   models: ModelOption[];
+  inheritedModel: string | null;
   onBack: () => void;
   onSave: (agent: ProjectAgentDefinition) => Promise<void>;
   onSetAllPreferences: (request: SetAllProjectAgentPreferencesRequest) => Promise<void>;
@@ -44,10 +46,20 @@ export function AgentManager({
     setDraft((current) => current ? { ...current, ...patch } : current);
   };
   const modelValue = draft?.model.mode === "fixed" ? `${draft.model.provider}/${draft.model.modelId}` : "inherit";
+  const supportedThinking = resolveAgentThinkingLevels(modelValue, inheritedModel, models);
+  const effectiveThinking = clampAgentThinkingLevel(draft?.thinkingLevel ?? "", supportedThinking);
+  const changeModel = (nextModelValue: string): void => {
+    const separator = nextModelValue.indexOf("/");
+    const model: ProjectAgentDefinition["model"] = nextModelValue === "inherit"
+      ? { mode: "inherit" }
+      : { mode: "fixed", provider: nextModelValue.slice(0, separator), modelId: nextModelValue.slice(separator + 1) };
+    const nextThinking = clampAgentThinkingLevel(draft?.thinkingLevel ?? "", resolveAgentThinkingLevels(nextModelValue, inheritedModel, models));
+    update({ model, ...(nextThinking ? { thinkingLevel: nextThinking } : {}) });
+  };
   const save = async (): Promise<void> => {
-    if (!draft || saving) return;
+    if (!draft || saving || !effectiveThinking) return;
     setSaving(true);
-    try { await onSave(draft); } finally { setSaving(false); }
+    try { await onSave({ ...draft, thinkingLevel: effectiveThinking }); } finally { setSaving(false); }
   };
   const add = async (): Promise<void> => {
     if (saving) return;
@@ -67,7 +79,7 @@ export function AgentManager({
         {[1, 2, 3, 4, 5, 6, 7].map((value) => <option value={value} key={value}>{value}</option>)}
       </select>
     </label>
-    <AgentBulkPreferences agents={catalog.agents} models={models} saving={saving} setSaving={setSaving}
+    <AgentBulkPreferences agents={catalog.agents} models={models} inheritedModel={inheritedModel} saving={saving} setSaving={setSaving}
       setDraft={setDraft} onSetAllPreferences={onSetAllPreferences} />
     <div className="agent-definition-list">
       {catalog.agents.map((agent) => <button type="button" key={agent.id} disabled={saving} className={agent.id === selected?.id ? "selected" : ""} onClick={() => setSelectedId(agent.id)}>
@@ -79,14 +91,8 @@ export function AgentManager({
       <label><span>{t("agent.name")}</span><input value={draft.name} maxLength={80} onChange={(event) => update({ name: event.target.value })} /></label>
       <label><span>{t("agent.role")}</span><select value={draft.role} onChange={(event) => update({ role: event.target.value as AgentRole })}>{ROLES.map((role) => <option key={role} value={role}>{t(`agent.role.${role}`)}</option>)}</select></label>
       <label className="agent-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => update({ enabled: event.target.checked })} /><span>{t("agent.enabled")}</span></label>
-      <label><span>{t("agent.model")}</span><select value={modelValue} disabled={saving} onChange={(event) => {
-        if (event.target.value === "inherit") update({ model: { mode: "inherit" } });
-        else {
-          const separator = event.target.value.indexOf("/");
-          update({ model: { mode: "fixed", provider: event.target.value.slice(0, separator), modelId: event.target.value.slice(separator + 1) } });
-        }
-      }}><option value="inherit">{t("agent.model.inherit")}</option>{models.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name} · {model.provider}</option>)}</select></label>
-      <label><span>{t("agent.thinking")}</span><select value={draft.thinkingLevel} disabled={saving} onChange={(event) => update({ thinkingLevel: event.target.value as ThinkingLevel })}>{THINKING_LEVELS.map((level) => <option value={level} key={level}>{level}</option>)}</select></label>
+      <label><span>{t("agent.model")}</span><select value={modelValue} disabled={saving} onChange={(event) => changeModel(event.target.value)}><option value="inherit">{t("agent.model.inherit")}</option>{modelValue !== "inherit" && !models.some((model) => `${model.provider}/${model.id}` === modelValue) && <option value={modelValue}>{modelValue}</option>}{models.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name} · {model.provider}</option>)}</select></label>
+      <label><span>{t("agent.thinking")}</span><select value={effectiveThinking} disabled={saving || supportedThinking.length === 0} onChange={(event) => update({ thinkingLevel: event.target.value as ThinkingLevel })}>{!effectiveThinking && <option value="" disabled />}{supportedThinking.map((level) => <option value={level} key={level}>{level}</option>)}</select></label>
       <fieldset><legend>{t("agent.compaction")}</legend>
         <label className="agent-check"><input type="checkbox" checked={draft.autoCompaction.enabled} onChange={(event) => update({ autoCompaction: { ...draft.autoCompaction, enabled: event.target.checked } })} /><span>{t("agent.compaction")}</span></label>
         <label><span>{t("agent.compaction.inherit")}</span><select value={draft.autoCompaction.thresholdPercent ?? "inherit"} disabled={!draft.autoCompaction.enabled} onChange={(event) => update({ autoCompaction: { ...draft.autoCompaction, thresholdPercent: event.target.value === "inherit" ? null : Number(event.target.value) } })}><option value="inherit">{t("agent.compaction.inherit")}</option>{[50, 60, 70, 80, 90].map((value) => <option value={value} key={value}>{value}%</option>)}</select></label>
@@ -95,7 +101,7 @@ export function AgentManager({
       <fieldset><legend>{t("agent.tools")}</legend><small>{t("agent.tools.help")}</small><div className="agent-tool-grid">{TOOLS.map((tool) => <label className="agent-check" key={tool}><input type="checkbox" checked={draft.disabledTools.includes(tool)} onChange={(event) => update({ disabledTools: event.target.checked ? [...draft.disabledTools, tool] : draft.disabledTools.filter((name) => name !== tool) })} /><code>{tool}</code></label>)}</div></fieldset>
       <div className="agent-editor-actions">
         {!draft.builtIn && <button type="button" className="danger" disabled={saving} onClick={() => void onRemove(draft.id)}><Trash2 size={12} />{t("agent.delete")}</button>}
-        <button type="submit" disabled={saving || !draft.name.trim() || !draft.prompt.trim()}><Save size={12} />{t("agent.save")}</button>
+        <button type="submit" disabled={saving || !effectiveThinking || !draft.name.trim() || !draft.prompt.trim()}><Save size={12} />{t("agent.save")}</button>
       </div>
     </form>}
   </section>;

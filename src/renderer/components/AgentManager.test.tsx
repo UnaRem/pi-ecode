@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProjectAgentCatalog, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
+import type { ThinkingLevel } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
 import { AgentManager } from "./AgentManager";
 
@@ -25,11 +26,12 @@ const catalog: ProjectAgentCatalog = {
   }],
 };
 
-function renderManager(currentCatalog: ProjectAgentCatalog, availableModels = true): string {
+function renderManager(currentCatalog: ProjectAgentCatalog, availableModels = true, thinkingLevels: ThinkingLevel[] = ["off", "low", "high", "max"], inheritedModel: string | null = "provider/model"): string {
   vi.stubGlobal("localStorage", { getItem: () => "zh-CN", setItem: vi.fn() });
   return renderToStaticMarkup(<I18nProvider><AgentManager
     catalog={currentCatalog}
-    models={availableModels ? [{ id: "model", provider: "provider", name: "模型", reasoning: true, supportsImages: false }] : []}
+    models={availableModels ? [{ id: "model", provider: "provider", name: "模型", reasoning: true, supportsImages: false, thinkingLevels }] : []}
+    inheritedModel={inheritedModel}
     onBack={vi.fn()} onSave={vi.fn()} onSetAllPreferences={vi.fn()}
     onCreate={vi.fn()} onRemove={vi.fn()} onSetConcurrency={vi.fn()}
   /></I18nProvider>);
@@ -91,10 +93,9 @@ describe("AgentManager", () => {
     const markup = bulkMarkup({ ...catalog, agents: [first, second] });
 
     expectSelected(markup, "");
-    expect(markup.match(/<option(?=[^>]*value="")(?=[^>]*selected="")[^>]*>/g)).toHaveLength(mixedField === "both" ? 2 : 1);
+    expect(markup.match(/<option(?=[^>]*value="")(?=[^>]*selected="")[^>]*>/g)).toHaveLength(mixedField === "thinking" ? 1 : 2);
     expect(markup).toContain("设置不一致，请选择");
     expect(markup).toMatch(/<button[^>]*disabled=""/);
-    if (mixedField === "model") expectSelected(markup, "low");
     if (mixedField === "thinking") expectSelected(markup, "inherit");
   });
 
@@ -103,8 +104,41 @@ describe("AgentManager", () => {
     const markup = bulkMarkup({ ...catalog, agents: [agent] }, false);
     expectSelected(markup, "retired/old/model");
     expect(markup).toContain(">retired/old/model</option>");
-    expectSelected(markup, "low");
-    expect(markup).not.toMatch(/<button[^>]*disabled=""/);
+    expectSelected(markup, "");
+    expect(markup).toMatch(/<button[^>]*disabled=""/);
+    const managerMarkup = renderManager({ ...catalog, agents: [agent] }, false);
+    expect(managerMarkup.match(/value="retired\/old\/model" selected=""/g)).toHaveLength(2);
+    expect(managerMarkup.match(/<select[^>]*disabled=""/g)).toHaveLength(2);
+    expect(managerMarkup).toMatch(/<button type="submit" disabled=""/);
+  });
+
+  it.each(["inherit", "fixed"])("按模型能力过滤两个思考选择框并约束失效等级：%s", (mode) => {
+    const agent = structuredClone(catalog.agents[0]!);
+    if (mode === "fixed") agent.model = { mode: "fixed", provider: "provider", modelId: "model" };
+    agent.thinkingLevel = "xhigh";
+    const markup = renderManager({ ...catalog, agents: [agent] });
+    expect(markup.match(/value="max" selected=""/g)).toHaveLength(2);
+    expect(markup).toContain('value="high"');
+    expect(markup).not.toContain('value="xhigh"');
+  });
+
+  it("仅支持 off 时两个控件均选择 off", () => {
+    const markup = renderManager(catalog, true, ["off"]);
+    expect(markup.match(/value="off" selected=""/g)).toHaveLength(2);
+    expect(markup).not.toContain('value="low"');
+  });
+
+  it.each([null, "missing/model"])("继承模型未知时禁用思考及保存应用：%s", (inheritedModel) => {
+    const markup = renderManager(catalog, true, ["off", "high"], inheritedModel);
+    expect(markup.match(/<select[^>]*disabled=""/g)).toHaveLength(2);
+    expect(markup).toMatch(/<button type="submit" disabled=""/);
+    expect(markup.split('class="agent-manager-all"')[1]!.split("</section>")[0]).toMatch(/<button[^>]*disabled=""/);
+  });
+
+  it("已知模型能力为空时同样禁用保存", () => {
+    const markup = renderManager(catalog, true, []);
+    expect(markup.match(/<select[^>]*disabled=""/g)).toHaveLength(2);
+    expect(markup).toMatch(/<button type="submit" disabled=""/);
   });
 
   it("没有代理时禁用批量应用", () => {
