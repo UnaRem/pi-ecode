@@ -31,6 +31,17 @@ export const EXPLORER_CHILD_GUIDANCE = `## PiECode 子代理
 - 所有用户可见自然语言都必须使用简体中文，包括工具调用前后的说明、进度更新和最终报告；代码、路径、命令、API 名称与报错原文可保留原文。
 - 最终给出自包含报告并引用相关路径和符号；受阻时明确写出缺少的依赖、已有证据和可降级方案。`;
 
+export const EDITOR_CHECK_GUIDANCE = `## 编辑者交付检查
+- 完成最后一次修改后，重新读取所有变更文件，检查实际落盘内容及任务范围。
+- 调用本会话提供的 run_validation 执行宿主固定检查，禁止任意 shell 命令。
+- 检查失败时定位原因，在授权范围内修正，复读最后修改并重新执行固定验证；超出范围或工具不可用时明确报告阻塞。
+- 最终如实报告实际执行的检查、结果、失败日志与未验证事项，不得把未执行或失败的检查说成通过。`;
+
+export function childGuidance(agent: Pick<ExplorerAgentSnapshot, "role" | "prompt"> | undefined): string[] {
+  return [EXPLORER_CHILD_GUIDANCE, ...(agent ? [agent.prompt] : []),
+    ...(agent?.role === "editor" ? [EDITOR_CHECK_GUIDANCE] : [])];
+}
+
 export interface ExplorerLocator {
   taskId: string;
   attempt: number;
@@ -156,6 +167,7 @@ export function normalizeTask(task: ExplorerTask): ExplorerTask {
   const levels: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
   return {
     ...task,
+    ...(["validator", "reviewer"].includes(task.agentRole ?? "") ? { agentRole: "explorer" as const } : {}),
     thinkingLevel: levels.includes(task.thinkingLevel) ? task.thinkingLevel : "low",
     attempt: Number.isInteger(task.attempt) && task.attempt > 0 ? task.attempt : 1,
     maxAttempts: Number.isInteger(task.maxAttempts) && task.maxAttempts > 0 ? task.maxAttempts : DEFAULT_WATCHDOG.maxAttempts,
@@ -176,6 +188,7 @@ export function restoredState(entries: readonly SessionEntry[]): ExplorerStateEn
       completions: Array.isArray(state.completions) ? state.completions.map((notice) => ({ ...notice })) : [],
       agentSnapshots: Array.isArray(state.agentSnapshots) ? state.agentSnapshots.map((snapshot) => ({
         ...snapshot,
+        role: snapshot.role === "editor" ? "editor" : "explorer",
         disabledTools: [...snapshot.disabledTools],
         autoCompactionEnabled: snapshot.autoCompactionEnabled ?? true,
         compactionThresholdPercent: snapshot.compactionThresholdPercent ?? null,
@@ -202,7 +215,10 @@ export function validationResultText(state: ValidationState): string {
   const steps = state.steps.filter((step) => step.status !== "skipped")
     .map((step) => `- ${step.label}: ${step.status}${step.exitCode === null ? "" : `（退出码 ${step.exitCode}）`}`)
     .join("\n");
-  return `验证状态：${state.status}\n${state.message ?? "固定验证已结束。"}${steps ? `\n${steps}` : ""}`;
+  const failures = state.steps.filter((step) => step.status === "failed")
+    .map((step) => `失败日志 ${step.label}：\n${step.output.slice(-4_000)}`)
+    .join("\n").slice(-12_000);
+  return `验证状态：${state.status}\n${state.message ?? "固定验证已结束。"}${steps ? `\n${steps}` : ""}${failures ? `\n${failures}` : ""}`;
 }
 
 export function compactFinalText(text: string): string {

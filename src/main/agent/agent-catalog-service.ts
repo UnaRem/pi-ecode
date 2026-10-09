@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ThinkingLevel } from "../../shared/contracts.js";
 import type {
@@ -12,22 +12,24 @@ import type {
 
 const MAX_AGENTS = 16;
 const THINKING_LEVELS = new Set<ThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-const ROLES = new Set<AgentRole>(["explorer", "validator", "reviewer", "editor"]);
+const ROLES = new Set<string>(["explorer", "editor"]);
+const LEGACY_ROLES = new Set<string>(["validator", "reviewer"]);
 
 const ROLE_PROMPTS: Record<AgentRole, string> = {
   explorer: `你是探索者，负责在明确范围内快速定位源码事实。\n- 优先并行使用只读搜索工具，再读取最相关文件。\n- 追踪定义、调用方和测试，不凭文件名猜测。\n- 用中文汇报结论，引用具体路径和符号；找不到时说明检索范围。`,
-  validator: `你是验证者，负责运行主会话指定的固定检查并解释失败。\n- 不修改任何文件，不执行任意 shell 命令。\n- 只报告实际运行的检查、通过数量、失败位置和可验证根因。\n- 原始长日志只摘录承载错误的必要部分。`,
-  reviewer: `你是审查者，负责检查指定代码或变更中的真实缺陷。\n- 只读，不修改文件，也不把个人风格偏好当作缺陷。\n- 重点检查错误结果、遗漏分支、竞态、资源泄漏、安全边界和缺失测试。\n- 按严重程度用中文报告 path:line、触发条件和影响；无问题时说明检查过的路径。`,
   editor: `你是编辑者，负责在主会话声明并锁定的文件范围内完成最小修改。\n- 修改前重新读取目标文件，不依赖旧上下文。\n- 不触碰任务范围外文件，不绕过路径锁，不执行任意 shell 命令。\n- 用中文报告变更文件、行为变化和固定验证结果。`,
 };
 
 const DEFAULT_ROLES: readonly AgentRole[] = [
-  "explorer", "explorer", "explorer", "validator", "reviewer", "editor", "editor",
+  "explorer", "explorer", "explorer", "editor", "editor", "editor",
 ];
 
 function defaultName(role: AgentRole, index: number): string {
-  const names: Record<AgentRole, string> = { explorer: "探索者", validator: "验证者", reviewer: "审查者", editor: "编辑者" };
-  return `${names[role]} ${index}`;
+  const names: Record<AgentRole, readonly string[]> = {
+    explorer: ["雅典娜 Athena", "阿波罗 Apollo", "赫尔墨斯 Hermes"],
+    editor: ["赫淮斯托斯 Hephaestus", "普罗米修斯 Prometheus", "赫斯提亚 Hestia"],
+  };
+  return names[role][index - 1] ?? `${role} ${index}`;
 }
 
 function cloneCatalog(catalog: ProjectAgentCatalog): ProjectAgentCatalog {
@@ -78,9 +80,38 @@ function parseCatalog(raw: string, projectPath: string): ProjectAgentCatalog {
   if (value.version !== 1 || value.projectPath !== projectPath || !Array.isArray(value.agents)) throw new Error("代理配置格式无效或不属于当前项目。");
   if (!Number.isInteger(value.maxConcurrent) || value.maxConcurrent! < 1 || value.maxConcurrent! > 7) throw new Error("代理并发上限必须为 1–7。");
   if (value.agents.length === 0 || value.agents.length > MAX_AGENTS) throw new Error(`代理数量必须为 1–${MAX_AGENTS}。`);
-  for (const agent of value.agents) assertAgent(agent);
+  for (const agent of value.agents) {
+    // 仅磁盘解析允许旧角色；迁移后再按当前角色约束发布。
+    assertAgent(LEGACY_ROLES.has(agent.role) ? { ...agent, role: "explorer" } : agent);
+  }
   if (new Set(value.agents.map((agent) => agent.id)).size !== value.agents.length) throw new Error("代理 ID 不能重复。");
   return value as ProjectAgentCatalog;
+}
+
+function migrateCatalog(catalog: ProjectAgentCatalog, now: number): ProjectAgentCatalog {
+  const agents = catalog.agents.flatMap((agent): ProjectAgentDefinition[] => {
+    if (LEGACY_ROLES.has(agent.role)) return agent.builtIn ? [] : [{ ...agent, role: "explorer" }];
+    if (!agent.builtIn) return [agent];
+    const match = /^(explorer|editor)-([1-3])$/u.exec(agent.id);
+    if (!match) return [agent];
+    const generic = `${agent.role === "explorer" ? "探索者" : "编辑者"} ${match[2]}`;
+    return agent.name === generic ? [{ ...agent, name: defaultName(agent.role, Number(match[2])) }] : [agent];
+  });
+  if (!agents.some((agent) => agent.id === "editor-3")) {
+    if (agents.length >= MAX_AGENTS) throw new Error("代理目录迁移需要新增 editor-3，但已达到 16 个代理上限。");
+    const editors = agents.filter((agent) => agent.role === "editor");
+    const firstModel = editors[0]?.model;
+    const commonModel = firstModel && editors.every(({ model }) => model.mode === "inherit"
+      ? firstModel.mode === "inherit"
+      : firstModel.mode === "fixed" && model.provider === firstModel.provider && model.modelId === firstModel.modelId);
+    const commonThinking = editors.length > 0 && editors.every((agent) => agent.thinkingLevel === editors[0]!.thinkingLevel);
+    const added = defaultCatalog(catalog.projectPath, now).agents.find((agent) => agent.id === "editor-3")!;
+    if (commonModel) added.model = structuredClone(editors[0]!.model);
+    if (commonThinking) added.thinkingLevel = editors[0]!.thinkingLevel;
+    agents.push(added);
+  }
+  const next = { ...catalog, agents };
+  return JSON.stringify(next) === JSON.stringify(catalog) ? catalog : { ...next, updatedAt: now };
 }
 
 export class AgentCatalogService {
@@ -110,16 +141,20 @@ export class AgentCatalogService {
 
   async open(projectPath: string): Promise<ProjectAgentCatalog> {
     const directory = join(this.rootDirectory, "projects", projectKey(projectPath));
-    this.filePath = join(directory, "agents.json");
+    const filePath = join(directory, "agents.json");
     await mkdir(directory, { recursive: true });
+    let loaded: ProjectAgentCatalog | undefined;
     try {
-      this.catalog = parseCatalog(await readFile(this.filePath, "utf8"), projectPath);
+      loaded = parseCatalog(await readFile(filePath, "utf8"), projectPath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      this.catalog = defaultCatalog(projectPath, this.now());
-      await this.persist();
     }
-    return cloneCatalog(this.catalog);
+    const next = loaded ? migrateCatalog(loaded, this.now()) : defaultCatalog(projectPath, this.now());
+    // 迁移及新目录均在原子替换成功后发布，失败时保留先前的内存目录。
+    if (next !== loaded) await this.persist(next, filePath);
+    this.filePath = filePath;
+    this.catalog = next;
+    return cloneCatalog(next);
   }
 
   get(agentId: string): ProjectAgentDefinition {
@@ -217,10 +252,14 @@ export class AgentCatalogService {
     return this.catalog;
   }
 
-  private async persist(catalog = this.requireCatalog()): Promise<void> {
-    if (!this.filePath) throw new Error("尚未打开项目代理配置。");
-    const temporaryPath = `${this.filePath}.${randomUUID()}.tmp`;
-    await writeFile(temporaryPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
-    await rename(temporaryPath, this.filePath);
+  private async persist(catalog = this.requireCatalog(), filePath = this.filePath): Promise<void> {
+    if (!filePath) throw new Error("尚未打开项目代理配置。");
+    const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporaryPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
+      await rename(temporaryPath, filePath);
+    } finally {
+      await rm(temporaryPath, { force: true });
+    }
   }
 }

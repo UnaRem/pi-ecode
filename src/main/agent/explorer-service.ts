@@ -21,7 +21,7 @@ import {
   type WriteToolInput,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot } from "../../shared/contracts.js";
+import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ValidationState } from "../../shared/contracts.js";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
 import { mapTimeline, toolItem } from "./timeline-mapper.js";
@@ -34,11 +34,11 @@ import {
   AgentMessageParameters,
   attemptSeparator,
   cloneTasks,
+  childGuidance,
   compactFinalText,
   COMPLETION_COALESCE_MS,
   compactionReserveTokens,
   DEFAULT_WATCHDOG,
-  EXPLORER_CHILD_GUIDANCE,
   EXPLORER_COMPLETION_MESSAGE,
   ExplorerParameters,
   type ExplorerAgentSnapshot,
@@ -79,6 +79,7 @@ interface ExplorerWaitResult {
 
 export class ExplorerService {
   private readonly tasks = new Map<string, ExplorerTask>();
+  private readonly validationUpdates = new Map<string, (state: ValidationState) => void>();
   private readonly writeLocks = new AgentWriteLockService();
   private readonly queue: string[] = [];
   private readonly controllers = new Map<string, AbortController>();
@@ -112,6 +113,11 @@ export class ExplorerService {
     this.now = options.now ?? Date.now;
     this.watchdog = { ...DEFAULT_WATCHDOG, ...options.watchdog };
     this.runExplorer = options.runExplorer ?? ((task, request, parent, signal) => this.runChildSession(task, request, parent, signal));
+  }
+
+  public onValidationChanged(state: ValidationState): void {
+    // 仅真实宿主进度推进工具活动；终态通知不替代 runValidation 的最终返回。
+    for (const update of this.validationUpdates.values()) update(state);
   }
 
   get current(): ExplorerTask[] {
@@ -208,6 +214,7 @@ export class ExplorerService {
 
   async reset(): Promise<void> {
     this.disposed = true;
+    this.validationUpdates.clear();
     this.generation += 1;
     await this.interruptAll();
     for (const timer of this.timelineTimers.values()) clearTimeout(timer);
@@ -263,10 +270,10 @@ export class ExplorerService {
       promptGuidelines: [
         "直接在主会话完成纯问答、简单只读查询，以及少量并行 read/ffgrep/fffind 能解决的定位，不要为此派发子代理。",
         "任何编辑者派发都必须在项目现有适用确认门禁获批后进行，小任务只是跳过探索：范围明确的小型实现可直接派一个编辑者并在 write_scope 声明精确路径，主会话不得同时编辑该范围。",
-        "根因不明或跨模块时先派探索者：单一调查方向用 agent_dispatch，只有两个相互独立且各需大量阅读的方向才用 dispatch_explorers；综合探索证据并通过同一确认门禁后再派编辑者。审查者按风险使用。",
+        "根因不明或跨模块时先派探索者：单一调查方向用 agent_dispatch，只有两个相互独立且各需大量阅读的方向才用 dispatch_explorers；综合探索证据并通过同一确认门禁后再派编辑者。探索者同时承担只读审查。",
         "编辑或审查任务结束后由主会话负责最终 run_validation、审查 diff 与 git status 并提交；若其后源文件再次变更，验证结果失效必须重跑。",
         "根据项目代理目录选择 agent_id；一个代理同一时刻只能执行一个任务。",
-        "探索者和审查者只读；验证者只能运行固定验证；非编辑者传空 write_scope，编辑者写入前声明精确范围。",
+        "探索者只读；编辑者可运行固定验证；非编辑者传空 write_scope，编辑者写入前声明精确范围。",
         "派发后不要轮询。agent_wait 返回 attention 时调用一次 agent_status；任务失败会自动重试一次，仍失败时读取 agent_result，补足依赖、改派空闲同角色代理，或明确告知用户并由主会话降级执行。",
         "收到完成通知后按需调用 agent_result；需要后续任务时调用 agent_message。不得把主会话降级执行描述为原代理验证通过。",
       ],
@@ -583,9 +590,7 @@ export class ExplorerService {
   ): ToolDefinition[] {
     const readOnlyNames = EXPLORER_TOOL_NAMES.filter((name) => !agent?.disabledTools.includes(name));
     const definitions = explorerToolDefinitions(parent, readOnlyNames);
-    // 只读 CodeGraph 探索只授权给 explorer、reviewer 和 editor；validator 仍然只能运行固定验证。
-    const mayExploreCodegraph = agent?.role !== "validator";
-    const codegraphDefinition = mayExploreCodegraph ? parent.getToolDefinition(CODEGRAPH_TOOL_NAME) : undefined;
+    const codegraphDefinition = parent.getToolDefinition(CODEGRAPH_TOOL_NAME);
     if (codegraphDefinition && !agent?.disabledTools.includes(CODEGRAPH_TOOL_NAME)) definitions.push(codegraphDefinition);
     if (agent?.role === "editor") {
       const edit = createEditToolDefinition(cwd);
@@ -610,16 +615,30 @@ export class ExplorerService {
       };
       definitions.push(lockedEdit as unknown as ToolDefinition, lockedWrite as unknown as ToolDefinition);
     }
-    if ((agent?.role === "editor" || agent?.role === "validator") && this.options.runValidation) {
+    if (agent?.role === "editor" && this.options.runValidation) {
       definitions.push({
         name: "run_validation",
         label: "运行固定验证",
         description: "运行宿主固定的 typecheck、test、build 检查；不能指定或执行任意命令。",
         parameters: Type.Object({}),
-        execute: async (_toolCallId, _params, signal) => {
+        execute: async (toolCallId, _params, signal, onUpdate) => {
           signal?.throwIfAborted();
-          const state = await this.options.runValidation!();
-          return { content: [{ type: "text", text: validationResultText(state) }], details: state };
+          const key = `${task.id}:${toolCallId}`;
+          const cleanup = (): void => { this.validationUpdates.delete(key); };
+          this.validationUpdates.set(key, (state) => {
+            if (signal?.aborted || task.status !== "running") return;
+            this.touch(task, `固定验证 · ${state.activeStep ?? state.status}`);
+            onUpdate?.({ content: [{ type: "text", text: validationResultText(state) }], details: state });
+          });
+          signal?.addEventListener("abort", cleanup, { once: true });
+          try {
+            const state = await this.options.runValidation!();
+            signal?.throwIfAborted();
+            return { content: [{ type: "text", text: validationResultText(state) }], details: state };
+          } finally {
+            cleanup();
+            signal?.removeEventListener("abort", cleanup);
+          }
         },
       });
     }
@@ -697,8 +716,7 @@ export class ExplorerService {
       resourceLoaderOptions: {
         extensionFactories: [nativeCompaction.asExtension()], appendSystemPromptOverride: (base) => [
           ...base,
-          EXPLORER_CHILD_GUIDANCE,
-          ...(agent ? [agent.prompt] : []),
+          ...childGuidance(agent),
         ],
         extensionsOverride: (base) => ({ ...base, extensions: [] }),
       },

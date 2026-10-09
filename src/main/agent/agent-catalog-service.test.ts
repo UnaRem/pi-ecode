@@ -1,9 +1,14 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SetAllProjectAgentPreferencesRequest } from "../../shared/agent-contracts.js";
 import { AgentCatalogService } from "./agent-catalog-service.js";
+
+vi.mock("node:fs/promises", async () => {
+  const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+  return { ...actual, rename: vi.fn(actual.rename) };
+});
 
 const temporaryDirectories: string[] = [];
 
@@ -14,22 +19,89 @@ async function service(now = 1_000): Promise<{ service: AgentCatalogService; roo
 }
 
 afterEach(async () => {
+  // mockReset 清除未消费的一次性失败，并恢复 vi.fn 创建时的真实 rename 实现。
+  vi.mocked(rename).mockReset();
+  vi.restoreAllMocks();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
 describe("AgentCatalogService", () => {
-  it("creates the seven project-scoped defaults with safe role boundaries", async () => {
+  it("creates the six project-scoped defaults with safe role boundaries", async () => {
     const test = await service();
     const catalog = await test.service.open("C:/work/demo");
 
     expect(catalog.maxConcurrent).toBe(3);
     expect(catalog.agents.map((agent) => agent.role)).toEqual([
-      "explorer", "explorer", "explorer", "validator", "reviewer", "editor", "editor",
+      "explorer", "explorer", "explorer", "editor", "editor", "editor",
     ]);
+    expect(catalog.agents.map((agent) => agent.id)).toEqual(["explorer-1", "explorer-2", "explorer-3", "editor-1", "editor-2", "editor-3"]);
+    expect(catalog.agents.map((agent) => agent.name)).toEqual(["雅典娜 Athena", "阿波罗 Apollo", "赫尔墨斯 Hermes", "赫淮斯托斯 Hephaestus", "普罗米修斯 Prometheus", "赫斯提亚 Hestia"]);
     expect(catalog.agents.every((agent) => agent.model.mode === "inherit" && agent.thinkingLevel === "low")).toBe(true);
     expect(catalog.agents.every((agent) => agent.autoCompaction.thresholdPercent === null)).toBe(true);
     expect(JSON.stringify(catalog)).toContain("不执行任意 shell 命令");
     expect(test.service.sessionRoot("parent-session")).toContain(join("parents", "parent-session", "sessions"));
+  });
+
+  it("迁移旧角色与通用名字，保留自定义字段并幂等原子写盘", async () => {
+    const test = await service();
+    const initial = await test.service.open("C:/work/demo");
+    const [key] = await readdir(join(test.root, "projects"));
+    const path = join(test.root, "projects", key!, "agents.json");
+    const oldAgents = initial.agents.filter((agent) => agent.id !== "editor-3").map((agent) => ({
+      ...agent, name: `${agent.role === "editor" ? "编辑者" : "探索者"} ${agent.id.split("-")[1]}`,
+      model: { mode: "fixed", provider: "p", modelId: "m" }, thinkingLevel: "high",
+    }));
+    oldAgents[0]!.name = "自定义探索名";
+    const legacy = ["validator", "reviewer"].flatMap((role) => [
+      { ...initial.agents[0]!, id: `${role}-1`, role, builtIn: true },
+      { ...initial.agents[0]!, id: `custom-${role}`, role, builtIn: false, name: "保留名字", prompt: "自定义提示", disabledTools: ["read"], enabled: false },
+    ]);
+    await writeFile(path, JSON.stringify({ ...initial, agents: [...oldAgents, ...legacy] }));
+    const migrated = await new AgentCatalogService(test.root, () => 2_000).open("C:/work/demo");
+    expect(migrated.agents).toHaveLength(8);
+    expect(migrated.agents.find((agent) => agent.id === "explorer-1")?.name).toBe("自定义探索名");
+    expect(migrated.agents.find((agent) => agent.id === "editor-1")?.name).toBe("赫淮斯托斯 Hephaestus");
+    for (const original of legacy.filter((agent) => !agent.builtIn)) {
+      expect(migrated.agents.find((agent) => agent.id === original.id)).toEqual({ ...original, role: "explorer" });
+    }
+    expect(migrated.agents.find((agent) => agent.id === "editor-3")).toMatchObject({ model: { mode: "fixed", provider: "p", modelId: "m" }, thinkingLevel: "high" });
+    const contents = await readFile(path, "utf8");
+    expect(await new AgentCatalogService(test.root, () => 3_000).open("C:/work/demo")).toEqual(migrated);
+    expect(await readFile(path, "utf8")).toBe(contents);
+  });
+
+  it("迁移写入权限失败不发布目录、不覆盖旧文件并清理临时文件", async () => {
+    const test = await service();
+    const initial = await test.service.open("C:/work/demo");
+    const [key] = await readdir(join(test.root, "projects"));
+    const directory = join(test.root, "projects", key!);
+    const path = join(directory, "agents.json");
+    const old = JSON.stringify({ ...initial, agents: initial.agents.filter((agent) => agent.id !== "editor-3") });
+    await writeFile(path, old);
+    vi.mocked(rename).mockRejectedValueOnce(Object.assign(new Error("permission denied"), { code: "EACCES" }));
+    await expect(test.service.open("C:/work/demo")).rejects.toThrow("permission denied");
+    expect(test.service.current).toEqual(initial);
+    expect(await readFile(path, "utf8")).toBe(old);
+    expect(await readdir(directory)).toEqual(["agents.json"]);
+  });
+
+  it("补编辑者超过上限时保留原目录，混合设置使用默认", async () => {
+    const test = await service();
+    const initial = await test.service.open("C:/work/demo");
+    const [key] = await readdir(join(test.root, "projects"));
+    const path = join(test.root, "projects", key!, "agents.json");
+    const agents = initial.agents.filter((agent) => agent.id !== "editor-3");
+    agents.find((agent) => agent.id === "editor-1")!.thinkingLevel = "max";
+    agents.find((agent) => agent.id === "editor-1")!.model = { mode: "fixed", provider: "p", modelId: "m" };
+    await writeFile(path, JSON.stringify({ ...initial, agents }));
+    const migrated = await test.service.open("C:/work/demo");
+    expect(migrated.agents.find((agent) => agent.id === "editor-3")).toMatchObject({ model: { mode: "inherit" }, thinkingLevel: "low" });
+    const full = [...agents, ...Array.from({ length: 11 }, (_, index) => ({ ...agents[0]!, id: `custom-${index}`, builtIn: false }))];
+    const old = JSON.stringify({ ...initial, agents: full });
+    await writeFile(path, old);
+    await expect(test.service.open("C:/work/demo")).rejects.toThrow("16 个代理上限");
+    expect(await readFile(path, "utf8")).toBe(old);
+    expect(test.service.current).toEqual(migrated);
   });
 
   it("persists project settings atomically and reloads them", async () => {
@@ -56,7 +128,7 @@ describe("AgentCatalogService", () => {
   it("updates model and thinking once for all existing agents while retaining other fields", async () => {
     const test = await service(2_000);
     const initial = await test.service.open("C:/work/demo");
-    const custom = await test.service.create({ name: "自建代理", role: "reviewer" });
+    const custom = await test.service.create({ name: "自建代理", role: "explorer" });
     const disabled = custom.agents[0]!;
     disabled.enabled = false;
     disabled.prompt = "特别说明";
@@ -110,6 +182,6 @@ describe("AgentCatalogService", () => {
     custom.autoCompaction.thresholdPercent = 95;
     await expect(test.service.save(custom)).rejects.toThrow("50%–90%");
     const removed = await test.service.remove(custom.id);
-    expect(removed.agents).toHaveLength(7);
+    expect(removed.agents).toHaveLength(6);
   });
 });

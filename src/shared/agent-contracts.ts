@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from "./contracts.js";
 
-export type AgentRole = "explorer" | "validator" | "reviewer" | "editor";
+export type AgentRole = "explorer" | "editor";
 
 export type AgentModelPreference =
   | { mode: "inherit" }
