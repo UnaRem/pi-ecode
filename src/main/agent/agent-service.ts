@@ -146,6 +146,7 @@ export class AgentService {
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
     this.validationTool.onValidationChanged(validation);
+    this.explorers.onValidationChanged(validation);
     this.emit({ type: "validation", validation });
     this.scheduleCodegraphSync(validation);
     const session = this.runtime?.session;
@@ -831,7 +832,7 @@ export class AgentService {
       const model = agent.model.mode === "inherit" ? "继承主会话模型" : `${agent.model.provider}/${agent.model.modelId}`;
       return `- ${agent.id}｜${agent.name}｜${agent.role}｜${model}｜thinking=${agent.thinkingLevel}`;
     }).join("\n");
-    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：探索者、审查者只读；验证者只能运行宿主固定验证；编辑者可用受锁 edit/write 和固定验证，且每个编辑任务必须声明 write_scope。\n编排摘要：小任务只跳过探索，仍须经既有确认门禁；复杂任务先探索、综合证据后确认再编辑；编辑与审查完成后由主会话负责最终验证、审查 diff 与提交。完整策略见 Subagent orchestration 章节。`;
+    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：仅 explorer（探索者）和 editor（编辑者）。探索者只读；编辑者仅在声明的 write_scope 内使用受锁 edit/write，完成前必须复读修改文件并执行可用的宿主固定检查，等待真实终态；失败时依据日志在授权范围内修正并重新检查，如实报告结果和未执行项。\n编排摘要：小任务只跳过探索，仍须经既有确认门禁；复杂任务先探索、综合证据后确认再编辑；所有编辑完成后由主会话负责最终验证、审查 diff 与 git status、提交。完整策略见 Subagent orchestration 章节。`;
   }
 
   private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {

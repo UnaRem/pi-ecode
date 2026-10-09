@@ -40,6 +40,36 @@ function validationPublisher(service: AgentService): (state: ValidationState) =>
   return (state) => validation.onChange(state);
 }
 
+describe("AgentService 验证进度接线", () => {
+  it("forwards host progress and terminal states to both validation consumers", () => {
+    const service = new AgentService();
+    const internal = service as unknown as {
+      explorers: { onValidationChanged: (state: ValidationState) => void };
+      validationTool: { onValidationChanged: (state: ValidationState) => void };
+    };
+    const childUpdates = vi.spyOn(internal.explorers, "onValidationChanged");
+    const mainUpdates = vi.spyOn(internal.validationTool, "onValidationChanged");
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const publish = validationPublisher(service);
+    const progress = { ...validationState("running", "child-run"), activeStep: "test" as const,
+      steps: [{ id: "test" as const, label: "Tests", command: "npm test", status: "running" as const,
+        output: "真实宿主进度", exitCode: null, durationMs: null }] };
+    const failed = { ...progress, status: "failed" as const, message: "检查失败" };
+
+    publish(progress);
+    publish(failed);
+
+    expect(childUpdates.mock.calls).toEqual([[progress], [failed]]);
+    expect(mainUpdates.mock.calls).toEqual([[progress], [failed]]);
+    expect(events.filter((event) => event.type === "validation")).toEqual([
+      { type: "validation", validation: progress }, { type: "validation", validation: failed },
+    ]);
+    childUpdates.mockRestore();
+    mainUpdates.mockRestore();
+  });
+});
+
 describe("AgentService codegraph 索引同步", () => {
   interface SyncHarness {
     projectPath: string;

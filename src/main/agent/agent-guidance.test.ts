@@ -34,6 +34,10 @@ describe("agent guidance", () => {
     expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("typecheck, test, and build");
     expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("continue only read-only work");
     expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("source revision");
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("In the main session, validation runs in the background");
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("In an editor session");
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("waits synchronously for the host terminal result");
+    expect(VALIDATION_ORCHESTRATION_GUIDANCE).toContain("streams real progress");
   });
 
   it("routes every main-session request to the right subagent role", () => {
@@ -47,6 +51,14 @@ describe("agent guidance", () => {
     expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("The main session owns the final validation");
     expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("validation must be rerun before delivery");
     expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("state that explicitly before degrading to main-session edits");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Dispatch only explorer and editor roles");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("reread the modified files");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("run available host-owned fixed checks");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("inspect failure logs");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("rerun checks after corrections");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Report actual results");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Editor checks do not replace this final responsibility");
+    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).not.toMatch(/reviewer|validator|A subagent turn never ends/u);
   });
 
   it("teaches every model the pi-ecode Explorer protocol", () => {

@@ -99,6 +99,14 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 - Comments should explain protocol constraints or non-obvious lifecycle decisions, not restate code.
 - Keep dependencies few. Add one only when it materially reduces complexity or accessibility risk.
 
+## Project agents
+
+- Only `explorer` and `editor` are valid roles for new or saved agents. Legacy `reviewer` and `validator` roles are accepted only by storage migration and restored-task compatibility. Catalog migration removes obsolete built-in agents and maps custom legacy agents to `explorer`; restored legacy task roles map to `explorer`. IPC must reject legacy roles for create/save requests.
+- The default catalog has three explorers: 雅典娜 Athena, 阿波罗 Apollo, 赫尔墨斯 Hermes; and three editors: 赫淮斯托斯 Hephaestus, 普罗米修斯 Prometheus, 赫斯提亚 Hestia. Preserve custom names when migrating old catalogs.
+- Explorers are read-only. Editors use locked `edit`/`write` tools only within the declared `write_scope`; the main session must not modify files locked by an active editor.
+- Before completing authorized implementation work, editors reread modified files and run available host-owned fixed `typecheck`, `test`, and `build` checks. Their `run_validation` waits for the real terminal result and streams host progress. On failure, inspect logs, correct within the authorized scope, rerun checks, and report actual results and unavailable or unexecuted checks.
+- Main-session `run_validation` uses the background dispatch protocol; do not poll or duplicate runs. Editor checks do not replace main responsibility: after all editors finish, main runs final validation, reviews the diff and `git status`, and commits verified work. Later source edits invalidate previous results.
+
 ## Verification
 
 Before considering a change complete, run:
