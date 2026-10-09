@@ -6,7 +6,7 @@ import { useI18n } from "../i18n/i18n";
 import { clampAgentThinkingLevel, resolveAgentThinkingLevels } from "../lib/agent-thinking-levels";
 import { AgentBulkPreferences } from "./AgentBulkPreferences";
 
-const ROLES: AgentRole[] = ["explorer", "validator", "reviewer", "editor"];
+const ROLES: AgentRole[] = ["explorer", "editor"];
 const TOOLS = ["read", "ffgrep", "fffind", "run_validation", "edit", "write"];
 
 export function AgentManager({

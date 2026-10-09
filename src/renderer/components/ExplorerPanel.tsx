@@ -16,8 +16,6 @@ function statusText(status: ExplorerStatus, t: Translate): string {
 
 function roleText(role: ProjectAgentDefinition["role"], t: Translate): string {
   if (role === "explorer") return t("agent.role.explorer");
-  if (role === "validator") return t("agent.role.validator");
-  if (role === "reviewer") return t("agent.role.reviewer");
   return t("agent.role.editor");
 }
 

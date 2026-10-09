@@ -62,6 +62,10 @@ describe("AgentManager", () => {
     expect(markup).toContain("只读调查");
     expect(markup).toContain("write");
     expect(markup).not.toContain("删除代理");
+    expect(markup).toContain('value="explorer"');
+    expect(markup).toContain('value="editor"');
+    expect(markup).not.toContain('value="validator"');
+    expect(markup).not.toContain('value="reviewer"');
   });
 
   it.each([

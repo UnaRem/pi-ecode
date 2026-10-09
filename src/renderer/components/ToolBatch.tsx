@@ -44,8 +44,6 @@ export function isScrollAreaAtBottom(scrollTop: number, clientHeight: number, sc
 
 const ROLE_LABEL_KEYS = {
   explorer: "agent.role.explorer",
-  validator: "agent.role.validator",
-  reviewer: "agent.role.reviewer",
   editor: "agent.role.editor",
 } as const satisfies Record<AgentRole, MessageKey>;
 
