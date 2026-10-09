@@ -8,6 +8,8 @@ import { GitPushButton } from "./GitPushButton";
 import { ValidationStepList, ValidationStepStatusIcon } from "./ValidationSteps";
 import { ExplorerPanel } from "./ExplorerPanel";
 import { AgentManager } from "./AgentManager";
+import type { ManagedProcess } from "@shared/process-contracts";
+import { ManagedProcessPanel } from "./ManagedProcessPanel";
 
 interface WorkspaceInspectorProps {
   tools: ToolActivity[];
@@ -18,6 +20,8 @@ interface WorkspaceInspectorProps {
   projectPath: string;
   isStreaming: boolean;
   explorers?: ExplorerTask[];
+  processes?: ManagedProcess[];
+  onStopManagedProcess?: (id: string) => Promise<void>;
   agentCatalog?: ProjectAgentCatalog | null;
   models?: ModelOption[];
   selectedModel?: string | null;
@@ -186,6 +190,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     setTab(nextTab);
   };
   const renderTab = (target: InspectorTab) => target === "tools" ? <>
+    <ManagedProcessPanel key={props.projectPath} processes={props.processes ?? []} onStop={props.onStopManagedProcess ?? (async () => { throw new Error(t("process.stopUnavailable")); })} />
     <ToolQueue {...props} onSelect={props.onSelectTool} />
     <OutputPanel {...props} />
     <ChangeFiles {...props} />

@@ -24,6 +24,28 @@
 .inspector-section > header { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-3); }
 .inspector-section > header strong { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; font-weight: 700; }
 .inspector-section > header > span { min-width: 20px; padding: 2px 6px; border-radius: var(--radius-pill); color: var(--color-text-muted); background: var(--color-surface-muted); font-size: 10px; text-align: center; }
+.managed-process-panel, .managed-process-detail { min-width: 0; }
+.managed-process-empty, .managed-process-note { margin: 0; color: var(--color-text-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.managed-process-list { display: grid; gap: var(--space-1); max-height: 180px; overflow-y: auto; margin-bottom: var(--space-3); }
+.managed-process-list > button { min-width: 0; display: grid; gap: 4px; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface); text-align: left; cursor: pointer; }
+.managed-process-list code, .managed-process-command { min-width: 0; font: 10.5px/1.5 "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
+.managed-process-list span, .managed-process-list small { font-size: 10px; overflow-wrap: anywhere; }
+.managed-process-list > button[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-soft); color: var(--color-text); }
+.managed-process-command { display: block; margin-bottom: var(--space-2); }
+.managed-process-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); font-size: 11px; }
+.managed-process-actions button { min-height: 28px; padding: 4px var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-danger); background: var(--color-surface); font-size: 10px; cursor: pointer; }
+.managed-process-list > button, .managed-process-actions button { transition: background-color 120ms var(--ease-standard), border-color 120ms var(--ease-standard); }
+.managed-process-list > button:hover { border-color: var(--color-accent-border); }
+.managed-process-actions button:hover:not(:disabled) { border-color: var(--color-danger); background: var(--color-danger-soft); }
+.managed-process-actions button:disabled { opacity: .55; cursor: default; }
+.managed-process-list > button:focus-visible, .managed-process-actions button:focus-visible, .managed-process-logs:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.managed-process-error { margin: var(--space-2) 0; color: var(--color-danger); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.managed-process-note { margin-bottom: var(--space-2); }
+.managed-process-logs { min-width: 0; max-height: 220px; overflow: auto; overscroll-behavior: contain; border-radius: var(--radius-sm); color: var(--color-code-text); background: var(--color-code-bg); }
+.managed-process-logs pre { margin: 0; padding: var(--space-2); font: 10.5px/1.6 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  .managed-process-list > button, .managed-process-actions button { transition: none; }
+}
 .inspector-tool-list { max-height: 148px; display: flex; flex-direction: column; gap: var(--space-1); overflow-y: auto; padding-right: 3px; }
 .inspector-tool-list > p, .inspector-file-list > p { margin: 0; padding: var(--space-3); color: var(--color-text-muted); font-size: 11px; text-align: center; }
 .inspector-tool-list > button { min-width: 0; min-height: 34px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); color: var(--color-text-muted); background: transparent; text-align: left; cursor: pointer; }

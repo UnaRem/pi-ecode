@@ -48,6 +48,13 @@ describe("WorkspaceInspector", () => {
         <WorkspaceInspector
           tools={[tool]}
           selectedTool={tool}
+          processes={[{
+            id: "dev-1", command: "npm run dev", status: "running", pid: 123,
+            projectPath: "C:/workspace", sessionId: "session-1", originToolCallId: "tool-1",
+            startedAt: 1, endedAt: null, exitCode: null, signal: null,
+            output: "development server ready", outputTruncated: false, errorMessage: null,
+          }]}
+          onStopManagedProcess={vi.fn(async () => undefined)}
           validation={validation}
           review={review}
           candidate={candidate}
@@ -63,6 +70,9 @@ describe("WorkspaceInspector", () => {
         />
       </I18nProvider>,
     );
+    expect(markup).toContain("Development processes");
+    expect(markup).toContain("development server ready");
+    expect(markup.indexOf('class="inspector-section managed-process-panel"')).toBeLessThan(markup.indexOf('class="inspector-section inspector-tools"'));
     expect(markup).toContain("npm test");
     expect(markup).toContain("203 passed");
     expect(markup).toContain("src/App.tsx");
@@ -100,6 +110,7 @@ describe("WorkspaceInspector", () => {
         />
       </I18nProvider>,
     );
+    expect(markup).toContain("No development processes yet.");
     expect(markup).toContain("selected read output");
     expect(markup).not.toContain("command output</pre>");
   });
