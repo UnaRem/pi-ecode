@@ -238,8 +238,11 @@ export class ValidationService {
       interval: 600,
       ignored: (path) => {
         const relativePath = path.slice(cwd.length).replaceAll("\\", "/").replace(/^\/+/, "");
-        const firstSegment = relativePath.split("/")[0];
-        return relativePath.endsWith(".tsbuildinfo") || Boolean(firstSegment && WATCH_IGNORES.has(firstSegment));
+        const segments = relativePath.split("/");
+        const firstSegment = segments[0];
+        // Bun/monorepo 子包依赖链接会扩大扫描，必须在任意层级剪枝 node_modules。
+        return segments.includes("node_modules") || relativePath.endsWith(".tsbuildinfo")
+          || Boolean(firstSegment && WATCH_IGNORES.has(firstSegment));
       },
     });
     this.watcher = watcher;

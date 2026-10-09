@@ -195,6 +195,35 @@ describe("ValidationService", () => {
     await service.dispose();
   });
 
+  it("剪枝子包依赖树，依赖变化保留通过结果而同包源码变化使结果过期", async () => {
+    const cwd = await project({ scripts: { typecheck: "node -e \"process.exit(0)\"" } });
+    const packageRoot = join(cwd, "packages", "app");
+    const dependencyRoot = join(packageRoot, "node_modules", "dependency");
+    const sourcePath = join(packageRoot, "source.ts");
+    await mkdir(dependencyRoot, { recursive: true });
+    await writeFile(join(dependencyRoot, "index.js"), "original dependency\n", "utf8");
+    await writeFile(sourcePath, "export const original = true;\n", "utf8");
+    const service = new ValidationService(() => undefined);
+    try {
+      await service.configure(cwd);
+      expect((await service.run()).status).toBe("passed");
+      // getWatched 来自真实 chokidar watcher；确认依赖目录在 ready 前已剪枝。
+      const { watcher } = service as unknown as { watcher: { getWatched: () => Record<string, string[]> } };
+      const watched = watcher.getWatched();
+      expect(Object.keys(watched).some((path) => path.replaceAll("\\", "/").split("/").includes("node_modules"))).toBe(false);
+      expect(watched[packageRoot]).toContain("source.ts");
+
+      await writeFile(join(dependencyRoot, "index.js"), "changed dependency\n", "utf8");
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      expect(service.getState().status).toBe("passed");
+
+      await writeFile(sourcePath, "export const changed = true;\n", "utf8");
+      await vi.waitFor(() => expect(service.getState().status).toBe("stale"), { timeout: 2_000 });
+    } finally {
+      await service.dispose();
+    }
+  });
+
   it("ignores a CodeGraph index written while validation runs", async () => {
     const cwd = await project({
       scripts: {
