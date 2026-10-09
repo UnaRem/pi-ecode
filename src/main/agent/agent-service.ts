@@ -59,6 +59,8 @@ import { ExplorerService } from "./explorer-service.js";
 import { AgentCatalogService } from "./agent-catalog-service.js";
 import { CodegraphToolService } from "./codegraph-tool.js";
 import { ValidationToolService } from "./validation-tool.js";
+import { ManagedProcessService } from "../processes/managed-process-service.js";
+import { ManagedProcessToolService } from "./managed-process-tool.js";
 import { configuredCompactionReserveTokens, contextBudgetReserveTokens } from "./context-budget.js";
 
 const HISTORY_PAGE_TURNS = 25;
@@ -68,7 +70,25 @@ function errorText(error: unknown): string {
 }
 
 export class AgentService {
+  private managedProcesses = this.createManagedProcesses();
+  private readonly managedProcessTool = new ManagedProcessToolService({
+    isCurrent: (cwd, sessionId) => this.projectPath === cwd && this.runtime?.session.sessionId === sessionId
+      && this.runtime.session.sessionManager.getCwd() === cwd,
+    start: (request) => this.managedProcesses.start(request),
+    stop: (id) => this.managedProcesses.stop(id),
+  });
   private runtime: AgentSessionRuntime | undefined;
+
+  private createManagedProcesses(): ManagedProcessService {
+    return new ManagedProcessService((processes) => this.emit({ type: "processes", processes }));
+  }
+
+  async stopManagedProcess(id: string): Promise<void> {
+    if (!this.projectPath || !this.managedProcesses.current.some((entry) => entry.id === id && entry.projectPath === this.projectPath)) {
+      throw new Error("Unknown managed process in the active project.");
+    }
+    await this.managedProcesses.stop(id);
+  }
   private projectPath: string | undefined;
   private startupError: string | undefined;
   private unsubscribe: (() => void) | undefined;
@@ -227,6 +247,13 @@ export class AgentService {
     if (!details.isDirectory()) throw new Error("Selected project is not a directory.");
 
     await this.disposeRuntime();
+    // 停止旧进程失败时保留旧项目归属，用户仍能通过登记 ID 重试停止。
+    try {
+      await this.managedProcesses.configure(cwd);
+    } catch (error) {
+      this.startupError = `项目切换失败，可重试停止旧项目进程：${errorText(error)}`;
+      throw error;
+    }
     this.projectPath = cwd;
     this.startupError = undefined;
 
@@ -246,6 +273,8 @@ export class AgentService {
       return snapshot;
     } catch (error) {
       await this.disposeRuntime();
+      await this.managedProcesses.dispose();
+      this.managedProcesses = this.createManagedProcesses();
       this.projectPath = undefined;
       throw error;
     }
@@ -410,7 +439,13 @@ export class AgentService {
 
   private async snapshotWithSessions(knownSessions?: import("../../shared/contracts.js").SessionSummary[]): Promise<AgentSnapshot> {
     if (!this.runtime || !this.projectPath) {
-      return { ...EMPTY_AGENT_SNAPSHOT, error: this.startupError ?? null };
+      return {
+        ...EMPTY_AGENT_SNAPSHOT,
+        projectPath: this.projectPath ?? null,
+        projectName: this.projectPath ? basename(this.projectPath) : null,
+        processes: this.managedProcesses.current,
+        error: this.startupError ?? null,
+      };
     }
     const session = this.runtime.session;
     const [sessions, availableModels, { history, review }] = await Promise.all([
@@ -452,6 +487,7 @@ export class AgentService {
       taskPlan: this.taskPlan.current,
       explorers: this.explorers.current,
       agentCatalog: this.agentCatalog.current,
+      processes: this.managedProcesses.current,
       extensionUi: this.extensionUi.current,
       history,
       validation: this.validation.getState(),
@@ -847,6 +883,7 @@ export class AgentService {
             this.taskPlan.asExtension(),
             this.explorers.asExtension(),
             this.validationTool.asExtension(),
+          this.managedProcessTool.asExtension(),
             this.codegraphTool.asExtension(),
           ],
           eventBus: this.extensionEventBus,
@@ -1169,6 +1206,7 @@ export class AgentService {
   }
 
   async dispose(): Promise<void> {
+    await this.managedProcesses.dispose();
     this.auth.cancel();
     await this.disposeRuntime();
     this.removeQuestionnaireListener();

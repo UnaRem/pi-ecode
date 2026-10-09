@@ -11,6 +11,15 @@ const snapshot: AgentSnapshot = {
 };
 
 describe("reduceAgentEvent", () => {
+  it("replaces managed process state from events and authoritative snapshots", () => {
+    const processes = [{ id: "process-1", projectPath: "C:/project", sessionId: "session", originToolCallId: "call",
+      command: "bun run dev", status: "running" as const, pid: 123, startedAt: 1, endedAt: null,
+      exitCode: null, signal: null, output: "真实日志", outputTruncated: false, errorMessage: null }];
+    const updated = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "processes", processes });
+    expect(updated.processes).toEqual(processes);
+    const restored = reduceAgentEvent(updated, { type: "snapshot", snapshot: { ...snapshot, processes: [] } });
+    expect(restored.processes).toEqual([]);
+  });
   it("replaces streaming text with the final timeline message", () => {
     let state = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "snapshot", snapshot });
     for (const text of ["Hello ", "Hello world"]) {

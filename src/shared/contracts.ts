@@ -1,5 +1,6 @@
 import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "./agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
+import type { ManagedProcess } from "./process-contracts.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
 
 export const IPC_CHANNELS = {
@@ -30,6 +31,7 @@ export const IPC_CHANNELS = {
   redo: "history:redo",
   runValidation: "validation:run",
   stopValidation: "validation:stop",
+  stopManagedProcess: "process:stop",
   getReview: "review:get",
   rejectReviewFile: "review:reject-file",
   prepareCandidate: "self-update:prepare",
@@ -355,6 +357,7 @@ export interface AgentSnapshot {
   taskPlan: TaskPlan | null;
   explorers: ExplorerTask[];
   agentCatalog: ProjectAgentCatalog | null;
+  processes: ManagedProcess[];
   extensionUi: ExtensionUiRequest | null;
   history: WorkspaceHistoryState;
   validation: ValidationState;
@@ -366,6 +369,7 @@ export interface AgentSnapshot {
 
 export type AgentEvent =
   | { type: "snapshot"; snapshot: AgentSnapshot }
+  | { type: "processes"; processes: ManagedProcess[] }
   | { type: "timeline-upsert"; item: ConversationItem }
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
@@ -423,6 +427,7 @@ export interface DesktopApi {
   redo(): Promise<HistoryOperationResult>;
   runValidation(): Promise<ValidationState>;
   stopValidation(): Promise<void>;
+  stopManagedProcess(id: string): Promise<void>;
   getReview(): Promise<ChangeReview>;
   rejectReviewFile(path: string): Promise<ChangeReview>;
   prepareCandidate(): Promise<CandidateState>;

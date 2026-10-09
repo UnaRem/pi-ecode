@@ -46,6 +46,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   taskPlan: null,
   explorers: [],
   agentCatalog: null,
+  processes: [],
   extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
@@ -233,6 +234,8 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
         }),
       };
     }
+    case "processes":
+      return { ...state, processes: event.processes };
     case "agent-catalog":
       return { ...state, agentCatalog: event.catalog };
     case "explorer-timeline": {

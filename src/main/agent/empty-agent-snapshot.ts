@@ -21,6 +21,7 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
   taskPlan: null,
   explorers: [],
   agentCatalog: null,
+  processes: [],
   extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {

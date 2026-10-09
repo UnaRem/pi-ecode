@@ -40,6 +40,111 @@ function validationPublisher(service: AgentService): (state: ValidationState) =>
   return (state) => validation.onChange(state);
 }
 
+describe("AgentService 托管进程", () => {
+  it("publishes process snapshots and rejects unregistered ids before delegating stop", async () => {
+    const service = new AgentService();
+    const internal = service as unknown as {
+      projectPath: string;
+      managedProcesses: { current: Array<{ id: string; projectPath: string }>; stop: (id: string) => Promise<void> };
+      createManagedProcesses: () => { configure: (path: string) => Promise<void>; dispose: () => Promise<void> };
+    };
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const publisher = internal.createManagedProcesses();
+    await publisher.configure(process.cwd());
+    expect(events).toContainEqual({ type: "processes", processes: [] });
+    await publisher.dispose();
+    const stop = vi.fn(async () => undefined);
+    internal.projectPath = "C:/project";
+    internal.managedProcesses = { current: [{ id: "registered", projectPath: "C:/project" },
+      { id: "other", projectPath: "C:/other" }], stop };
+    await service.stopManagedProcess("registered");
+    expect(stop).toHaveBeenCalledWith("registered");
+    await expect(service.stopManagedProcess("123")).rejects.toThrow("active project");
+    await expect(service.stopManagedProcess("other")).rejects.toThrow("active project");
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("configures a project after runtime disposal and cleans failed project opens", async () => {
+    const service = new AgentService();
+    const order: string[] = [];
+    const internal = service as unknown as {
+      managedProcesses: { configure: (path: string) => Promise<void>; dispose: () => Promise<void> };
+      agentCatalog: { open: (path: string) => Promise<void> };
+      disposeRuntime: () => Promise<void>;
+      projectPath: string | undefined;
+    };
+    const configure = vi.fn(async () => { order.push("configure"); });
+    const cleanup = vi.fn(async () => { order.push("process-cleanup"); });
+    const processService = { configure, dispose: cleanup };
+    internal.managedProcesses = processService;
+    internal.agentCatalog = { open: async () => { throw new Error("catalog unavailable"); } };
+    const runtimeCleanup = vi.spyOn(internal, "disposeRuntime").mockImplementation(async () => { order.push("runtime-cleanup"); });
+
+    await expect(service.openProject(process.cwd())).rejects.toThrow("catalog unavailable");
+
+    expect(order).toEqual(["runtime-cleanup", "configure", "runtime-cleanup", "process-cleanup"]);
+    expect(configure).toHaveBeenCalledWith(process.cwd());
+    expect(internal.projectPath).toBeUndefined();
+    expect(internal.managedProcesses).not.toBe(processService);
+    runtimeCleanup.mockRestore();
+  });
+
+  it("preserves the old project and registered stop entry when configure cleanup fails", async () => {
+    const service = new AgentService();
+    const oldProject = "C:/old-project";
+    const records = [{ id: "old-process", projectPath: oldProject, sessionId: "old-session", originToolCallId: "call",
+      command: "bun run dev", status: "running" as const, pid: 123, startedAt: 1, endedAt: null,
+      exitCode: null, signal: null, output: "still alive", outputTruncated: false, errorMessage: null }];
+    const configure = vi.fn(async () => { throw new Error("taskkill failed"); });
+    const cleanup = vi.fn(async () => { throw new Error("must not dispose"); });
+    const stop = vi.fn(async () => undefined);
+    const processService = { current: records, configure, dispose: cleanup, stop };
+    const internal = service as unknown as {
+      projectPath: string; managedProcesses: typeof processService; disposeRuntime: () => Promise<void>;
+      agentCatalog: { open: (path: string) => Promise<void> };
+    };
+    internal.projectPath = oldProject;
+    internal.managedProcesses = processService;
+    const openCatalog = vi.spyOn(internal.agentCatalog, "open");
+    const runtimeCleanup = vi.spyOn(internal, "disposeRuntime");
+
+    await expect(service.openProject(process.cwd())).rejects.toThrow("taskkill failed");
+    const snapshot = await service.getSnapshot();
+    await service.stopManagedProcess("old-process");
+
+    expect(runtimeCleanup).toHaveBeenCalledTimes(1);
+    expect(configure).toHaveBeenCalledWith(process.cwd());
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(openCatalog).not.toHaveBeenCalled();
+    expect(internal.projectPath).toBe(oldProject);
+    expect(internal.managedProcesses).toBe(processService);
+    expect(snapshot).toMatchObject({ projectPath: oldProject, projectName: "old-project", sessionId: null, processes: records,
+      error: expect.stringContaining("taskkill failed") });
+    expect(stop).toHaveBeenCalledWith("old-process");
+    openCatalog.mockRestore();
+    runtimeCleanup.mockRestore();
+  });
+
+  it("keeps processes during runtime replacement and cleans them before final disposal", async () => {
+    const service = new AgentService();
+    const internal = service as unknown as {
+      managedProcesses: { dispose: () => Promise<void> };
+      disposeRuntime: () => Promise<void>;
+    };
+    const cleanup = vi.fn(async () => undefined);
+    internal.managedProcesses = { dispose: cleanup };
+    await internal.disposeRuntime();
+    expect(cleanup).not.toHaveBeenCalled();
+    const runtimeCleanup = vi.spyOn(internal, "disposeRuntime").mockImplementation(async () => {
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+    await service.dispose();
+    expect(runtimeCleanup).toHaveBeenCalledTimes(1);
+    runtimeCleanup.mockRestore();
+  });
+});
+
 describe("AgentService 验证进度接线", () => {
   it("forwards host progress and terminal states to both validation consumers", () => {
     const service = new AgentService();
@@ -483,6 +588,7 @@ describe("AgentService prompt lifecycle", () => {
         thinkingLevels: ["off"], supportsImages: false },
     ]);
     expect(snapshot.thinkingLevels).toEqual(["off"]);
+    expect(snapshot.processes).toEqual([]);
   });
 
   it("switches with one ownership scan and refreshes the selected title from the runtime", async () => {
