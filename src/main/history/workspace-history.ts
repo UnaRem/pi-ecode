@@ -175,9 +175,20 @@ export class WorkspaceHistory {
 
   async getReview(session: AgentSession): Promise<ChangeReview> {
     const context = this.captureHistoryContext(session);
-    const { cwd, sessionId, record } = context;
-    const redo = await this.readRedo(cwd, sessionId);
+    const redo = await this.readRedo(context.cwd, context.sessionId);
     const problem = await this.historyProblem(context, redo);
+    return this.reviewFromContext(context, problem);
+  }
+
+  async getSnapshot(session: AgentSession): Promise<{ history: WorkspaceHistoryState; review: ChangeReview }> {
+    const context = this.captureHistoryContext(session);
+    const redo = await this.readRedo(context.cwd, context.sessionId);
+    const problem = await this.historyProblem(context, redo);
+    return { history: this.stateFromContext(context, redo, problem), review: await this.reviewFromContext(context, problem) };
+  }
+
+  private async reviewFromContext(context: HistoryReadContext, problem: string | null): Promise<ChangeReview> {
+    const { cwd, sessionId, record } = context;
     if (problem) return { available: false, baseCommit: null, headCommit: null, files: [], patch: "", truncated: false, message: problem };
     if (!record) {
       return {
@@ -284,11 +295,14 @@ export class WorkspaceHistory {
       return { available: false, canUndo: false, canRedo: false, isBusy: this.busy, message: this.statusMessage };
     }
     const context = this.captureHistoryContext(session);
-    const canUndo = context.record !== undefined;
     const redo = await this.readRedo(context.cwd, context.sessionId);
     const problem = await this.historyProblem(context, redo);
+    return this.stateFromContext(context, redo, problem);
+  }
+
+  private stateFromContext(context: HistoryReadContext, redo: RedoRecord | undefined, problem: string | null): WorkspaceHistoryState {
     if (problem) return { available: false, canUndo: false, canRedo: false, isBusy: this.busy, message: problem };
-    return { available: true, canUndo, canRedo: redo !== undefined, isBusy: this.busy, message: this.statusMessage };
+    return { available: true, canUndo: context.record !== undefined, canRedo: redo !== undefined, isBusy: this.busy, message: this.statusMessage };
   }
 
   captureSourceRevision(session: AgentSession): Promise<string> {

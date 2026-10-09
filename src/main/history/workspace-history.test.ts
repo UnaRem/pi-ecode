@@ -224,6 +224,10 @@ describe("WorkspaceHistory", () => {
     expect(review).toMatchObject({ available: false, files: [], baseCommit: null, headCommit: null });
     expect(review.message).toContain("required commits are missing");
     expect(await history.getState(session)).toMatchObject({ available: false, canUndo: false, canRedo: false, message: review.message });
+    expect(await history.getSnapshot(session)).toMatchObject({
+      history: { available: false, canUndo: false, canRedo: false, message: review.message },
+      review: { available: false, files: [], message: review.message },
+    });
     await expect(history.undo(session)).rejects.toThrow("Workspace history is unavailable");
     await expect(history.redo(session)).rejects.toThrow("Workspace history is unavailable");
     expect(navigations).toBe(0);
@@ -234,7 +238,7 @@ describe("WorkspaceHistory", () => {
     expect(entries).toEqual(missing === "redo-only" ? [] : [turn]);
   });
 
-  it.each(["review", "state"])("读取期间同一会话对象切换到缺仓库目标仍使用原上下文：%s", async (operation) => {
+  it.each(["review", "state", "snapshot"])("读取期间同一会话对象切换到缺仓库目标仍使用原上下文：%s", async (operation) => {
     const workspaceA = await mkdtemp(join(tmpdir(), "pi-ecode-read-a-"));
     const workspaceB = await mkdtemp(join(tmpdir(), "pi-ecode-read-b-"));
     const storage = await mkdtemp(join(tmpdir(), "pi-ecode-read-history-"));
@@ -272,7 +276,8 @@ describe("WorkspaceHistory", () => {
       await gate;
       return readRedo(cwd, sessionId);
     });
-    const pending = operation === "review" ? history.getReview(session) : history.getState(session);
+    const pending = operation === "review" ? history.getReview(session)
+      : operation === "snapshot" ? history.getSnapshot(session) : history.getState(session);
     expect(reads).toHaveBeenCalledWith(workspaceA, "test-session");
     Object.assign(session, { sessionId: sessionB.sessionId, sessionManager: sessionB.sessionManager });
     resume();
@@ -280,6 +285,9 @@ describe("WorkspaceHistory", () => {
 
     if (operation === "review") {
       expect(result).toMatchObject({ available: true, baseCommit: beforeCommit, headCommit: afterCommit });
+    } else if (operation === "snapshot") {
+      expect(result).toMatchObject({ history: { available: true, canUndo: true },
+        review: { available: true, baseCommit: beforeCommit, headCommit: afterCommit } });
     } else {
       expect(result).toMatchObject({ available: true, canUndo: true, canRedo: false });
     }
@@ -315,6 +323,31 @@ describe("WorkspaceHistory", () => {
     expect(checks.mock.calls.map((call) => call[2])).not.toContain("1".repeat(40));
     entries.pop();
     expect(await history.getState(session)).toMatchObject({ available: false, canUndo: false, canRedo: false });
+  });
+
+  it("组合快照只读取一次上下文和 redo，校验三次提交并执行七次 Git", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "pi-ecode-combined-workspace-"));
+    const storage = await mkdtemp(join(tmpdir(), "pi-ecode-combined-history-"));
+    temporaryPaths.push(workspace, storage);
+    const history = new WorkspaceHistory(storage);
+    const { session } = await seedLegacyTurn(history, storage, workspace, "combined task");
+    const seam = history as unknown as {
+      readRedo: (cwd: string, sessionId: string) => Promise<unknown>;
+      hasCommit: (cwd: string, sessionId: string, commit: string) => Promise<boolean>;
+      execGit: (cwd: string, sessionId: string, args: string[]) => Promise<string>;
+    };
+    const branches = vi.spyOn(session.sessionManager, "getBranch");
+    const reads = vi.spyOn(seam, "readRedo");
+    const checks = vi.spyOn(seam, "hasCommit");
+    const commands = vi.spyOn(seam, "execGit");
+
+    const snapshot = await history.getSnapshot(session);
+
+    expect(snapshot).toMatchObject({ history: { available: true, canUndo: true }, review: { available: true } });
+    expect(branches).toHaveBeenCalledTimes(1);
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(checks).toHaveBeenCalledTimes(3);
+    expect(commands).toHaveBeenCalledTimes(7);
   });
 
   it("coalesces repeated checkpoint requests for the same session", async () => {

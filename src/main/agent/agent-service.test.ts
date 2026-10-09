@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionManager, type AgentSession, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, SessionSummary, ValidationState } from "../../shared/contracts.js";
 
-const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[] }));
+const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[], scans: 0 }));
 vi.mock("./session-summaries.js", () => ({
-  listSessionSummaries: async () => sessionSummaryState.sessions,
+  listSessionSummaries: async () => { sessionSummaryState.scans += 1; return sessionSummaryState.sessions; },
 }));
 
 import { AgentService } from "./agent-service.js";
@@ -252,7 +252,9 @@ describe("AgentService settled 后台刷新", () => {
       runtime: { session: AgentSession }; projectPath: string;
       handleSessionEvent: (activeSession: AgentSession, event: AgentSessionEvent) => void;
     };
-    Object.assign(service, { runtime: { session }, projectPath: "C:/project", history });
+    Object.assign(service, { runtime: { session }, projectPath: "C:/project", history: {
+      ...history, getSnapshot: async () => ({ history: await history.getState(), review: await history.getReview() }),
+    } });
     const events: AgentEvent[] = [];
     service.subscribe((event) => events.push(event));
     return { service, session, internal, history, events };
@@ -434,8 +436,7 @@ describe("AgentService prompt lifecycle", () => {
       projectPath: "C:/project",
       runtime: { session, diagnostics: [] },
       history: {
-        getState: async () => EMPTY_AGENT_SNAPSHOT.history,
-        getReview: async () => EMPTY_AGENT_SNAPSHOT.review,
+        getSnapshot: async () => ({ history: EMPTY_AGENT_SNAPSHOT.history, review: EMPTY_AGENT_SNAPSHOT.review }),
       },
     });
 
@@ -452,6 +453,39 @@ describe("AgentService prompt lifecycle", () => {
         thinkingLevels: ["off"], supportsImages: false },
     ]);
     expect(snapshot.thinkingLevels).toEqual(["off"]);
+  });
+
+  it("switches with one ownership scan and refreshes the selected title from the runtime", async () => {
+    const path = "C:/sessions/selected.jsonl";
+    sessionSummaryState.sessions = [{ path, id: "selected", title: "stale title", modifiedAt: 1, messageCount: 1 }];
+    sessionSummaryState.scans = 0;
+    const session = {
+      sessionId: "selected", sessionFile: path, sessionName: "current title",
+      model: null, modelRuntime: { getAvailable: async () => [] }, messages: [],
+      sessionManager: SessionManager.inMemory("C:/project"), getContextUsage: () => undefined,
+      resourceLoader: { getAgentsFiles: () => ({ agentsFiles: [] }) },
+      thinkingLevel: "off", getAvailableThinkingLevels: () => ["off"],
+      isStreaming: false, isCompacting: false, pendingMessageCount: 0,
+    } as unknown as AgentSession;
+    const switchSession = vi.fn(async () => undefined);
+    const getSnapshot = vi.fn(async () => ({ history: EMPTY_AGENT_SNAPSHOT.history, review: EMPTY_AGENT_SNAPSHOT.review }));
+    const service = new AgentService();
+    Object.assign(service, { projectPath: "C:/project", runtime: { session, switchSession, diagnostics: [] },
+      history: { getSnapshot } });
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+
+    const snapshot = await service.switchSession(path);
+
+    expect(sessionSummaryState.scans).toBe(1);
+    expect(switchSession).toHaveBeenCalledWith(path);
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot.sessions[0]?.title).toBe("current title");
+    expect(events.filter((event) => event.type === "snapshot")).toEqual([{ type: "snapshot", snapshot }]);
+    switchSession.mockClear();
+    await expect(service.switchSession("C:/outside.jsonl")).rejects.toThrow("active project");
+    expect(switchSession).not.toHaveBeenCalled();
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("persists model selections and reapplies the 200K context budget", async () => {

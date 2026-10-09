@@ -404,15 +404,18 @@ export class AgentService {
   }
 
   async getSnapshot(): Promise<AgentSnapshot> {
+    return this.snapshotWithSessions();
+  }
+
+  private async snapshotWithSessions(knownSessions?: import("../../shared/contracts.js").SessionSummary[]): Promise<AgentSnapshot> {
     if (!this.runtime || !this.projectPath) {
       return { ...EMPTY_AGENT_SNAPSHOT, error: this.startupError ?? null };
     }
     const session = this.runtime.session;
-    const [sessions, availableModels, history, review] = await Promise.all([
-      listSessionSummaries(this.projectPath),
+    const [sessions, availableModels, { history, review }] = await Promise.all([
+      knownSessions ?? listSessionSummaries(this.projectPath),
       session.modelRuntime.getAvailable().catch(() => session.modelRuntime.getAvailableSnapshot()),
-      this.history.getState(session),
-      this.history.getReview(session),
+      this.history.getSnapshot(session),
     ]);
     const timelinePage = this.timelinePage(session);
     const model = session.model;
@@ -476,7 +479,10 @@ export class AgentService {
       throw new Error("That session does not belong to the active project.");
     }
     await runtime.switchSession(sessionPath);
-    const snapshot = await this.getSnapshot();
+    const updatedSessions = sessions.map((summary) => summary.path === sessionPath
+      ? { ...summary, title: runtime.session.sessionName ?? summary.title }
+      : summary);
+    const snapshot = await this.snapshotWithSessions(updatedSessions);
     this.emit({ type: "snapshot", snapshot });
     return snapshot;
   }

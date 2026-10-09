@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { CreateProjectAgentRequest, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "@shared/contracts";
 import { INITIAL_AGENT_STATE, optimisticTimeline, reduceAgentEvent } from "@renderer/lib/agent-state";
@@ -13,6 +13,7 @@ export function useAgent() {
   const [state, dispatch] = useReducer(reduceAgentEvent, INITIAL_AGENT_STATE);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const switchingSession = useRef(false);
   const timeline = useMemo(() => optimisticTimeline(state), [state.timeline, state.pendingPrompts]);
 
   const run = useCallback(async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
@@ -64,9 +65,14 @@ export function useAgent() {
   }, [run]);
 
   const switchSession = useCallback(async (path: string) => {
-    if (path === state.sessionFile || state.isStreaming) return;
-    const snapshot = await run(() => window.piDesktop.switchSession(path));
-    if (snapshot) dispatch({ type: "snapshot", snapshot });
+    if (path === state.sessionFile || state.isStreaming || switchingSession.current) return;
+    switchingSession.current = true;
+    try {
+      // Main 广播权威快照；请求返回值不再重复应用同一份状态。
+      await run(() => window.piDesktop.switchSession(path));
+    } finally {
+      switchingSession.current = false;
+    }
   }, [run, state.isStreaming, state.sessionFile]);
 
   const deleteSession = useCallback(async (path: string) => {
