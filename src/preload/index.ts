@@ -32,6 +32,7 @@ const api: DesktopApi = {
   redo: () => ipcRenderer.invoke(IPC_CHANNELS.redo),
   runValidation: () => ipcRenderer.invoke(IPC_CHANNELS.runValidation),
   stopValidation: () => ipcRenderer.invoke(IPC_CHANNELS.stopValidation),
+  stopManagedProcess: (id) => ipcRenderer.invoke(IPC_CHANNELS.stopManagedProcess, id),
   getReview: () => ipcRenderer.invoke(IPC_CHANNELS.getReview),
   rejectReviewFile: (path) => ipcRenderer.invoke(IPC_CHANNELS.rejectReviewFile, path),
   prepareCandidate: () => ipcRenderer.invoke(IPC_CHANNELS.prepareCandidate),

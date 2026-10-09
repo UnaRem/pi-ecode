@@ -55,6 +55,8 @@ src/main      windows, native dialogs, pi SDK, filesystem/session lifecycle
 - Correlate tool activity by `toolCallId`; updates replace prior partial output, and end events finalize it.
 - A prompt accepted while idle starts immediately. While streaming, the default send action is `steer`; stopping clears queued work before aborting.
 - Surface recoverable failures in the conversation or status area. Do not hide errors in developer-console-only logs.
+- 主 service 拥有项目托管进程的登记、实时日志与停止职责；`start_process` 工具启动持续进程，停止操作使用登记 ID，切换项目和退出应用必须等待进程清理完成，失败应报告并保留重试能力。
+- 托管进程的 renderer 控制仅通过 `process:stop` 窄 IPC 传递非空、长度不超过 200 的字符串 ID；主 service 必须再次确认登记 ID 属于当前项目，不接受 PID、命令或任意进程目标。
 
 ## Source layout
 

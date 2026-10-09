@@ -193,6 +193,10 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.redo, () => service.redo());
   ipcMain.handle(IPC_CHANNELS.runValidation, () => service.runValidation());
   ipcMain.handle(IPC_CHANNELS.stopValidation, () => service.stopValidation());
+  ipcMain.handle(IPC_CHANNELS.stopManagedProcess, (_event, id: unknown) => {
+    if (typeof id !== "string" || !id.trim() || id.length > 200) throw new Error("托管进程 ID 无效。");
+    return service.stopManagedProcess(id);
+  });
   ipcMain.handle(IPC_CHANNELS.getReview, () => service.getReview());
   ipcMain.handle(IPC_CHANNELS.rejectReviewFile, (_event, path: string) => service.rejectReviewFile(path));
   ipcMain.handle(IPC_CHANNELS.prepareCandidate, () => service.prepareCandidate());

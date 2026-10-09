@@ -43,6 +43,8 @@ let unregisterIpc: (() => void) | undefined;
 let unsubscribeAgent: (() => void) | undefined;
 let unregisterAuth: (() => void) | undefined;
 let unsubscribeAuth: (() => void) | undefined;
+let shutdown: Promise<void> | undefined;
+let cleanupComplete = false;
 
 function focusMainWindow(): void {
   const window = BrowserWindow.getAllWindows()[0];
@@ -84,6 +86,12 @@ function createWindow(): void {
     },
   });
 
+  window.on("close", (event) => {
+    if (process.platform === "darwin" || cleanupComplete) return;
+    // 保留窗口直到清理成功，失败消息仍可显示，用户也能再次关闭重试。
+    event.preventDefault();
+    app.quit();
+  });
   window.setMenuBarVisibility(false);
   // The branded development executable already embeds the icon; an unregistered AppUserModelID makes Windows fall back to a generic taskbar icon.
   if (process.platform === "win32" && !IS_BRANDED_DEVELOPMENT_RUNTIME) {
@@ -136,11 +144,26 @@ if (!hasSingleInstanceLock) {
     if (process.platform !== "darwin") app.quit();
   });
 
-  app.on("before-quit", () => {
-    unregisterIpc?.();
-    unsubscribeAgent?.();
-    unsubscribeAuth?.();
-    void settings.dispose();
-    void service.dispose();
+  app.on("before-quit", (event) => {
+    if (cleanupComplete) return;
+    event.preventDefault();
+    if (shutdown) return;
+    // 重入退出必须等待同一次清理；失败保留 IPC/订阅用于报告与再次尝试。
+    shutdown = (async () => {
+      const results = await Promise.allSettled([
+        Promise.resolve().then(() => settings.dispose()),
+        Promise.resolve().then(() => service.dispose()),
+      ]);
+      const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+      if (failures.length) throw new AggregateError(failures.map((failure) => failure.reason), "退出清理失败");
+      unregisterIpc?.();
+      unsubscribeAgent?.();
+      unsubscribeAuth?.();
+      cleanupComplete = true;
+      app.quit();
+    })().catch((error: unknown) => {
+      const reasons = error instanceof AggregateError ? error.errors : [error];
+      service.reportError(`退出清理失败，请重试退出：${reasons.map((reason: unknown) => reason instanceof Error ? reason.message : String(reason)).join("；")}`);
+    }).finally(() => { shutdown = undefined; });
   });
 }
