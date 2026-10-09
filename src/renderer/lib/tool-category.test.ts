@@ -10,6 +10,11 @@ describe("toolCategory", () => {
     expect(toolCategory("task_plan", "")).toBe("plan");
   });
 
+  it("classifies managed process starts as execution regardless of command text", () => {
+    expect(toolCategory("start_process", "bun run dev")).toBe("execute");
+    expect(toolCategory("START_PROCESS", "git daemon")).toBe("execute");
+  });
+
   it("recognizes git commands without treating every shell command as version work", () => {
     expect(toolCategory("bash", " git status --short")).toBe("version");
     expect(toolCategory("bash", "npm run build && git status")).toBe("execute");

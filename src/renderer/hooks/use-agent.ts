@@ -80,6 +80,16 @@ export function useAgent() {
     await run(() => window.piDesktop.deleteSession(path));
   }, [run, state.isStreaming, state.sessionFile]);
 
+  const stopManagedProcess = useCallback(async (id: string): Promise<void> => {
+    try {
+      await window.piDesktop.stopManagedProcess(id);
+    } catch (error) {
+      dispatch({ type: "error", message: messageFromError(error) });
+      // 面板需要收到拒绝才能显示停止失败并保留重试操作。
+      throw error;
+    }
+  }, []);
+
   const renameSession = useCallback(async (title: string) => {
     await run(() => window.piDesktop.renameSession(title));
   }, [run]);
@@ -224,6 +234,7 @@ export function useAgent() {
       newSession,
       switchSession,
       deleteSession,
+      stopManagedProcess,
       renameSession,
       loadOlderTimeline,
       loadExplorerTimeline,

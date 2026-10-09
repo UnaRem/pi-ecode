@@ -228,6 +228,8 @@ export default function App() {
         projectPath={state.projectPath}
         isStreaming={state.isStreaming}
         explorers={state.explorers}
+        processes={state.processes}
+        onStopManagedProcess={actions.stopManagedProcess}
         agentCatalog={state.agentCatalog}
         models={state.models}
         selectedModel={state.selectedModel}

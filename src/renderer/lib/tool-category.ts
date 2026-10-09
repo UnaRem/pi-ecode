@@ -12,7 +12,7 @@ export function toolCategory(name: string, input: string): ToolCategory {
   if (INSPECT_TOOLS.has(normalizedName)) return "inspect";
   if (MUTATION_TOOLS.has(normalizedName)) return "mutate";
   if (RESEARCH_TOOLS.has(normalizedName)) return "research";
-  if (normalizedName === "bash" || normalizedName === "powershell") return "execute";
+  if (normalizedName === "bash" || normalizedName === "powershell" || normalizedName === "start_process") return "execute";
   return "other";
 }
 
