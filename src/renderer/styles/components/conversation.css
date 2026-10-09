@@ -39,6 +39,8 @@
 .app-shell.has-custom-backdrop .message.user .message-content { border: 1px solid var(--color-backdrop-border); border-radius: var(--radius-lg); background: var(--color-backdrop-surface); box-shadow: var(--shadow-sm); backdrop-filter: blur(16px) saturate(1.05); }
 .markdown h1, .markdown h2, .markdown h3, .markdown h4 { color: var(--color-text); }
 .markdown blockquote { border-left-color: var(--color-accent-border-hover); color: var(--color-text-muted); }
+.markdown blockquote > :first-child { margin-top: 0; }
+.markdown blockquote > :last-child { margin-bottom: 0; }
 .markdown code { color: var(--slate-700); background: var(--color-surface-muted); }
 .markdown-code-block { position: relative; margin: 10px 0 14px; }
 .markdown-code-block pre { margin: 0; padding-top: 38px; border-color: var(--color-border); color: var(--color-code-text); background: var(--color-code-bg); }

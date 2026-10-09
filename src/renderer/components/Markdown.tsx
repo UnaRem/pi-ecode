@@ -1,5 +1,5 @@
 import { Check, Copy, TriangleAlert } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n/i18n";
 
 type CopyStatus = "idle" | "copied" | "failed";
@@ -82,67 +82,135 @@ function MarkdownTable({ header, divider, rows }: { header: string[]; divider: s
   );
 }
 
-export function Markdown({ children }: { children: string }) {
-  const lines = children.replaceAll("\r\n", "\n").split("\n");
+const QUOTE_MARKER = /^ {0,3}>[ \t]?/u;
+const FENCE_MARKER = /^ {0,3}(`{3,}|~{3,})(.*)$/u;
+
+function listMarker(line: string) {
+  const match = line.match(/^( *)([-*+]|\d+[.)])([ \t]+)(.*)$/u);
+  if (!match) return undefined;
+  return { indent: match[1]!.length, ordered: /^\d/u.test(match[2]!), number: Number.parseInt(match[2]!, 10),
+    contentIndent: match[1]!.length + match[2]!.length + match[3]!.length, text: match[4]! };
+}
+
+function parseCodeBlock(lines: string[], start: number) {
+  const fence = lines[start]!.match(FENCE_MARKER)!;
+  const marker = fence[1]!;
+  const code: string[] = [];
+  let next = start + 1;
+  // 未闭合的流式围栏读到末尾；正文不 trim，保留复制所需的缩进与空行。
+  while (next < lines.length) {
+    const closing = lines[next]!.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/u)?.[1];
+    if (closing && closing[0] === marker[0] && closing.length >= marker.length) { next += 1; break; }
+    code.push(lines[next++]!);
+  }
+  return { next, node: <MarkdownCodeBlock key={start} code={code.join("\n")} language={fence[2]!.trim()} /> };
+}
+
+function isTableStart(lines: string[], start: number): boolean {
+  const line = lines[start] ?? "";
+  if (!line.includes("|")) return false;
+  const divider = tableCells(lines[start + 1] ?? "");
+  return tableCells(line).length === divider.length && divider.every((cell) => tableAlignment(cell) !== undefined);
+}
+
+function parseTableBlock(lines: string[], start: number) {
+  if (!isTableStart(lines, start)) return undefined;
+  const header = tableCells(lines[start]!);
+  const divider = tableCells(lines[start + 1] ?? "");
+  const rows: string[][] = [];
+  let next = start + 2;
+  while (next < lines.length && lines[next]!.includes("|") && lines[next]!.trim()) rows.push(tableCells(lines[next++]!));
+  return { next, node: <MarkdownTable key={start} header={header} divider={divider} rows={rows} /> };
+}
+
+function nextNonBlankLine(lines: string[], start: number): number {
+  let index = start;
+  while (index < lines.length && !lines[index]!.trim()) index += 1;
+  return index;
+}
+
+function parseListBlock(lines: string[], start: number) {
+  const first = listMarker(lines[start]!)!;
+  const items: ReactNode[] = [];
+  let next = start;
+  while (next < lines.length) {
+    const marker = listMarker(lines[next]!);
+    if (!marker || marker.indent !== first.indent || marker.ordered !== first.ordered) break;
+    const itemStart = next;
+    const body = [marker.text];
+    next += 1;
+    while (next < lines.length) {
+      const line = lines[next]!;
+      if (!line.trim()) {
+        const following = nextNonBlankLine(lines, next + 1);
+        const followingMarker = listMarker(lines[following] ?? "");
+        const sameList = followingMarker?.indent === first.indent && followingMarker.ordered === first.ordered;
+        const continuation = (lines[following]?.match(/^ */u)?.[0].length ?? 0) >= marker.contentIndent;
+        if (!sameList && !continuation) break;
+        body.push(line.slice(marker.contentIndent));
+        next += 1;
+        continue;
+      }
+      if ((line.match(/^ */u)?.[0].length ?? 0) < marker.contentIndent) break;
+      body.push(line.slice(marker.contentIndent));
+      next += 1;
+    }
+    // 显式编号保留跨空行或跳号的有序列表；子列表复用相同块解析。
+    items.push(<li key={itemStart} value={first.ordered ? marker.number : undefined}>{parseBlocks(body)}</li>);
+  }
+  return { next, node: first.ordered ? <ol key={start} start={first.number}>{items}</ol> : <ul key={start}>{items}</ul> };
+}
+
+function startsBlock(lines: string[], index: number): boolean {
+  const line = lines[index] ?? "";
+  return QUOTE_MARKER.test(line) || FENCE_MARKER.test(line) || /^(#{1,4})\s/u.test(line)
+    || listMarker(line) !== undefined || isTableStart(lines, index);
+}
+
+function parseBlocks(lines: string[]): ReactNode[] {
   const nodes: ReactNode[] = [];
   let index = 0;
   while (index < lines.length) {
-    const line = lines[index] ?? "";
-    if (line.startsWith("```")) {
-      const language = line.slice(3).trim();
-      const code: string[] = [];
-      index += 1;
-      while (index < lines.length && !(lines[index] ?? "").startsWith("```")) code.push(lines[index++] ?? "");
-      index += 1;
-      const codeText = code.join("\n");
-      nodes.push(<MarkdownCodeBlock key={`code-${index}`} code={codeText} language={language} />);
+    const start = index;
+    const line = lines[index]!;
+    if (!line.trim()) { index += 1; continue; }
+    if (FENCE_MARKER.test(line)) {
+      const block = parseCodeBlock(lines, start);
+      nodes.push(block.node);
+      index = block.next;
       continue;
     }
-    const nextLine = lines[index + 1] ?? "";
-    const headerCells = tableCells(line);
-    const dividerCells = tableCells(nextLine);
-    if (line.includes("|") && headerCells.length === dividerCells.length && dividerCells.every((cell) => tableAlignment(cell))) {
-      const rows: string[][] = [];
-      index += 2;
-      while (index < lines.length && (lines[index] ?? "").includes("|") && (lines[index] ?? "").trim()) {
-        rows.push(tableCells(lines[index++] ?? ""));
-      }
-      nodes.push(<MarkdownTable key={`table-${index}`} header={headerCells} divider={dividerCells} rows={rows} />);
+    if (QUOTE_MARKER.test(line)) {
+      const quoted: string[] = [];
+      // 每次仅剥一层引用标记，裸 > 留下空行，嵌套引用递归生成子块。
+      while (index < lines.length && QUOTE_MARKER.test(lines[index]!)) quoted.push(lines[index++]!.replace(QUOTE_MARKER, ""));
+      nodes.push(<blockquote key={start}>{parseBlocks(quoted)}</blockquote>);
       continue;
     }
+    const table = parseTableBlock(lines, start);
+    if (table) { nodes.push(table.node); index = table.next; continue; }
     const heading = line.match(/^(#{1,4})\s+(.+)$/u);
     if (heading) {
-      const level = heading[1]?.length ?? 1;
-      const content = inlineMarkdown(heading[2] ?? "");
-      nodes.push(level === 1 ? <h1 key={index}>{content}</h1> : level === 2 ? <h2 key={index}>{content}</h2> : level === 3 ? <h3 key={index}>{content}</h3> : <h4 key={index}>{content}</h4>);
+      const level = heading[1]!.length;
+      const content = inlineMarkdown(heading[2]!);
+      nodes.push(level === 1 ? <h1 key={start}>{content}</h1> : level === 2 ? <h2 key={start}>{content}</h2> : level === 3 ? <h3 key={start}>{content}</h3> : <h4 key={start}>{content}</h4>);
       index += 1;
       continue;
     }
-    if (/^[-*]\s+/u.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length && /^[-*]\s+/u.test(lines[index] ?? "")) items.push((lines[index++] ?? "").replace(/^[-*]\s+/u, ""));
-      nodes.push(<ul key={`list-${index}`}>{items.map((item, itemIndex) => <li key={itemIndex}>{inlineMarkdown(item)}</li>)}</ul>);
-      continue;
-    }
-    if (/^\d+\.\s+/u.test(line)) {
-      const items: string[] = [];
-      while (index < lines.length && /^\d+\.\s+/u.test(lines[index] ?? "")) items.push((lines[index++] ?? "").replace(/^\d+\.\s+/u, ""));
-      nodes.push(<ol key={`ordered-${index}`}>{items.map((item, itemIndex) => <li key={itemIndex}>{inlineMarkdown(item)}</li>)}</ol>);
-      continue;
-    }
-    if (line.startsWith("> ")) {
-      nodes.push(<blockquote key={index}>{inlineMarkdown(line.slice(2))}</blockquote>);
-      index += 1;
-      continue;
-    }
-    if (!line.trim()) {
-      index += 1;
+    if (listMarker(line)) {
+      const block = parseListBlock(lines, start);
+      nodes.push(block.node);
+      index = block.next;
       continue;
     }
     const paragraph = [line];
     index += 1;
-    while (index < lines.length && (lines[index] ?? "").trim() && !/^(#{1,4})\s|^```|^[-*]\s|^\d+\.\s|^>\s/u.test(lines[index] ?? "")) paragraph.push(lines[index++] ?? "");
-    nodes.push(<p key={`paragraph-${index}`}>{inlineMarkdown(paragraph.join("\n"))}</p>);
+    while (index < lines.length && lines[index]!.trim() && !startsBlock(lines, index)) paragraph.push(lines[index++]!);
+    nodes.push(<p key={start}>{inlineMarkdown(paragraph.join("\n"))}</p>);
   }
-  return <div className="markdown">{nodes}</div>;
+  return nodes;
 }
+
+export const Markdown = memo(function Markdown({ children }: { children: string }) {
+  return <div className="markdown">{parseBlocks(children.replaceAll("\r\n", "\n").split("\n"))}</div>;
+});
