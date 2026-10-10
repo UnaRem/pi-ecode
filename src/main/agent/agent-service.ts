@@ -90,6 +90,8 @@ export class AgentService {
     await this.managedProcesses.stop(id);
   }
   private projectPath: string | undefined;
+  private sessionSummaries: { projectPath: string; sessions: import("../../shared/contracts.js").SessionSummary[] } | undefined;
+  private sessionSummaryRevision = 0;
   private startupError: string | undefined;
   private unsubscribe: (() => void) | undefined;
   private readonly listeners = new Set<(event: AgentEvent) => void>();
@@ -255,6 +257,8 @@ export class AgentService {
       throw error;
     }
     this.projectPath = cwd;
+    this.sessionSummaries = undefined;
+    this.sessionSummaryRevision += 1;
     this.startupError = undefined;
 
     try {
@@ -449,7 +453,7 @@ export class AgentService {
     }
     const session = this.runtime.session;
     const [sessions, availableModels, { history, review }] = await Promise.all([
-      knownSessions ?? listSessionSummaries(this.projectPath),
+      knownSessions ?? this.loadSessionSummaries(),
       session.modelRuntime.getAvailable().catch(() => session.modelRuntime.getAvailableSnapshot()),
       this.history.getSnapshot(session),
     ]);
@@ -511,16 +515,31 @@ export class AgentService {
     const runtime = this.requireRuntime();
     if (this.runtimeBusy) throw new Error("Stop the active agent run before switching sessions.");
     this.flushStreamItems();
-    const sessions = await listSessionSummaries(this.projectPath);
+    const projectPath = this.projectPath;
+    const isCurrent = this.sessionGuard(runtime.session);
+    const knownSessions = this.sessionSummaries;
+    const sessions = knownSessions && knownSessions.projectPath === projectPath
+      ? knownSessions.sessions : await this.loadSessionSummaries();
     if (!sessions.some((session) => session.path === sessionPath)) {
       throw new Error("That session does not belong to the active project.");
     }
-    await runtime.switchSession(sessionPath);
-    const updatedSessions = sessions.map((summary) => summary.path === sessionPath
+    const details = await stat(sessionPath);
+    if (!details.isFile()) throw new Error("Selected session is not a file.");
+    if (!isCurrent()) throw new Error("The active session changed before switching.");
+    const switchResult = await runtime.switchSession(sessionPath);
+    if (this.runtime !== runtime || this.projectPath !== projectPath) throw new Error("The active project changed while switching.");
+    // SDK 取消切换时仍停留原会话，不得把目标标题写入已发布列表。
+    const switched = !switchResult.cancelled && runtime.session.sessionFile === sessionPath;
+    const updatedSessions = switched ? sessions.map((summary) => summary.path === sessionPath
       ? { ...summary, title: runtime.session.sessionName ?? summary.title }
-      : summary);
+      : summary) : sessions;
+    if (switched && projectPath) {
+      this.sessionSummaryRevision += 1;
+      this.sessionSummaries = { projectPath, sessions: updatedSessions };
+    }
+    const stillCurrent = this.sessionGuard(runtime.session);
     const snapshot = await this.snapshotWithSessions(updatedSessions);
-    this.emit({ type: "snapshot", snapshot });
+    if (stillCurrent()) this.emit({ type: "snapshot", snapshot });
     return snapshot;
   }
 
@@ -1173,12 +1192,25 @@ export class AgentService {
     });
   }
 
+  private async loadSessionSummaries(): Promise<import("../../shared/contracts.js").SessionSummary[]> {
+    const projectPath = this.projectPath;
+    const session = this.runtime?.session;
+    const isCurrent = session ? this.sessionGuard(session) : () => this.projectPath === projectPath;
+    const revision = ++this.sessionSummaryRevision;
+    const sessions = await listSessionSummaries(projectPath);
+    // SDK 会原地切换 session；旧项目、旧会话或较早刷新不得回写当前列表。
+    if (projectPath && isCurrent() && revision === this.sessionSummaryRevision) {
+      this.sessionSummaries = { projectPath, sessions };
+    }
+    return sessions;
+  }
+
   private async refreshSessions(session = this.runtime?.session): Promise<void> {
     const projectPath = this.projectPath;
     const isCurrent = session ? this.sessionGuard(session) : () => this.projectPath === projectPath;
     if (!isCurrent()) return;
-    const sessions = await listSessionSummaries(projectPath);
-    if (isCurrent()) this.emit({ type: "sessions", sessions });
+    const sessions = await this.loadSessionSummaries();
+    if (isCurrent() && this.sessionSummaries?.sessions === sessions) this.emit({ type: "sessions", sessions });
   }
 
   respondExtensionUi(response: ExtensionUiResponse): boolean {
@@ -1186,6 +1218,8 @@ export class AgentService {
   }
 
   private async disposeRuntime(): Promise<void> {
+    this.sessionSummaries = undefined;
+    this.sessionSummaryRevision += 1;
     if (this.streamTimer !== undefined) clearTimeout(this.streamTimer);
     this.streamTimer = undefined;
     this.pendingStreamItems.clear();

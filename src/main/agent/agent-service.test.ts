@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SessionManager, type AgentSession, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, SessionSummary, ValidationState } from "../../shared/contracts.js";
 
-const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[], scans: 0 }));
+const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[], scans: 0,
+  pending: undefined as Promise<SessionSummary[]> | undefined }));
 vi.mock("./session-summaries.js", () => ({
-  listSessionSummaries: async () => { sessionSummaryState.scans += 1; return sessionSummaryState.sessions; },
+  listSessionSummaries: async () => { sessionSummaryState.scans += 1; return sessionSummaryState.pending ?? sessionSummaryState.sessions; },
 }));
 
 import { AgentService } from "./agent-service.js";
@@ -488,6 +492,7 @@ describe("AgentService settled 后台刷新", () => {
 describe("AgentService prompt lifecycle", () => {
   afterEach(() => {
     sessionSummaryState.sessions = [];
+    sessionSummaryState.pending = undefined;
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
@@ -591,9 +596,17 @@ describe("AgentService prompt lifecycle", () => {
     expect(snapshot.processes).toEqual([]);
   });
 
-  it("switches with one ownership scan and refreshes the selected title from the runtime", async () => {
-    const path = "C:/sessions/selected.jsonl";
-    sessionSummaryState.sessions = [{ path, id: "selected", title: "stale title", modifiedAt: 1, messageCount: 1 }];
+  it.each([false, true])("已初始化列表连续切换不额外扫描；未初始化仅扫描一次：%s", async (initialized) => {
+    const directory = await mkdtemp(join(tmpdir(), "pi-session-switch-"));
+    const path = join(directory, "selected.jsonl");
+    const otherPath = join(directory, "other.jsonl");
+    await writeFile(path, "session", "utf8");
+    await writeFile(otherPath, "other session", "utf8");
+    try {
+    sessionSummaryState.sessions = [
+      { path, id: "selected", title: "stale title", modifiedAt: 1, messageCount: 1 },
+      { path: otherPath, id: "other", title: "other stale title", modifiedAt: 1, messageCount: 1 },
+    ];
     sessionSummaryState.scans = 0;
     const session = {
       sessionId: "selected", sessionFile: path, sessionName: "current title",
@@ -603,7 +616,11 @@ describe("AgentService prompt lifecycle", () => {
       thinkingLevel: "off", getAvailableThinkingLevels: () => ["off"],
       isStreaming: false, isCompacting: false, pendingMessageCount: 0,
     } as unknown as AgentSession;
-    const switchSession = vi.fn(async () => undefined);
+    const switchSession = vi.fn(async (target: string) => {
+      Object.assign(session, { sessionFile: target, sessionId: target === path ? "selected" : "other",
+        sessionName: target === path ? "current title" : "other current title" });
+      return { cancelled: false };
+    });
     const getSnapshot = vi.fn(async () => ({ history: EMPTY_AGENT_SNAPSHOT.history, review: EMPTY_AGENT_SNAPSHOT.review }));
     const service = new AgentService();
     Object.assign(service, { projectPath: "C:/project", runtime: { session, switchSession, diagnostics: [] },
@@ -611,17 +628,102 @@ describe("AgentService prompt lifecycle", () => {
     const events: AgentEvent[] = [];
     service.subscribe((event) => events.push(event));
 
+    if (initialized) await service.getSnapshot();
+    const scansBeforeSwitch = sessionSummaryState.scans;
+    const otherSnapshot = await service.switchSession(otherPath);
     const snapshot = await service.switchSession(path);
 
+    expect(sessionSummaryState.scans - scansBeforeSwitch).toBe(initialized ? 0 : 1);
     expect(sessionSummaryState.scans).toBe(1);
-    expect(switchSession).toHaveBeenCalledWith(path);
-    expect(getSnapshot).toHaveBeenCalledTimes(1);
-    expect(snapshot.sessions[0]?.title).toBe("current title");
-    expect(events.filter((event) => event.type === "snapshot")).toEqual([{ type: "snapshot", snapshot }]);
+    expect(switchSession.mock.calls).toEqual([[otherPath], [path]]);
+    expect(otherSnapshot).toMatchObject({ sessionId: "other", sessionFile: otherPath, sessionTitle: "other current title" });
+    expect(snapshot).toMatchObject({ sessionId: "selected", sessionFile: path, sessionTitle: "current title" });
+    expect(getSnapshot).toHaveBeenCalledTimes(initialized ? 3 : 2);
+    expect(snapshot.sessions.map((summary) => summary.title)).toEqual(["current title", "other current title"]);
+    expect(events.filter((event) => event.type === "snapshot").at(-1)).toEqual({ type: "snapshot", snapshot });
     switchSession.mockClear();
     await expect(service.switchSession("C:/outside.jsonl")).rejects.toThrow("active project");
     expect(switchSession).not.toHaveBeenCalled();
-    expect(getSnapshot).toHaveBeenCalledTimes(1);
+    expect(getSnapshot).toHaveBeenCalledTimes(initialized ? 3 : 2);
+    expect(sessionSummaryState.scans).toBe(1);
+    await rm(path);
+    await expect(service.switchSession(path)).rejects.toThrow();
+    await mkdir(path);
+    await expect(service.switchSession(path)).rejects.toThrow("not a file");
+    expect(switchSession).not.toHaveBeenCalled();
+    Object.assign(service, { projectPath: "C:/other-project" });
+    sessionSummaryState.sessions = [];
+    await expect(service.switchSession(path)).rejects.toThrow("active project");
+    expect(switchSession).not.toHaveBeenCalled();
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("旧项目或旧会话的刷新结果不能覆盖当前列表", async () => {
+    const session = { sessionId: "old", sessionManager: SessionManager.inMemory("C:/old") } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service, { projectPath: "C:/old", runtime: { session } });
+    const internals = service as unknown as { refreshSessions: () => Promise<void> };
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    for (const changeProject of [false, true]) {
+      let finish = (_sessions: SessionSummary[]): void => undefined;
+      sessionSummaryState.pending = new Promise<SessionSummary[]>((resolve) => { finish = resolve; });
+      const oldRefresh = internals.refreshSessions();
+      if (changeProject) Object.assign(service, { projectPath: "C:/new", runtime: { session: { sessionId: "new-project" } } });
+      else Object.assign(session, { sessionId: "new-session" });
+      sessionSummaryState.pending = undefined;
+      sessionSummaryState.sessions = [{ path: "new.jsonl", id: "new", title: "New", modifiedAt: 1, messageCount: 1 }];
+      await internals.refreshSessions();
+      finish([{ path: "old.jsonl", id: "old", title: "Old", modifiedAt: 1, messageCount: 1 }]);
+      await oldRefresh;
+      // 从公开切换行为验证旧路径不在列表：拒绝发生在 stat/runtime 之前且不重扫。
+      const scans = sessionSummaryState.scans;
+      await expect(service.switchSession("old.jsonl")).rejects.toThrow("active project");
+      expect(sessionSummaryState.scans).toBe(scans);
+      expect(events.filter((event) => event.type === "sessions").at(-1)).toEqual({ type: "sessions", sessions: sessionSummaryState.sessions });
+    }
+  });
+
+  it("取消或 SDK 报错不改目标标题，旧刷新也不覆盖新 snapshot 列表", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pi-session-cancel-"));
+    const path = join(directory, "target.jsonl");
+    await writeFile(path, "session", "utf8");
+    try {
+      const session = {
+        sessionId: "active", sessionFile: "active.jsonl", sessionName: "active title",
+        model: null, modelRuntime: { getAvailable: async () => [] }, messages: [],
+        sessionManager: SessionManager.inMemory(directory), getContextUsage: () => undefined,
+        resourceLoader: { getAgentsFiles: () => ({ agentsFiles: [] }) },
+        thinkingLevel: "off", getAvailableThinkingLevels: () => ["off"], pendingMessageCount: 0,
+      } as unknown as AgentSession;
+      const switchSession = vi.fn(async () => ({ cancelled: true }));
+      const service = new AgentService();
+      Object.assign(service, { projectPath: directory, runtime: { session, switchSession, diagnostics: [] },
+        history: { getSnapshot: async () => ({ history: EMPTY_AGENT_SNAPSHOT.history, review: EMPTY_AGENT_SNAPSHOT.review }) } });
+      sessionSummaryState.sessions = [{ path, id: "target", title: "original title", modifiedAt: 1, messageCount: 1 }];
+      await service.getSnapshot();
+      const cancelled = await service.switchSession(path);
+      expect(cancelled.sessions[0]?.title).toBe("original title");
+      // 即使请求当前路径，cancelled 也必须优先，不能把当前标题写入目标摘要。
+      Object.assign(session, { sessionFile: path });
+      expect((await service.switchSession(path)).sessions[0]?.title).toBe("original title");
+      Object.assign(session, { sessionFile: "active.jsonl" });
+      switchSession.mockRejectedValueOnce(new Error("SDK failed"));
+      await expect(service.switchSession(path)).rejects.toThrow("SDK failed");
+      const internals = service as unknown as { refreshSessions: () => Promise<void> };
+      let finish = (_sessions: SessionSummary[]): void => undefined;
+      sessionSummaryState.pending = new Promise<SessionSummary[]>((resolve) => { finish = resolve; });
+      const oldRefresh = internals.refreshSessions();
+      sessionSummaryState.pending = undefined;
+      sessionSummaryState.sessions = [{ ...sessionSummaryState.sessions[0]!, title: "fresh title" }];
+      await service.getSnapshot();
+      finish([]);
+      await oldRefresh;
+      const scans = sessionSummaryState.scans;
+      const afterFailure = await service.switchSession(path);
+      expect(afterFailure.sessions[0]?.title).toBe("fresh title");
+      expect(sessionSummaryState.scans).toBe(scans);
+    } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
   it("persists model selections and reapplies the 200K context budget", async () => {
