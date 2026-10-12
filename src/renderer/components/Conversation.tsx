@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ArrowDown, Sparkles } from "lucide-react";
 import type { ChangeReview, ConversationItem, ExplorerTask, ValidationState } from "@shared/contracts";
 import type { ConversationIdentity } from "@shared/app-config-contracts";
+import { confirmationDisplayText, findPendingConfirmation } from "../../shared/confirmation.js";
+import { ConfirmationPrompt } from "./ConfirmationPrompt";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
@@ -26,6 +28,7 @@ interface ConversationProps {
   isLoadingOlder?: boolean;
   onLoadOlder?: () => void;
   onContinue: () => void;
+  onSendConfirmation?: (message: string) => Promise<void>;
   selectedToolId?: string | null;
   onSelectTool?: (toolId: string) => void;
   conversationIdentity?: ConversationIdentity | undefined;
@@ -229,6 +232,8 @@ function ConversationBody(props: ConversationBodyProps) {
   const renderGroups = useMemo(() => groupConsecutiveTools(visibleTimeline), [visibleTimeline]);
   const firstAssistantIds = useMemo(() => firstAssistantIdsByTurn(renderGroups), [renderGroups]);
   const firstUserId = renderGroups.find((group) => group.kind === "message" && group.item.message.role === "user")?.id;
+  const pendingConfirmation = useMemo(() => findPendingConfirmation(props.timeline), [props.timeline]);
+  const hasPendingUser = props.timeline.some((item) => item.kind === "message" && item.message.role === "user" && item.message.id.startsWith("pending-user-"));
   const isEmpty = visibleTimeline.length === 0;
   const lastItem = visibleTimeline.at(-1);
   const latestUserGroupId = [...renderGroups].reverse().find((group) => group.kind === "message" && group.item.message.role === "user")?.id;
@@ -283,7 +288,7 @@ function ConversationBody(props: ConversationBodyProps) {
                 status={group.item.message.role === "assistant" && group.id === activeAssistantHeaderId ? activeStatus : null}
               />}
               <div className="message-content">
-                {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : group.item.message.text}
+                {group.item.message.role === "assistant" ? <Markdown>{group.item.message.text}</Markdown> : confirmationDisplayText(group.item.message.text)}
                 {group.item.message.pastedTexts && group.item.message.pastedTexts.length > 0 && <PastedTextAttachments attachments={group.item.message.pastedTexts} variant="message" />}
                 {group.item.message.images && group.item.message.images.length > 0 && <ImageGallery images={group.item.message.images} variant="message" />}
                 {hasLiveAssistant && group.id === lastItem?.id && <span className="stream-caret" aria-label={t("conversation.generating")} />}
@@ -311,6 +316,12 @@ function ConversationBody(props: ConversationBodyProps) {
           )}
         </>
       )}
+      {pendingConfirmation && props.onSendConfirmation && <ConfirmationPrompt
+        key={`${props.viewKey ?? "conversation"}:${pendingConfirmation.requestId}`}
+        request={pendingConfirmation}
+        disabled={props.isStreaming || hasPendingUser}
+        onSend={props.onSendConfirmation}
+      />}
       <ConversationErrorBanner {...props} />
       <ConversationNoticeBanner notice={props.notice} />
     </div>
@@ -359,7 +370,7 @@ export function Conversation(props: ConversationProps) {
     user: props.conversationIdentity?.user.nickname ?? "你",
   });
   const userMessages = useMemo(() => props.timeline.flatMap((item) => (
-    item.kind === "message" && item.message.role === "user" ? [item.message] : []
+    item.kind === "message" && item.message.role === "user" ? [{ ...item.message, text: confirmationDisplayText(item.message.text) }] : []
   )), [props.timeline]);
   const latestUserId = userMessages.at(-1)?.id ?? null;
   const [activeUserId, setActiveUserId] = useActiveUserTracking(containerRef, userElements, userMessages, latestUserId);

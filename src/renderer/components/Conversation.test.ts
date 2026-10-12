@@ -5,11 +5,66 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/i18n";
 import { Conversation, formatWorkingDuration } from "./Conversation";
 import { normalizeNickname } from "./MessageRoleLabel";
+import type { ConversationItem } from "@shared/contracts";
+import * as confirmation from "../../shared/confirmation.js";
 
 describe("Conversation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  function renderConfirmationConversation(options: {
+    timeline?: ConversationItem[];
+    isStreaming?: boolean;
+    sendable?: boolean;
+  } = {}) {
+    vi.stubGlobal("localStorage", { getItem: () => "zh-CN", setItem: vi.fn() });
+    return renderToStaticMarkup(createElement(I18nProvider, null, createElement(Conversation, {
+      timeline: options.timeline ?? [],
+      isStreaming: options.isStreaming ?? false,
+      workingStartedAt: null,
+      projectName: "demo",
+      error: null,
+      canContinue: false,
+      notice: null,
+      onContinue: vi.fn(),
+      ...(options.sendable === false ? {} : { onSendConfirmation: vi.fn(async () => undefined) }),
+    })));
+  }
+
+  it("shows a restored pending plan only in a sendable conversation", () => {
+    vi.spyOn(confirmation, "findPendingConfirmation").mockReturnValue({ requestId: "request-1", title: "方案标题", message: "方案详情" });
+    expect(renderConfirmationConversation()).toContain("确认并发送");
+    expect(renderConfirmationConversation({ sendable: false })).not.toContain("confirmation-prompt");
+  });
+
+  it("keeps a pending plan visible but disabled during streaming and a local user echo", () => {
+    vi.spyOn(confirmation, "findPendingConfirmation").mockReturnValue({ requestId: "request-1", title: "方案标题", message: "方案详情" });
+    expect(renderConfirmationConversation({ isStreaming: true }).match(/disabled=""/g)).toHaveLength(3);
+    const markup = renderConfirmationConversation({ timeline: [{
+      kind: "message", id: "pending-user-1",
+      message: { id: "pending-user-1", role: "user", text: "确认", timestamp: 1 },
+    }] });
+    expect(markup).toContain("方案标题");
+    expect(markup.match(/disabled=""/g)).toHaveLength(3);
+  });
+
+  it("does not show confirmation controls when the timeline has no pending request", () => {
+    vi.spyOn(confirmation, "findPendingConfirmation").mockReturnValue(undefined);
+    expect(renderConfirmationConversation()).not.toContain("confirmation-prompt");
+  });
+
+  it("strips response metadata from both user text and outline input without changing the wire message", () => {
+    const request = { requestId: "private-confirmation-id", title: "审查修改", message: "方案" };
+    const wireText = confirmation.createConfirmationResponse(request, true, "补充说明");
+    const timeline: ConversationItem[] = [{ kind: "message", id: "user-1", message: { id: "user-1", role: "user", text: wireText, timestamp: 1 } }];
+    const displaySpy = vi.spyOn(confirmation, "confirmationDisplayText");
+    const markup = renderConfirmationConversation({ timeline });
+    expect(markup).toContain("补充说明");
+    expect(markup).not.toContain(request.requestId);
+    expect(displaySpy).toHaveBeenCalledWith(wireText);
+    expect(timeline[0]).toMatchObject({ message: { text: wireText } });
   });
 
   it("positions the latest button outside the outline at the composer edge", () => {

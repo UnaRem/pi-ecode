@@ -184,6 +184,7 @@ export default function App() {
           isLoadingOlder={selectedExplorer ? false : isLoadingOlder}
           {...(!selectedExplorer ? { onLoadOlder: () => void actions.loadOlderTimeline() } : {})}
           onContinue={() => void actions.continueAfterError()}
+          {...(!selectedExplorer ? { onSendConfirmation: (message: string) => actions.send(message) } : {})}
           selectedToolId={workspaceTools.selectedToolId}
           onSelectTool={workspaceTools.selectTool}
         />

@@ -125,6 +125,23 @@
 .tool-title { color: var(--color-text); }
 .tool-preview { color: var(--color-text-muted); }
 
+.confirmation-prompt { margin: var(--space-4) 0 var(--space-5) var(--conversation-content-inset); padding: var(--space-4) 0; border-top: 1px solid var(--color-border); color: var(--color-text); font-size: 13.5px; line-height: 1.7; animation: confirmation-prompt-enter 180ms ease-out both; }
+.confirmation-prompt-title { display: block; overflow-wrap: anywhere; }
+.confirmation-prompt-message { margin: var(--space-2) 0 var(--space-3); white-space: pre-wrap; overflow-wrap: anywhere; }
+.confirmation-prompt label { display: grid; gap: var(--space-2); color: var(--color-text-muted); font-size: 12px; }
+.confirmation-prompt textarea { width: 100%; min-height: 64px; resize: vertical; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text); background: var(--color-surface); font: inherit; }
+.confirmation-prompt-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.confirmation-prompt-actions button { min-height: 32px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface-raised); font: inherit; font-size: 12px; cursor: pointer; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease; }
+.confirmation-prompt-actions .confirmation-prompt-confirm { border-color: var(--color-accent-border); color: var(--color-accent); background: var(--color-accent-soft); }
+.confirmation-prompt-actions button:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
+.confirmation-prompt textarea:focus-visible, .confirmation-prompt-actions button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.confirmation-prompt :disabled { cursor: default; opacity: .6; }
+@keyframes confirmation-prompt-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .confirmation-prompt { animation: none; }
+  .confirmation-prompt-actions button { transition: none; }
+}
+
 .error-banner { border-color: var(--color-danger-border); color: var(--color-danger); background: var(--color-danger-soft); }
 .notice-banner { border-color: var(--color-success-border); color: var(--color-success); background: var(--color-success-soft); }
 .conversation-latest { right: 20px; bottom: var(--space-3); border-color: var(--color-accent-border-strong); color: var(--color-accent); background: var(--color-surface); box-shadow: var(--shadow-md); }
