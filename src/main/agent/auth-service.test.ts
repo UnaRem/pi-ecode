@@ -13,13 +13,27 @@ function createRuntime(login: (interaction: AuthInteraction) => Promise<void>): 
 }
 
 describe("AuthService", () => {
+  it("supplies the same settings-owned device id across logins", async () => {
+    const runtime = createRuntime(async () => undefined);
+    const getDeviceId = vi.fn(() => "persistent-device-id");
+    const service = new AuthService(() => runtime, vi.fn(), async () => undefined, getDeviceId);
+    await service.login("demo", "api_key");
+    await service.login("demo", "api_key");
+    const login = vi.mocked(runtime.login);
+    expect(login).toHaveBeenCalledTimes(2);
+    for (const call of login.mock.calls) {
+      expect(call[3]?.getDeviceId).toBe(getDeviceId);
+      expect(call[3]?.getDeviceId?.()).toBe("persistent-device-id");
+    }
+  });
+
   it("keeps secret prompt values out of emitted state", async () => {
     let submitted = "";
     const events: AuthFlowEvent[] = [];
     const runtime = createRuntime(async (interaction) => {
       submitted = await interaction.prompt({ type: "secret", message: "API key" });
     });
-    const service = new AuthService(() => runtime, (event) => events.push(event), async () => undefined);
+    const service = new AuthService(() => runtime, (event) => events.push(event), async () => undefined, () => "device-1");
     const operation = service.login("demo", "api_key");
     await vi.waitFor(() => expect(events.at(-1)?.state?.request?.type).toBe("secret"));
     const requestId = events.at(-1)?.state?.request?.id;
@@ -36,7 +50,7 @@ describe("AuthService", () => {
     const runtime = createRuntime(async (interaction) => {
       await interaction.prompt({ type: "text", message: "Code" });
     });
-    const service = new AuthService(() => runtime, (event) => events.push(event), async () => undefined);
+    const service = new AuthService(() => runtime, (event) => events.push(event), async () => undefined, () => "device-1");
     const operation = service.login("demo", "api_key");
     await vi.waitFor(() => expect(events.at(-1)?.state?.request).not.toBeNull());
     service.cancel();

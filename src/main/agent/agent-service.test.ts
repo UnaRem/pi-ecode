@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionManager, type AgentSession, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { SessionManager, type AgentSession, type AgentSessionEvent, type PromptOptions } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, SessionSummary, ValidationState } from "../../shared/contracts.js";
 
 const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[], scans: 0,
@@ -13,10 +13,6 @@ vi.mock("./session-summaries.js", () => ({
 
 import { AgentService } from "./agent-service.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
-
-interface PromptOptions {
-  preflightResult?: (accepted: boolean) => void;
-}
 
 function validationState(status: ValidationState["status"], runId: string | null): ValidationState {
   return {
@@ -924,7 +920,7 @@ describe("AgentService prompt lifecycle", () => {
   it("shows work immediately and steers messages submitted during preflight", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     let finishPrompt: (() => void) | undefined;
-    let finishPreflight: ((accepted: boolean) => void) | undefined;
+    let finishPreflight: PromptOptions["preflightResult"];
     const session = {
       isStreaming: false,
       pendingMessageCount: 0,
@@ -951,7 +947,7 @@ describe("AgentService prompt lifecycle", () => {
     expect(lifecycle.promptLifecycle.workingStartedAt).toBe(1_000);
     expect(session.prompt).toHaveBeenCalledTimes(1);
     expect(session.steer).not.toHaveBeenCalled();
-    finishPreflight?.(true);
+    finishPreflight?.("started");
     await steeringPrompt;
     expect(session.steer).toHaveBeenCalledWith("continue", []);
     finishPrompt?.();
@@ -1078,7 +1074,7 @@ describe("AgentService prompt lifecycle", () => {
 
   it("honors stop requests made before agent_start", async () => {
     let finishPrompt: (() => void) | undefined;
-    let finishPreflight: ((accepted: boolean) => void) | undefined;
+    let finishPreflight: PromptOptions["preflightResult"];
     const session = {
       isStreaming: false,
       isCompacting: false,
@@ -1103,7 +1099,7 @@ describe("AgentService prompt lifecycle", () => {
 
     const promptOperation = service.prompt("first");
     const stopOperation = service.stop();
-    finishPreflight?.(true);
+    finishPreflight?.("started");
     await vi.waitFor(() => expect(session.abort).toHaveBeenCalled());
     finishPrompt?.();
     await Promise.all([promptOperation, stopOperation]);

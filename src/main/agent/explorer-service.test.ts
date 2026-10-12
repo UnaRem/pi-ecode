@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AgentSession, ExtensionAPI, ExtensionContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ExtensionAPI, ExtensionContext, ExtensionToolContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ToolActivity, ValidationState } from "../../shared/contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
@@ -48,7 +48,7 @@ function harness(
   } as unknown as ExtensionAPI;
   const extension = service.asExtension();
   void (typeof extension === "function" ? extension(pi) : extension.factory(pi));
-  const context = { sessionManager: { getBranch: () => branch } } as unknown as ExtensionContext;
+  const context = { sessionManager: { getBranch: () => branch } } as unknown as ExtensionToolContext;
   handlers.get("session_start")?.({}, context);
   return {
     service,
@@ -228,7 +228,7 @@ describe("ExplorerService", () => {
     const internals = explorerInternals(test.service);
     const parent = { getToolDefinition: (name: string) => ({ name } as ToolDefinition) } as Pick<AgentSession, "getToolDefinition">;
     const definitions = internals.roleToolDefinitions({ id: "no-lock" }, parent, root, { role: "editor", disabledTools: [] });
-    const context = {} as ExtensionContext;
+    const context = {} as ExtensionToolContext;
     await expect(definitions.find((tool) => tool.name === "edit")!.execute("edit", {
       path: "target.txt", edits: [{ oldText: "original", newText: "changed" }],
     }, undefined, undefined, context)).rejects.toThrow("没有有效写锁");
@@ -295,7 +295,7 @@ describe("ExplorerService", () => {
     expect(internals.roleToolDefinitions(task, parent, "C:/project", { role: "editor", disabledTools: ["run_validation"] }).map((definition) => definition.name)).not.toContain("run_validation");
     const controller = new AbortController();
     const update = vi.fn();
-    const execution = tool.execute("validation-call", {}, controller.signal, update, {} as ExtensionContext);
+    const execution = tool.execute("validation-call", {}, controller.signal, update, {} as ExtensionToolContext);
     let returned = false;
     const outcome = execution.then((result) => { returned = true; return result; }, (error: unknown) => { returned = true; return error; });
     const running: ValidationState = { supported: true, isSelfProject: true, status: "running", runId: "run",
@@ -547,7 +547,7 @@ describe("ExplorerService", () => {
     const dispatchTool = tools.get("dispatch_explorers");
     if (!dispatchTool) throw new Error("Explorer tool was not registered.");
 
-    await dispatchTool.execute("dispatch-retry", { description: "retry", thinking_level: "medium", explorers: [request(1)] }, undefined, undefined, {} as ExtensionContext);
+    await dispatchTool.execute("dispatch-retry", { description: "retry", thinking_level: "medium", explorers: [request(1)] }, undefined, undefined, {} as ExtensionToolContext);
     await vi.advanceTimersByTimeAsync(75);
     await vi.waitFor(() => expect(service.current[0]?.status).toBe("completed"));
 

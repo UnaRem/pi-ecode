@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionToolContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ManagedProcess } from "../../shared/process-contracts.js";
 import { ManagedProcessToolService } from "./managed-process-tool.js";
 
@@ -15,7 +15,7 @@ function harness() {
   const extension = service.asExtension();
   const pi = { registerTool: (definition: ToolDefinition) => { tool = definition; } } as unknown as ExtensionAPI;
   void (typeof extension === "function" ? extension(pi) : extension.factory(pi));
-  const ctx = { cwd: "C:/project", sessionManager: { getSessionId: () => "session" } } as unknown as ExtensionContext;
+  const ctx = { cwd: "C:/project", sessionManager: { getSessionId: () => "session" } } as unknown as ExtensionToolContext;
   return { start, stop, isCurrent, record, execute: (command = "bun run dev", signal?: AbortSignal) => {
     if (!tool) throw new Error("未注册工具。");
     return tool.execute("call", { command }, signal, undefined, ctx);

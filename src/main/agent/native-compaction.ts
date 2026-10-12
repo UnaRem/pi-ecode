@@ -144,6 +144,8 @@ function serializeMessages(model: Model<Api>, messages: AgentMessage[]): unknown
   const input: unknown[] = [];
   const pendingCalls = new Map<string, ToolCall>();
   converted.forEach((message, index) => {
+    // The current system prompt is already sent through the request instructions.
+    if (message.role === "system") return;
     if (message.role === "user") {
       for (const call of pendingCalls.values()) input.push({ type: "function_call_output", call_id: call.id.split("|")[0], output: "No result provided" });
       pendingCalls.clear();

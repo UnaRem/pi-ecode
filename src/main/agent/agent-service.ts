@@ -196,6 +196,7 @@ export class AgentService {
         for (const listener of this.authListeners) listener(event);
       },
       openExternal,
+      () => this.requireRuntime().services.settingsManager.getOrCreateDeviceId(),
     );
   }
 

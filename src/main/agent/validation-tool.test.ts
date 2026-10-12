@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionToolContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ValidationState } from "../../shared/contracts.js";
 import { ValidationToolService } from "./validation-tool.js";
 
@@ -39,7 +39,7 @@ function harness(initial = state()) {
     setState: (next: ValidationState) => { current = next; },
     execute: async () => {
       if (!tool) throw new Error("Validation tool was not registered.");
-      return tool.execute("validation-call", {}, undefined, undefined, {} as ExtensionContext);
+      return tool.execute("validation-call", {}, undefined, undefined, {} as ExtensionToolContext);
     },
   };
 }

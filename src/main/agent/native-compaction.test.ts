@@ -161,6 +161,44 @@ describe("NativeCompaction", () => {
     expect(result?.compaction?.details).toMatchObject({ kind: "pi-ecode.remote-compaction-v2" });
   });
 
+  it("skips system messages while preserving the tool call and result order", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(sse());
+    const session = fakeSession();
+    const handlers = register(new NativeCompaction(() => session, fetcher));
+    const systemMessage = { role: "system", content: "historical instructions", timestamp: 1 };
+
+    await handlers.compact?.(compactEvent(), context([], model, [
+      systemMessage,
+      { role: "user", content: "inspect", timestamp: 2 },
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call_read|fc_read", name: "read", arguments: { path: "app.ts" } }],
+        api: "openai-responses",
+        provider: "third-party",
+        model: "model-1",
+        stopReason: "toolUse",
+        timestamp: 3,
+      },
+      systemMessage,
+      {
+        role: "toolResult", toolCallId: "call_read|fc_read", toolName: "read",
+        content: [{ type: "text", text: "file contents" }], isError: false, timestamp: 4,
+      },
+      { role: "user", content: "continue", timestamp: 5 },
+      systemMessage,
+    ]));
+
+    const body = JSON.parse(String((fetcher.mock.calls[0]?.[1] as RequestInit).body)) as Record<string, unknown>;
+    expect(body.instructions).toBe("project instructions");
+    expect(body.input).toEqual([
+      { role: "user", content: [{ type: "input_text", text: "inspect" }] },
+      { type: "function_call", id: "fc_read", call_id: "call_read", name: "read", arguments: '{"path":"app.ts"}' },
+      { type: "function_call_output", call_id: "call_read", output: "file contents" },
+      { role: "user", content: [{ type: "input_text", text: "continue" }] },
+      { type: "compaction_trigger" },
+    ]);
+  });
+
   it("does not synthesize an orphan output for a tool call in a failed assistant response", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(sse());
     const session = fakeSession();

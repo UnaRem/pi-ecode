@@ -24,6 +24,7 @@ export class AuthService {
     private readonly getRuntime: () => ModelRuntime | undefined,
     private readonly emit: (event: AuthFlowEvent) => void,
     private readonly openExternal: (url: string) => Promise<void>,
+    private readonly getDeviceId: () => string,
   ) {}
 
   async getProviderStatuses(): Promise<ProviderStatus[]> {
@@ -64,7 +65,7 @@ export class AuthService {
       notify: (event) => this.handleNotification(event),
     };
     try {
-      await runtime.login(providerId, type, interaction);
+      await runtime.login(providerId, type, interaction, { getDeviceId: this.getDeviceId });
       this.publish("completed", `${provider.name} authentication completed.`, null);
     } catch (error) {
       const cancelled = this.controller.signal.aborted || (error instanceof Error && error.name === "AbortError");
