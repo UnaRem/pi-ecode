@@ -587,6 +587,7 @@ export class AgentService {
     const promptText = text || "Describe the attached image.";
     const sdkImages = images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }));
     try {
+      this.confirmation.assertResponse(session, promptText, this.isAgentActive(session));
       await this.promptLifecycle.prompt(session, promptText, sdkImages);
     } catch (error) {
       this.emit({ type: "error", message: errorText(error) });
@@ -963,6 +964,7 @@ export class AgentService {
     this.contextEstimate = this.nativeCompaction.storedEstimatedTokensAfter(session);
     this.compactionStatus = { status: "idle" };
     this.streamContinuity.install(session);
+    this.confirmation.install(session);
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";

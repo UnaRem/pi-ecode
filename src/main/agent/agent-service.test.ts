@@ -13,6 +13,7 @@ vi.mock("./session-summaries.js", () => ({
 
 import { AgentService } from "./agent-service.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
+import { createConfirmationResponse } from "../../shared/confirmation.js";
 
 function validationState(status: ValidationState["status"], runId: string | null): ValidationState {
   return {
@@ -1070,6 +1071,18 @@ describe("AgentService prompt lifecycle", () => {
     const toolEvents = events.filter((event) => event.type === "timeline-upsert" && event.item.kind === "tool");
     expect(toolEvents.at(-1)).toMatchObject({ item: { tool: { startedAt: 1_000, endedAt: 4_500 } } });
     now.mockRestore();
+  });
+
+  it("rejects stale confirmation replies before SDK prompt and surfaces the error", async () => {
+    const session = { isIdle: true, prompt: vi.fn(), sessionManager: { getBranch: () => [] } } as unknown as AgentSession;
+    const service = new AgentService();
+    Object.assign(service as unknown as { runtime: { session: AgentSession } }, { runtime: { session } });
+    const events: AgentEvent[] = [];
+    service.subscribe((event) => events.push(event));
+    const wire = createConfirmationResponse({ requestId: "stale", title: "旧请求", message: "说明" }, true, "");
+    await expect(service.prompt(wire)).rejects.toThrow("失效");
+    expect(session.prompt).not.toHaveBeenCalled();
+    expect(events.at(-1)).toMatchObject({ type: "error", message: expect.stringContaining("失效") });
   });
 
   it("honors stop requests made before agent_start", async () => {

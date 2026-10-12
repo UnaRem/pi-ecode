@@ -55,6 +55,8 @@ src/main      windows, native dialogs, pi SDK, filesystem/session lifecycle
 - Correlate tool activity by `toolCallId`; updates replace prior partial output, and end events finalize it.
 - A prompt accepted while idle starts immediately. While streaming, the default send action is `steer`; stopping clears queued work before aborting.
 - Surface recoverable failures in the conversation or status area. Do not hide errors in developer-console-only logs.
+- `request_confirmation` 保存 `pi-ecode.confirmation` v1 pending 工具结果并立即结束本轮，不使用弹窗或超时；等待确认在会话分支中持久化，离开及重开会话后仍可回复。同批仅允许第一个确认工具，其他工具及重复确认必须阻断。主进程包装已有 `finishTurn`，先执行既有回调，再清空队列并发起非等待的 abort，阻止 SDK 外层继续本轮；pending 期间后台 custom 消息只写入会话，不触发新轮次。
+- 确认按钮发送可读中文动作和标题，可附补充要求，末尾带 `pi-ecode-confirmation-response` JSON 标记；renderer 仅隐藏合法尾缀并投影成功且 ID 匹配的 pending 工具结果，乐观用户消息不清除请求。主进程仅在 idle 且无提示词预检进行时接受与当前分支 details、ID、标题和动作一致的标记回复；正式用户消息使旧请求失效，普通文字仍正常发送。
 - 主 service 拥有项目托管进程的登记、实时日志与停止职责；`start_process` 工具启动持续进程，停止操作使用登记 ID，切换项目和退出应用必须等待进程清理完成，失败应报告并保留重试能力。
 - 托管进程的 renderer 控制仅通过 `process:stop` 窄 IPC 传递非空、长度不超过 200 的字符串 ID；主 service 必须再次确认登记 ID 属于当前项目，不接受 PID、命令或任意进程目标。
 
