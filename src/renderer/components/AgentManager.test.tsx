@@ -33,7 +33,7 @@ function renderManager(currentCatalog: ProjectAgentCatalog, availableModels = tr
     models={availableModels ? [{ id: "model", provider: "provider", name: "模型", reasoning: true, supportsImages: false, thinkingLevels }] : []}
     inheritedModel={inheritedModel}
     onBack={vi.fn()} onSave={vi.fn()} onSetAllPreferences={vi.fn()}
-    onCreate={vi.fn()} onRemove={vi.fn()} onSetConcurrency={vi.fn()}
+    onRemove={vi.fn()} onSetConcurrency={vi.fn()}
   /></I18nProvider>);
 }
 
@@ -60,10 +60,12 @@ describe("AgentManager", () => {
     expect(markup).toContain("已派发任务保留原设置");
     expect(markup).toContain("自动压缩");
     expect(markup).toContain("只读调查");
-    expect(markup).toContain("write");
+    expect(markup).toContain("codegraph_explore");
+    expect(markup).not.toContain("<code>write</code>");
+    expect(markup).not.toContain("新增代理");
     expect(markup).not.toContain("删除代理");
-    expect(markup).toContain('value="explorer"');
-    expect(markup).toContain('value="editor"');
+    expect(markup).toContain('readOnly=""');
+    expect(markup).not.toContain('value="editor"');
     expect(markup).not.toContain('value="validator"');
     expect(markup).not.toContain('value="reviewer"');
   });

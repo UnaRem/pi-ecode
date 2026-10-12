@@ -40,6 +40,7 @@ import { ConfirmationService } from "./confirmation.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
 import { conversationImagePayload, historyMessages, mapTimeline, messageItem, recentMessageWindow, toolItem } from "./timeline-mapper.js";
 import { NativeCompaction } from "./native-compaction.js";
+import { NativeMcp } from "./native-mcp.js";
 import { StreamContinuity } from "./stream-continuity.js";
 import { TaskPlanService } from "./task-plan.js";
 import { ExtensionUiBridge } from "./extension-ui-bridge.js";
@@ -78,6 +79,7 @@ export class AgentService {
     stop: (id) => this.managedProcesses.stop(id),
   });
   private runtime: AgentSessionRuntime | undefined;
+  private readonly sessionMcp = new WeakMap<AgentSession, NativeMcp>();
 
   private createManagedProcesses(): ManagedProcessService {
     return new ManagedProcessService((processes) => this.emit({ type: "processes", processes }));
@@ -128,7 +130,6 @@ export class AgentService {
     getAgentDefinitions: () => this.agentCatalog?.enabled() ?? [],
     getMaxConcurrent: () => this.agentCatalog?.current?.maxConcurrent ?? 3,
     getSessionRoot: (parent) => this.agentCatalog.sessionRoot(parent.sessionId),
-    runValidation: () => this.runValidationFromAgent(),
     onChange: (explorers) => {
       this.emit({ type: "explorers", explorers });
       const session = this.runtime?.session;
@@ -168,7 +169,6 @@ export class AgentService {
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
     this.validationTool.onValidationChanged(validation);
-    this.explorers.onValidationChanged(validation);
     this.emit({ type: "validation", validation });
     this.scheduleCodegraphSync(validation);
     const session = this.runtime?.session;
@@ -493,6 +493,7 @@ export class AgentService {
       explorers: this.explorers.current,
       agentCatalog: this.agentCatalog.current,
       processes: this.managedProcesses.current,
+      mcpTools: this.sessionMcp.get(session)?.current ?? [],
       extensionUi: this.extensionUi.current,
       history,
       validation: this.validation.getState(),
@@ -684,12 +685,6 @@ export class AgentService {
       await this.history.checkpoint(session, "validation input");
       return this.executeValidation(session);
     })();
-    return this.trackValidation(operation);
-  }
-
-  private runValidationFromAgent(): Promise<ValidationState> {
-    if (this.validationOperation) throw new Error("Validation is already running.");
-    const operation = this.executeValidation(this.requireRuntime().session);
     return this.trackValidation(operation);
   }
 
@@ -889,15 +884,20 @@ export class AgentService {
       const model = agent.model.mode === "inherit" ? "继承主会话模型" : `${agent.model.provider}/${agent.model.modelId}`;
       return `- ${agent.id}｜${agent.name}｜${agent.role}｜${model}｜thinking=${agent.thinkingLevel}`;
     }).join("\n");
-    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：仅 explorer（探索者）和 editor（编辑者）。探索者只读；编辑者仅在声明的 write_scope 内使用受锁 edit/write，完成前必须复读修改文件并执行可用的宿主固定检查，等待真实终态；失败时依据日志在授权范围内修正并重新检查，如实报告结果和未执行项。\n编排摘要：小任务只跳过探索，仍须经既有确认门禁；复杂任务先探索、综合证据后确认再编辑；所有编辑完成后由主会话负责最终验证、审查 diff 与 git status、提交。完整策略见 Subagent orchestration 章节。`;
+    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：仅 explorer（只读探索者），默认甘、文、崔三个；没有编辑子代理，主会话直接编辑、验证和提交。\n编排摘要：简单任务由主会话直接处理；复杂任务先探索并综合证据，主会话在已授权范围内实施，完成最终验证、审查 diff 与 git status、提交。完整策略见 Subagent orchestration 章节。`;
   }
 
   private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
     return async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
+      let owner: AgentSession | undefined;
+      const mcp = new NativeMcp((tools) => {
+        if (owner && this.runtime?.session === owner) this.emit({ type: "mcp-tools", tools });
+      });
       const services = await createAgentSessionServices({
         cwd: targetCwd,
         resourceLoaderOptions: {
           extensionFactories: [
+            ...mcp.extensions(),
             this.history.asExtension(),
             this.nativeCompaction.asExtension(),
             this.confirmation.asExtension(),
@@ -921,6 +921,7 @@ export class AgentService {
             ...base,
             extensions: base.extensions.filter((extension) => (
               !extension.path.replaceAll("\\", "/").includes("/node_modules/pi-workspace-history/")
+              && !extension.path.replaceAll("\\", "/").includes("/node_modules/pi-mcp-adapter/")
             )),
           }),
         },
@@ -930,6 +931,8 @@ export class AgentService {
         sessionManager,
         ...(sessionStartEvent ? { sessionStartEvent } : {}),
       });
+      owner = sessionRuntime.session;
+      this.sessionMcp.set(owner, mcp);
       // Keep parallel batching an explicit pi-ecode contract instead of relying on the SDK default.
       sessionRuntime.session.agent.toolExecution = "parallel";
       return {

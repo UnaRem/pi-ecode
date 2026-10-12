@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { type AgentSession, type SessionEntry, SessionManager, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
-import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ThinkingLevel, ValidationState } from "../../shared/contracts.js";
+import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ThinkingLevel } from "../../shared/contracts.js";
 import { textFromContent } from "./message-mapper.js";
 import { messageItem } from "./timeline-mapper.js";
 
@@ -27,19 +27,12 @@ export const EXPLORER_CHILD_GUIDANCE = `## PiECode 子代理
 你是由主会话编排的项目子代理。
 - 只处理本次委派的目标和范围，重新核实当前源码，不依赖过时记忆。
 - 不嵌套派发，不询问用户，不修改代理配置或主会话状态。
-- 只调用本会话实际提供的工具；没有写工具时不得声称已修改文件。
+- 你是只读探索者，只调用本会话提供的只读工具，不修改文件，不执行命令，不运行验证。旧自定义提示中的编辑要求也不授予写入能力。
 - 所有用户可见自然语言都必须使用简体中文，包括工具调用前后的说明、进度更新和最终报告；代码、路径、命令、API 名称与报错原文可保留原文。
 - 最终给出自包含报告并引用相关路径和符号；受阻时明确写出缺少的依赖、已有证据和可降级方案。`;
 
-export const EDITOR_CHECK_GUIDANCE = `## 编辑者交付检查
-- 完成最后一次修改后，重新读取所有变更文件，检查实际落盘内容及任务范围。
-- 调用本会话提供的 run_validation 执行宿主固定检查，禁止任意 shell 命令。
-- 检查失败时定位原因，在授权范围内修正，复读最后修改并重新执行固定验证；超出范围或工具不可用时明确报告阻塞。
-- 最终如实报告实际执行的检查、结果、失败日志与未验证事项，不得把未执行或失败的检查说成通过。`;
-
 export function childGuidance(agent: Pick<ExplorerAgentSnapshot, "role" | "prompt"> | undefined): string[] {
-  return [EXPLORER_CHILD_GUIDANCE, ...(agent ? [agent.prompt] : []),
-    ...(agent?.role === "editor" ? [EDITOR_CHECK_GUIDANCE] : [])];
+  return [EXPLORER_CHILD_GUIDANCE, ...(agent ? [agent.prompt] : [])];
 }
 
 export interface ExplorerLocator {
@@ -122,7 +115,6 @@ export interface ExplorerServiceOptions {
   getAgentDefinitions?: () => ProjectAgentDefinition[];
   getMaxConcurrent?: () => number;
   getSessionRoot?: (parent: AgentSession) => string;
-  runValidation?: () => Promise<ValidationState>;
 }
 
 export const ExplorerTaskIdParameters = Type.Object({
@@ -138,7 +130,7 @@ export const AgentMessageParameters = Type.Object({
   agent_id: Type.String({ minLength: 1, maxLength: 80, description: "项目代理 ID" }),
   message: Type.String({ minLength: 1, maxLength: 4000, description: "发送给空闲代理的后续任务或追问" }),
   deliverable: Type.Optional(Type.String({ minLength: 1, maxLength: 800, description: "期望报告格式" })),
-  write_scope: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { minItems: 0, maxItems: 30, description: "编辑者传非空写入范围；其他角色传空数组" }),
+  write_scope: Type.Optional(Type.Array(Type.String(), { maxItems: 0, description: "探索者只读，此项只能为空数组" })),
 });
 
 export const ExplorerStatusParameters = Type.Object({
@@ -155,7 +147,7 @@ export const ExplorerParameters = Type.Object({
     objective: Type.String({ minLength: 1, maxLength: 800, description: "一个具体目标" }),
     scope: Type.String({ minLength: 1, maxLength: 800, description: "明确的文件、目录或模块范围" }),
     deliverable: Type.String({ minLength: 1, maxLength: 800, description: "证据和报告要求" }),
-    write_scope: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { minItems: 0, maxItems: 30, description: "编辑者传非空相对写入范围；其他角色传空数组；目录使用 /** 后缀" }),
+    write_scope: Type.Optional(Type.Array(Type.String(), { maxItems: 0, description: "探索者只读，此项只能为空数组" })),
   }), { minItems: 1, maxItems: 8 }),
 });
 
@@ -167,7 +159,7 @@ export function normalizeTask(task: ExplorerTask): ExplorerTask {
   const levels: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
   return {
     ...task,
-    ...(["validator", "reviewer"].includes(task.agentRole ?? "") ? { agentRole: "explorer" as const } : {}),
+    ...(["editor", "validator", "reviewer"].includes(task.agentRole ?? "") ? { agentRole: "explorer" as const } : {}),
     thinkingLevel: levels.includes(task.thinkingLevel) ? task.thinkingLevel : "low",
     attempt: Number.isInteger(task.attempt) && task.attempt > 0 ? task.attempt : 1,
     maxAttempts: Number.isInteger(task.maxAttempts) && task.maxAttempts > 0 ? task.maxAttempts : DEFAULT_WATCHDOG.maxAttempts,
@@ -188,7 +180,7 @@ export function restoredState(entries: readonly SessionEntry[]): ExplorerStateEn
       completions: Array.isArray(state.completions) ? state.completions.map((notice) => ({ ...notice })) : [],
       agentSnapshots: Array.isArray(state.agentSnapshots) ? state.agentSnapshots.map((snapshot) => ({
         ...snapshot,
-        role: snapshot.role === "editor" ? "editor" : "explorer",
+        role: "explorer",
         disabledTools: [...snapshot.disabledTools],
         autoCompactionEnabled: snapshot.autoCompactionEnabled ?? true,
         compactionThresholdPercent: snapshot.compactionThresholdPercent ?? null,
@@ -209,16 +201,6 @@ export function explorerToolDefinitions(parent: Pick<AgentSession, "getToolDefin
 
 export function compactionReserveTokens(contextWindow: number, thresholdPercent: number): number {
   return Math.max(1, Math.floor(contextWindow * (1 - thresholdPercent / 100)));
-}
-
-export function validationResultText(state: ValidationState): string {
-  const steps = state.steps.filter((step) => step.status !== "skipped")
-    .map((step) => `- ${step.label}: ${step.status}${step.exitCode === null ? "" : `（退出码 ${step.exitCode}）`}`)
-    .join("\n");
-  const failures = state.steps.filter((step) => step.status === "failed")
-    .map((step) => `失败日志 ${step.label}：\n${step.output.slice(-4_000)}`)
-    .join("\n").slice(-12_000);
-  return `验证状态：${state.status}\n${state.message ?? "固定验证已结束。"}${steps ? `\n${steps}` : ""}${failures ? `\n${failures}` : ""}`;
 }
 
 export function compactFinalText(text: string): string {

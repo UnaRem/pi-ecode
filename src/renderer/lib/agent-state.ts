@@ -47,6 +47,7 @@ export const INITIAL_AGENT_STATE: AgentViewState = {
   explorers: [],
   agentCatalog: null,
   processes: [],
+  mcpTools: [],
   extensionUi: null,
   history: { available: false, canUndo: false, canRedo: false, isBusy: false, message: null },
   validation: {
@@ -220,6 +221,8 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
       };
     case "timeline-upsert":
       return { ...state, timeline: upsertTimeline(state.timeline, event.item) };
+    case "mcp-tools":
+      return { ...state, mcpTools: event.tools };
     case "context":
       return { ...state, context: event.context };
     case "task-plan":

@@ -14,9 +14,8 @@ function statusText(status: ExplorerStatus, t: Translate): string {
   return t("explorer.status.interrupted");
 }
 
-function roleText(role: ProjectAgentDefinition["role"], t: Translate): string {
-  if (role === "explorer") return t("agent.role.explorer");
-  return t("agent.role.editor");
+function roleText(_role: ProjectAgentDefinition["role"], t: Translate): string {
+  return t("agent.role.explorer");
 }
 
 function StatusIcon({ status }: { status: ExplorerStatus }) {

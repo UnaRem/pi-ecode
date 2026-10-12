@@ -47,6 +47,7 @@ describe("WorkspaceInspector", () => {
       <I18nProvider>
         <WorkspaceInspector
           tools={[tool]}
+          mcpTools={[{ name: "mcp__docs__lookup", server: "docs", description: "Find current SDK documentation", exposure: "deferred" }]}
           selectedTool={tool}
           processes={[{
             id: "dev-1", command: "npm run dev", status: "running", pid: 123,
@@ -70,6 +71,10 @@ describe("WorkspaceInspector", () => {
         />
       </I18nProvider>,
     );
+    expect(markup).toContain("Main session MCP tools");
+    expect(markup).toContain("mcp__docs__lookup");
+    expect(markup).toContain("Find current SDK documentation");
+    expect(markup).toContain("Search to load");
     expect(markup).toContain("Development processes");
     expect(markup).toContain("development server ready");
     expect(markup.indexOf('class="inspector-section managed-process-panel"')).toBeLessThan(markup.indexOf('class="inspector-section inspector-tools"'));

@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSession, ExtensionAPI, ExtensionContext, ExtensionToolContext, SessionEntry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
-import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ToolActivity, ValidationState } from "../../shared/contracts.js";
+import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ToolActivity } from "../../shared/contracts.js";
 import { compactionReserveTokens, EXPLORER_TOOL_NAMES, ExplorerService, explorerToolDefinitions } from "./explorer-service.js";
-import { AgentMessageParameters, childGuidance, EDITOR_CHECK_GUIDANCE, EXPLORER_CHILD_GUIDANCE, restoredState, validationResultText, type ExplorerLocator, ExplorerParameters, ExplorerStatusParameters, messagesForLocator, taskPrompt } from "./explorer-support.js";
+import { AgentMessageParameters, childGuidance, EXPLORER_CHILD_GUIDANCE, restoredState, type ExplorerLocator, ExplorerParameters, ExplorerStatusParameters, messagesForLocator, taskPrompt } from "./explorer-support.js";
 import { CODEGRAPH_TOOL_NAME } from "./codegraph-tool.js";
 import { mapTimeline } from "./timeline-mapper.js";
 
@@ -116,9 +116,7 @@ interface ExplorerInternals {
   onChildEvent: (task: ExplorerTask, child: AgentSession, event: { type: "agent_settled" }) => void;
   promptChild: (task: ExplorerTask, child: AgentSession, request: ReturnType<typeof taskRequest>, reusable: boolean, signal: AbortSignal) => Promise<string>;
   roleToolDefinitions: (
-    task: { id: string },
     parent: Pick<AgentSession, "getToolDefinition">,
-    cwd: string,
     agent: { role: ProjectAgentDefinition["role"]; disabledTools: string[] } | undefined,
   ) => ToolDefinition[];
 }
@@ -219,24 +217,12 @@ describe("ExplorerService", () => {
     expect(() => explorerToolDefinitions(parent)).toThrow("parent ffgrep tool");
   });
 
-  it("编辑者写工具无有效写锁时拒绝落盘，探索者无写工具", async () => {
-    const root = await mkdtemp(join(tmpdir(), "pi-ecode-editor-permissions-"));
-    temporaryDirectories.push(root);
-    const path = join(root, "target.txt");
-    await writeFile(path, "original", "utf8");
+  it("探索者只有只读工具且不能获得写入、命令或验证工具", () => {
     const test = harness(() => Promise.resolve({ sessionId: "unused", finalText: "unused" }));
-    const internals = explorerInternals(test.service);
     const parent = { getToolDefinition: (name: string) => ({ name } as ToolDefinition) } as Pick<AgentSession, "getToolDefinition">;
-    const definitions = internals.roleToolDefinitions({ id: "no-lock" }, parent, root, { role: "editor", disabledTools: [] });
-    const context = {} as ExtensionToolContext;
-    await expect(definitions.find((tool) => tool.name === "edit")!.execute("edit", {
-      path: "target.txt", edits: [{ oldText: "original", newText: "changed" }],
-    }, undefined, undefined, context)).rejects.toThrow("没有有效写锁");
-    await expect(definitions.find((tool) => tool.name === "write")!.execute("write", {
-      path: "target.txt", content: "changed",
-    }, undefined, undefined, context)).rejects.toThrow("没有有效写锁");
-    expect(await readFile(path, "utf8")).toBe("original");
-    expect(internals.roleToolDefinitions({ id: "readonly" }, parent, root, { role: "explorer", disabledTools: [] }).map((tool) => tool.name)).toEqual([...EXPLORER_TOOL_NAMES, CODEGRAPH_TOOL_NAME]);
+    const names = explorerInternals(test.service).roleToolDefinitions(parent, { role: "explorer", disabledTools: [] }).map((tool) => tool.name);
+    expect(names).toEqual([...EXPLORER_TOOL_NAMES, CODEGRAPH_TOOL_NAME]);
+    for (const forbidden of ["edit", "write", "bash", "run_validation"]) expect(names).not.toContain(forbidden);
   });
 
   it("兼容旧任务及快照角色为只读探索者", () => {
@@ -248,7 +234,7 @@ describe("ExplorerService", () => {
         { id: "undefined-role", agentRole: undefined, thinkingLevel: "low" },
       ], agentSnapshots: ["validator", "reviewer"].map((role) => ({ taskId: role, role, prompt: "保留", disabledTools: ["read"] })) },
     } as SessionEntry]);
-    expect(state?.tasks.map((task) => task.agentRole)).toEqual(["explorer", "explorer", "explorer", "editor", undefined, undefined]);
+    expect(state?.tasks.map((task) => task.agentRole)).toEqual(["explorer", "explorer", "explorer", "explorer", undefined, undefined]);
     expect(state?.tasks[4]).not.toHaveProperty("agentRole");
     expect(state?.tasks[5]).toHaveProperty("agentRole", undefined);
     for (const task of state?.tasks ?? []) expect(task).not.toHaveProperty("role");
@@ -256,81 +242,12 @@ describe("ExplorerService", () => {
     expect(state?.agentSnapshots[0]).toMatchObject({ prompt: "保留", disabledTools: ["read"] });
   });
 
-  it("编辑者统一追加复读、验证和失败修正要求而不修改自定义提示", () => {
+  it("探索者保留用户提示并附加只读边界", () => {
     const prompt = "用户自己的提示";
-    const guidance = childGuidance({ role: "editor", prompt });
-    expect(guidance).toEqual([EXPLORER_CHILD_GUIDANCE, prompt, EDITOR_CHECK_GUIDANCE]);
-    expect(guidance[2]).toContain("完成最后一次修改后，重新读取所有变更文件");
-    expect(guidance[2]).toContain("重新执行固定验证");
-    expect(guidance[2]).toContain("不得把未执行或失败的检查说成通过");
     expect(childGuidance({ role: "explorer", prompt })).toEqual([EXPLORER_CHILD_GUIDANCE, prompt]);
   });
 
-  it("验证失败返回有界尾部日志并保留失败摘要", () => {
-    const state: ValidationState = { supported: true, isSelfProject: true, status: "failed", runId: "run",
-      activeStep: null, sourceRevision: null, originToolCallId: null, startedAt: 1, verifiedAt: null, message: "失败",
-      steps: [{ id: "typecheck", label: "typecheck", command: "npm run typecheck", status: "failed",
-        output: "old-secret" + "x".repeat(10_000) + "error TS123", exitCode: 2, durationMs: 1 }] };
-    const text = validationResultText(state);
-    expect(text).toContain("typecheck: failed（退出码 2）");
-    expect(text).toContain("error TS123");
-    expect(text).not.toContain("old-secret");
-    expect(text.length).toBeLessThan(4_200);
-  });
-
-  it.each(["return", "abort", "reset"])("固定验证进度保持活动、等待实际返回并清理订阅：%s", async (ending) => {
-    const pending = deferredResult();
-    let finish = (_state: ValidationState): void => undefined;
-    const validation = new Promise<ValidationState>((resolve) => { finish = resolve; });
-    let now = 1;
-    const test = harness(() => pending.promise, { getAgentDefinitions: () => [agent("editor-1", "editor")],
-      runValidation: () => validation, now: () => now });
-    await test.dispatch([{ ...request(1), agent_id: "editor-1", write_scope: ["src/**"] }]);
-    const internals = explorerInternals(test.service);
-    const task = internals.tasks.get(test.service.current[0]!.id)!;
-    const parent = { getToolDefinition: (name: string) => ({ name } as ToolDefinition) } as Pick<AgentSession, "getToolDefinition">;
-    const tools = internals.roleToolDefinitions(task, parent, "C:/project", { role: "editor", disabledTools: [] });
-    const tool = tools.find((definition) => definition.name === "run_validation")!;
-    expect(internals.roleToolDefinitions(task, parent, "C:/project", { role: "explorer", disabledTools: [] }).map((definition) => definition.name)).not.toContain("run_validation");
-    expect(internals.roleToolDefinitions(task, parent, "C:/project", { role: "editor", disabledTools: ["run_validation"] }).map((definition) => definition.name)).not.toContain("run_validation");
-    const controller = new AbortController();
-    const update = vi.fn();
-    const execution = tool.execute("validation-call", {}, controller.signal, update, {} as ExtensionToolContext);
-    let returned = false;
-    const outcome = execution.then((result) => { returned = true; return result; }, (error: unknown) => { returned = true; return error; });
-    const running: ValidationState = { supported: true, isSelfProject: true, status: "running", runId: "run",
-      activeStep: "test", steps: [], sourceRevision: null, originToolCallId: null, startedAt: 1, verifiedAt: null, message: "日志进度" };
-    now = 50;
-    test.service.onValidationChanged(running);
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(task.lastActivityAt).toBe(50);
-    const terminal = { ...running, status: "passed" as const, activeStep: null };
-    test.service.onValidationChanged(terminal);
-    await Promise.resolve();
-    expect(returned).toBe(false);
-    if (ending === "abort") controller.abort();
-    if (ending === "reset") {
-      const resetting = test.service.reset();
-      pending.resolve({ sessionId: "child", finalText: "done" });
-      await resetting;
-    }
-    const count = update.mock.calls.length;
-    if (ending !== "return") test.service.onValidationChanged(running);
-    if (ending !== "return") expect(update).toHaveBeenCalledTimes(count);
-    finish(terminal);
-    const result = await outcome;
-    if (ending === "return") expect(result).toMatchObject({ details: terminal });
-    if (ending === "abort") expect(result).toBeInstanceOf(Error);
-    test.service.onValidationChanged(running);
-    expect(update).toHaveBeenCalledTimes(count);
-    if (ending !== "reset") {
-      const stopping = test.service.interruptAll();
-      pending.resolve({ sessionId: "child", finalText: "done" });
-      await stopping;
-    }
-  });
-
-  it("grants the read-only CodeGraph tool to both current roles", () => {
+  it("grants the read-only CodeGraph tool and honors disabled tools", () => {
     const definitions = new Map<string, ToolDefinition>([
       ...EXPLORER_TOOL_NAMES.map((name) => [name, { name } as ToolDefinition] as const),
       [CODEGRAPH_TOOL_NAME, { name: CODEGRAPH_TOOL_NAME } as ToolDefinition] as const,
@@ -340,16 +257,13 @@ describe("ExplorerService", () => {
     } as Pick<AgentSession, "getToolDefinition">;
     const internals = explorerInternals(harness(() => Promise.resolve({ sessionId: "unused", finalText: "unused" })).service);
     const roleToolNames = (role: ProjectAgentDefinition["role"], disabledTools: string[] = []): string[] =>
-      internals.roleToolDefinitions({ id: "task-1" }, parent, "C:/project", { role, disabledTools }).map((definition) => definition.name);
+      internals.roleToolDefinitions(parent, { role, disabledTools }).map((definition) => definition.name);
 
     expect(roleToolNames("explorer")).toContain(CODEGRAPH_TOOL_NAME);
-    expect(roleToolNames("editor")).toContain(CODEGRAPH_TOOL_NAME);
     expect(roleToolNames("explorer")).not.toContain("edit");
     expect(roleToolNames("explorer")).not.toContain("write");
-    expect(roleToolNames("editor")).toEqual(expect.arrayContaining(["edit", "write"]));
-    expect(roleToolNames("editor")).not.toContain("bash");
     expect(roleToolNames("explorer", [CODEGRAPH_TOOL_NAME])).not.toContain(CODEGRAPH_TOOL_NAME);
-    expect(internals.roleToolDefinitions({ id: "task-1" }, parent, "C:/project", undefined)
+    expect(internals.roleToolDefinitions(parent, undefined)
       .map((definition) => definition.name)).toContain(CODEGRAPH_TOOL_NAME);
   });
 
@@ -361,7 +275,7 @@ describe("ExplorerService", () => {
     } as Pick<AgentSession, "getToolDefinition">;
     const internals = explorerInternals(harness(() => Promise.resolve({ sessionId: "unused", finalText: "unused" })).service);
 
-    expect(internals.roleToolDefinitions({ id: "task-1" }, parent, "C:/project", { role: "explorer", disabledTools: [] })
+    expect(internals.roleToolDefinitions(parent, { role: "explorer", disabledTools: [] })
       .map((definition) => definition.name)).toEqual([...EXPLORER_TOOL_NAMES]);
   });
 
@@ -382,40 +296,30 @@ describe("ExplorerService", () => {
     medium.resolve({ sessionId: "medium", finalText: "stopped" });
   });
 
-  it("exposes write_scope as a required array that permits non-editor empty scopes", () => {
+  it("accepts only optional empty write scopes for read-only tasks", () => {
     const taskSchema = ExplorerParameters.properties.explorers.items;
-    expect(taskSchema.required).toContain("write_scope");
-    expect(taskSchema.properties.write_scope).toMatchObject({ minItems: 0 });
-    expect(AgentMessageParameters.required).toContain("write_scope");
-    expect(AgentMessageParameters.properties.write_scope).toMatchObject({ minItems: 0 });
+    expect(taskSchema.required).not.toContain("write_scope");
+    expect(taskSchema.properties.write_scope).toMatchObject({ maxItems: 0 });
+    expect(AgentMessageParameters.required).not.toContain("write_scope");
+    expect(AgentMessageParameters.properties.write_scope).toMatchObject({ maxItems: 0 });
     expect(ExplorerStatusParameters.required).toContain("task_id");
     expect(ExplorerStatusParameters.properties.task_id).toMatchObject({ minLength: 0 });
   });
 
-  it("accepts empty write_scope for read-only agents and requires a non-empty editor scope", async () => {
-    const readOnlyPending = deferredResult();
-    const editorPending = deferredResult();
+  it("accepts empty write_scope and rejects non-empty scopes", async () => {
+    const pending = deferredResult();
     const explorer = agent("explorer-1");
-    const editor = agent("editor-1", "editor");
-    const readOnlyTest = harness(() => readOnlyPending.promise, { getAgentDefinitions: () => [explorer] });
-    const editorTest = harness(() => editorPending.promise, { getAgentDefinitions: () => [editor] });
-
-    await readOnlyTest.dispatch([{ ...request(1), agent_id: "explorer-1", write_scope: [] }]);
-    expect(readOnlyTest.service.current[0]?.writeScope).toBeUndefined();
+    const test = harness(() => pending.promise, { getAgentDefinitions: () => [explorer] });
+    await test.dispatch([{ ...request(1), agent_id: "explorer-1", write_scope: [] }]);
+    expect(test.service.current[0]?.writeScope).toBeUndefined();
     await expect(harness(() => Promise.resolve({ sessionId: "unused", finalText: "unused" }), {
       getAgentDefinitions: () => [explorer],
-    }).dispatch([{ ...request(2), agent_id: "explorer-1", write_scope: ["src/main/**"] }])).rejects.toThrow("只有编辑者任务可以声明非空 write_scope");
-
-    await expect(editorTest.dispatch([{ ...request(3), agent_id: "editor-1", write_scope: [] }])).rejects.toThrow("必须声明 write_scope");
-    await editorTest.dispatch([{ ...request(4), agent_id: "editor-1", write_scope: ["src/main/**"] }]);
-    expect(editorTest.service.current[0]?.writeScope).toEqual(["src/main/**"]);
-    await expect(editorTest.call("agent_status", { task_id: "" })).resolves.toBeDefined();
-    await expect(editorTest.call("agent_result", { task_id: "missing" })).rejects.toThrow("不属于当前主会话");
-
-    const stops = Promise.all([readOnlyTest.service.interruptAll(), editorTest.service.interruptAll()]);
-    readOnlyPending.resolve({ sessionId: "read-only", finalText: "stopped" });
-    editorPending.resolve({ sessionId: "editor", finalText: "stopped" });
-    await stops;
+    }).dispatch([{ ...request(2), agent_id: "explorer-1", write_scope: ["src/main/**"] }])).rejects.toThrow("探索者只读");
+    await expect(test.call("agent_status", { task_id: "" })).resolves.toBeDefined();
+    await expect(test.call("agent_result", { task_id: "missing" })).rejects.toThrow("不属于当前主会话");
+    const stopping = test.service.interruptAll();
+    pending.resolve({ sessionId: "read-only", finalText: "stopped" });
+    await stopping;
   });
 
   it("waits for all or any selected tasks without polling", async () => {

@@ -147,13 +147,11 @@ describe("AgentService 托管进程", () => {
 });
 
 describe("AgentService 验证进度接线", () => {
-  it("forwards host progress and terminal states to both validation consumers", () => {
+  it("forwards host progress and terminal states to main validation and renderer", () => {
     const service = new AgentService();
     const internal = service as unknown as {
-      explorers: { onValidationChanged: (state: ValidationState) => void };
       validationTool: { onValidationChanged: (state: ValidationState) => void };
     };
-    const childUpdates = vi.spyOn(internal.explorers, "onValidationChanged");
     const mainUpdates = vi.spyOn(internal.validationTool, "onValidationChanged");
     const events: AgentEvent[] = [];
     service.subscribe((event) => events.push(event));
@@ -166,12 +164,10 @@ describe("AgentService 验证进度接线", () => {
     publish(progress);
     publish(failed);
 
-    expect(childUpdates.mock.calls).toEqual([[progress], [failed]]);
     expect(mainUpdates.mock.calls).toEqual([[progress], [failed]]);
     expect(events.filter((event) => event.type === "validation")).toEqual([
       { type: "validation", validation: progress }, { type: "validation", validation: failed },
     ]);
-    childUpdates.mockRestore();
     mainUpdates.mockRestore();
   });
 });
@@ -1014,34 +1010,6 @@ describe("AgentService prompt lifecycle", () => {
         message: null,
       },
     });
-  });
-
-  it("starts child validation without waiting for a parent-session checkpoint", async () => {
-    const session = { sessionId: "session-validator" } as unknown as AgentSession;
-    const service = new AgentService();
-    const validation: ValidationState = {
-      supported: true,
-      isSelfProject: true,
-      status: "passed",
-      runId: "run-1",
-      activeStep: null,
-      steps: [],
-      sourceRevision: "revision-1",
-      originToolCallId: null,
-      startedAt: 1,
-      verifiedAt: 2,
-      message: "passed",
-    };
-    const internal = service as unknown as {
-      runtime: { session: AgentSession };
-      executeValidation: (activeSession: AgentSession) => Promise<ValidationState>;
-      runValidationFromAgent: () => Promise<ValidationState>;
-    };
-    internal.runtime = { session };
-    const executeValidation = vi.spyOn(internal, "executeValidation").mockResolvedValue(validation);
-
-    await expect(internal.runValidationFromAgent()).resolves.toEqual(validation);
-    expect(executeValidation).toHaveBeenCalledWith(session);
   });
 
   it("records tool execution start and end times", () => {

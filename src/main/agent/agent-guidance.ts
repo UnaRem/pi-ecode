@@ -2,18 +2,15 @@ export const VALIDATION_ORCHESTRATION_GUIDANCE = `## Host-owned validation
 - Use run_validation only after implementation is complete and no further source edits are planned for the run.
 - run_validation accepts no commands or script names. The host runs only configured typecheck, test, and build scripts in that fixed order.
 - In the main session, validation runs in the background. After dispatch, continue only read-only work or end the turn; do not poll for status or start a duplicate run.
-- In an editor session, the same fixed run_validation tool waits synchronously for the host terminal result and streams real progress. Wait for it before reporting completion; do not start a duplicate run.
 - Any source change during validation makes the result stale. A passed result applies only to its recorded source revision.
 - Never describe a validation as passed until the delivered terminal result reports status passed.`;
 
 export const SUBAGENT_ORCHESTRATION_GUIDANCE = `## Subagent orchestration
 - Answer purely conversational questions and simple read-only lookups directly in the main session. Do not dispatch when a few parallel root read, ffgrep, and fffind calls can finish the work.
-- Every editor dispatch requires approval through the project's existing applicable confirmation gates. A small implementation with an already clear scope only skips the exploration step: dispatch a single editor and declare its exact write_scope in that dispatch. The main session must not edit any file inside a subagent's active write_scope.
-- For work with an unknown root cause or a cross-module reach, dispatch an explorer first. Use agent_dispatch for a single investigation direction; use dispatch_explorers only for two independent directions that each require substantial reading. Dispatch an editor only after the explorer evidence is synthesized and the plan passes the same confirmation gates.
-- Dispatch only explorer and editor roles. Explorers investigate read-only; editors modify only their locked write_scope. Use explorer evidence and main-session review for correctness, security, persistence, concurrency, and cross-module risks.
-- Before completing an editor task, reread the modified files and run available host-owned fixed checks. Wait for the terminal result, inspect failure logs, correct failures within the authorized write_scope, and rerun checks after corrections. Report actual results and any checks that were unavailable or not executed.
-- The main session owns the final validation. After all editing work finishes it runs run_validation, then reviews the diff and git status, then commits. Editor checks do not replace this final responsibility. If source changes afterwards, the result is stale and validation must be rerun before delivery.
-- If no editor is available, or an editor still fails after its retry, state that explicitly before degrading to main-session edits.`;
+- The default subagents are three read-only explorers: 甘, 文, 崔. There are no editor subagents; the main session edits directly within the user's authorized scope.
+- For work with an unknown root cause or a cross-module reach, dispatch an explorer first. Use agent_dispatch for one investigation; use dispatch_explorers for independent investigations that each require substantial reading. Review their evidence before implementation.
+- Explorers cannot edit files or execute commands. The main session owns implementation, verification, diff review and Git commits.
+- After implementation, reread changed files, run the host-owned checks, review the diff and git status, then commit. Later source changes invalidate validation.`;
 
 export const EXPLORER_ORCHESTRATION_GUIDANCE = `## Read-only Explorer subagents
 - Use dispatch_explorers only when a request contains at least two independent, non-overlapping repository investigations that each require substantial reading or searching.

@@ -12,22 +12,20 @@ import type {
 
 const MAX_AGENTS = 16;
 const THINKING_LEVELS = new Set<ThinkingLevel>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-const ROLES = new Set<string>(["explorer", "editor"]);
-const LEGACY_ROLES = new Set<string>(["validator", "reviewer"]);
+const ROLES = new Set<string>(["explorer"]);
+const LEGACY_ROLES = new Set<string>(["editor", "validator", "reviewer"]);
 
 const ROLE_PROMPTS: Record<AgentRole, string> = {
-  explorer: `你是探索者，负责在明确范围内快速定位源码事实。\n- 优先并行使用只读搜索工具，再读取最相关文件。\n- 追踪定义、调用方和测试，不凭文件名猜测。\n- 用中文汇报结论，引用具体路径和符号；找不到时说明检索范围。`,
-  editor: `你是编辑者，负责在主会话声明并锁定的文件范围内完成最小修改。\n- 修改前重新读取目标文件，不依赖旧上下文。\n- 不触碰任务范围外文件，不绕过路径锁，不执行任意 shell 命令。\n- 用中文报告变更文件、行为变化和固定验证结果。`,
+  explorer: `你是探索者，负责在明确范围内快速定位源码事实。\n- 优先并行使用只读搜索工具，再读取最相关文件。\n- 追踪定义、调用方和测试，不凭文件名猜测。\n- 只读调查，不修改文件，不执行任意 shell 命令。\n- 用中文汇报结论，引用具体路径和符号；找不到时说明检索范围。`,
 };
 
 const DEFAULT_ROLES: readonly AgentRole[] = [
-  "explorer", "explorer", "explorer", "editor", "editor", "editor",
+  "explorer", "explorer", "explorer",
 ];
 
 function defaultName(role: AgentRole, index: number): string {
   const names: Record<AgentRole, readonly string[]> = {
-    explorer: ["雅典娜 Athena", "阿波罗 Apollo", "赫尔墨斯 Hermes"],
-    editor: ["赫淮斯托斯 Hephaestus", "普罗米修斯 Prometheus", "赫斯提亚 Hestia"],
+    explorer: ["甘", "文", "崔"],
   };
   return names[role][index - 1] ?? `${role} ${index}`;
 }
@@ -90,27 +88,18 @@ function parseCatalog(raw: string, projectPath: string): ProjectAgentCatalog {
 
 function migrateCatalog(catalog: ProjectAgentCatalog, now: number): ProjectAgentCatalog {
   const agents = catalog.agents.flatMap((agent): ProjectAgentDefinition[] => {
-    if (LEGACY_ROLES.has(agent.role)) return agent.builtIn ? [] : [{ ...agent, role: "explorer" }];
+    if (LEGACY_ROLES.has(agent.role)) {
+      return agent.builtIn ? [] : [{ ...agent, role: "explorer" }];
+    }
     if (!agent.builtIn) return [agent];
-    const match = /^(explorer|editor)-([1-3])$/u.exec(agent.id);
-    if (!match) return [agent];
-    const generic = `${agent.role === "explorer" ? "探索者" : "编辑者"} ${match[2]}`;
-    return agent.name === generic ? [{ ...agent, name: defaultName(agent.role, Number(match[2])) }] : [agent];
+    const match = /^explorer-([1-3])$/u.exec(agent.id);
+    return match ? [{ ...agent, name: defaultName("explorer", Number(match[1])) }] : [agent];
   });
-  if (!agents.some((agent) => agent.id === "editor-3")) {
-    if (agents.length >= MAX_AGENTS) throw new Error("代理目录迁移需要新增 editor-3，但已达到 16 个代理上限。");
-    const editors = agents.filter((agent) => agent.role === "editor");
-    const firstModel = editors[0]?.model;
-    const commonModel = firstModel && editors.every(({ model }) => model.mode === "inherit"
-      ? firstModel.mode === "inherit"
-      : firstModel.mode === "fixed" && model.provider === firstModel.provider && model.modelId === firstModel.modelId);
-    const commonThinking = editors.length > 0 && editors.every((agent) => agent.thinkingLevel === editors[0]!.thinkingLevel);
-    const added = defaultCatalog(catalog.projectPath, now).agents.find((agent) => agent.id === "editor-3")!;
-    if (commonModel) added.model = structuredClone(editors[0]!.model);
-    if (commonThinking) added.thinkingLevel = editors[0]!.thinkingLevel;
-    agents.push(added);
+  for (const builtin of defaultCatalog(catalog.projectPath, now).agents) {
+    if (!agents.some((agent) => agent.id === builtin.id)) agents.push(builtin);
   }
-  const next = { ...catalog, agents };
+  if (agents.length > MAX_AGENTS) throw new Error("补充默认探索者将超过 16 个代理上限，原目录已保留。");
+  const next = { ...catalog, agents, maxConcurrent: Math.min(catalog.maxConcurrent, 3) };
   return JSON.stringify(next) === JSON.stringify(catalog) ? catalog : { ...next, updatedAt: now };
 }
 
@@ -173,7 +162,8 @@ export class AgentCatalogService {
     const index = catalog.agents.findIndex((candidate) => candidate.id === agent.id);
     if (index < 0) throw new Error(`找不到代理：${agent.id}`);
     const existing = catalog.agents[index]!;
-    catalog.agents[index] = { ...structuredClone(agent), builtIn: existing.builtIn, createdAt: existing.createdAt, updatedAt: this.now() };
+    catalog.agents[index] = { ...structuredClone(agent), name: existing.builtIn ? existing.name : agent.name,
+      builtIn: existing.builtIn, createdAt: existing.createdAt, updatedAt: this.now() };
     catalog.updatedAt = this.now();
     await this.persist();
     return cloneCatalog(catalog);
@@ -239,7 +229,7 @@ export class AgentCatalogService {
   }
 
   async setMaxConcurrent(value: number): Promise<ProjectAgentCatalog> {
-    if (!Number.isInteger(value) || value < 1 || value > 7) throw new Error("代理并发上限必须为 1–7。");
+    if (!Number.isInteger(value) || value < 1 || value > 3) throw new Error("探索者并发上限必须为 1–3。");
     const catalog = this.requireCatalog();
     catalog.maxConcurrent = value;
     catalog.updatedAt = this.now();

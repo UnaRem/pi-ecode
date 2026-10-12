@@ -25,12 +25,13 @@ function message(id: string, role: "user" | "assistant" = "assistant"): Conversa
   return { kind: "message", id, message: { id, role, text: id, timestamp: 1 } };
 }
 
-function explorerTask(id: string, originToolCallId: string, agentRole?: ExplorerTask["agentRole"]): ExplorerTask {
+function explorerTask(id: string, originToolCallId: string, agentRole?: ExplorerTask["agentRole"] | "editor"): ExplorerTask {
   return {
     id, taskName: id, title: `Explorer ${id}`, objective: "Inspect behavior", scope: `src/${id}`,
     deliverable: "Evidence", status: "running", originToolCallId, thinkingLevel: "low",
     attempt: 1, maxAttempts: 2, revision: 1, queuedAt: 1,
-    ...(agentRole ? { agentRole } : {}),
+    // 历史时间线可能携带旧角色，UI 应回退到中性标签。
+    ...(agentRole ? { agentRole: agentRole as NonNullable<ExplorerTask["agentRole"]> } : {}),
   };
 }
 
@@ -124,7 +125,7 @@ describe("ToolBatch", () => {
       tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
       explorers: [explorerTask("linked", "dispatch-call", "editor")],
     });
-    expect(editor).toContain("Editor · 1 active / 1 total");
+    expect(editor).toContain("Agents · 1 active / 1 total");
 
     const explorers = renderBatch({
       tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],

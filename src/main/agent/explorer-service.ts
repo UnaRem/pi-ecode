@@ -5,12 +5,9 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   createAgentSessionFromServices,
   createAgentSessionServices,
-  createEditToolDefinition,
-  createWriteToolDefinition,
   getAgentDir,
   type AgentSession,
   type AgentSessionEvent,
-  type EditToolInput,
   type ExtensionAPI,
   type ExtensionContext,
   type InlineExtension,
@@ -18,16 +15,14 @@ import {
   SessionManager,
   SettingsManager,
   type ToolDefinition,
-  type WriteToolInput,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot, ValidationState } from "../../shared/contracts.js";
+import type { ConversationItem, ExplorerTask, ExplorerTimelineSnapshot } from "../../shared/contracts.js";
 import type { ProjectAgentDefinition } from "../../shared/agent-contracts.js";
 import { formatToolInput, textFromContent, textFromToolResult, toolOutputView, toolTitle } from "./message-mapper.js";
 import { mapTimeline, toolItem } from "./timeline-mapper.js";
 import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
 import { NativeCompaction } from "./native-compaction.js";
-import { AgentWriteLockService } from "./agent-write-locks.js";
 import { CODEGRAPH_TOOL_NAME } from "./codegraph-tool.js";
 import { configuredCompactionReserveTokens, contextBudgetReached, contextBudgetReserveTokens } from "./context-budget.js";
 import {
@@ -66,7 +61,6 @@ import {
   taskPrompt,
   TERMINAL_STATUSES,
   TIMELINE_THROTTLE_MS,
-  validationResultText,
   type WatchdogOptions,
 } from "./explorer-support.js";
 
@@ -79,8 +73,6 @@ interface ExplorerWaitResult {
 
 export class ExplorerService {
   private readonly tasks = new Map<string, ExplorerTask>();
-  private readonly validationUpdates = new Map<string, (state: ValidationState) => void>();
-  private readonly writeLocks = new AgentWriteLockService();
   private readonly queue: string[] = [];
   private readonly controllers = new Map<string, AbortController>();
   private readonly operations = new Set<Promise<void>>();
@@ -113,11 +105,6 @@ export class ExplorerService {
     this.now = options.now ?? Date.now;
     this.watchdog = { ...DEFAULT_WATCHDOG, ...options.watchdog };
     this.runExplorer = options.runExplorer ?? ((task, request, parent, signal) => this.runChildSession(task, request, parent, signal));
-  }
-
-  public onValidationChanged(state: ValidationState): void {
-    // 仅真实宿主进度推进工具活动；终态通知不替代 runValidation 的最终返回。
-    for (const update of this.validationUpdates.values()) update(state);
   }
 
   get current(): ExplorerTask[] {
@@ -193,7 +180,6 @@ export class ExplorerService {
     if (queuedIndex >= 0) this.queue.splice(queuedIndex, 1);
     this.publish();
     await this.operationsForTask(taskId);
-    this.writeLocks.release(taskId);
   }
 
   async interruptAll(): Promise<void> {
@@ -209,12 +195,10 @@ export class ExplorerService {
     this.queue.length = 0;
     this.publish();
     await Promise.allSettled([...this.operations]);
-    this.writeLocks.clear();
   }
 
   async reset(): Promise<void> {
     this.disposed = true;
-    this.validationUpdates.clear();
     this.generation += 1;
     await this.interruptAll();
     for (const timer of this.timelineTimers.values()) clearTimeout(timer);
@@ -236,7 +220,6 @@ export class ExplorerService {
     this.attentionTaskIds.clear();
     this.taskAgents.clear();
     this.generations.clear();
-    this.writeLocks.clear();
     this.extensionApi = undefined;
     this.parentAgentActive = false;
     this.disposed = false;
@@ -265,15 +248,15 @@ export class ExplorerService {
     pi.registerTool({
       name: "agent_dispatch",
       label: "派发代理任务",
-      description: "向项目代理派发一个或多个任务。代理可长期复用会话；所有任务都要传 write_scope 数组，编辑者必须传非空范围。",
+      description: "向只读探索者派发调查任务。默认甘、文、崔三个探索者；主会话负责编辑与验证。",
       promptSnippet: "按稳定 agent_id 指挥项目代理；完成通知不携带报告正文",
       promptGuidelines: [
         "直接在主会话完成纯问答、简单只读查询，以及少量并行 read/ffgrep/fffind 能解决的定位，不要为此派发子代理。",
-        "任何编辑者派发都必须在项目现有适用确认门禁获批后进行，小任务只是跳过探索：范围明确的小型实现可直接派一个编辑者并在 write_scope 声明精确路径，主会话不得同时编辑该范围。",
-        "根因不明或跨模块时先派探索者：单一调查方向用 agent_dispatch，只有两个相互独立且各需大量阅读的方向才用 dispatch_explorers；综合探索证据并通过同一确认门禁后再派编辑者。探索者同时承担只读审查。",
+        "主会话遵循现有确认门禁直接编辑；根因不明或跨模块时先综合探索者的只读证据。",
+        "单一调查方向用 agent_dispatch；只有两个相互独立且各需大量阅读的方向才用 dispatch_explorers。",
         "编辑或审查任务结束后由主会话负责最终 run_validation、审查 diff 与 git status 并提交；若其后源文件再次变更，验证结果失效必须重跑。",
         "根据项目代理目录选择 agent_id；一个代理同一时刻只能执行一个任务。",
-        "探索者只读；编辑者可运行固定验证；非编辑者传空 write_scope，编辑者写入前声明精确范围。",
+        "探索者只读，不提供写入或验证工具；主会话负责最终验证、审查和提交。",
         "派发后不要轮询。agent_wait 返回 attention 时调用一次 agent_status；任务失败会自动重试一次，仍失败时读取 agent_result，补足依赖、改派空闲同角色代理，或明确告知用户并由主会话降级执行。",
         "收到完成通知后按需调用 agent_result；需要后续任务时调用 agent_message。不得把主会话降级执行描述为原代理验证通过。",
       ],
@@ -364,7 +347,7 @@ export class ExplorerService {
           objective: params.message,
           scope: "沿用该代理既有项目范围，并只处理本次消息明确涉及的文件。",
           deliverable: params.deliverable ?? "用中文给出自包含结论，并引用本次重新核实的文件路径。",
-          ...(params.write_scope.length > 0 ? { write_scope: params.write_scope } : {}),
+          ...(params.write_scope?.length ? { write_scope: params.write_scope } : {}),
         }]);
         return { content: [{ type: "text", text: `已向代理 ${params.agent_id} 发送后续任务，task_id=${snapshots[0]!.id}` }], details: { taskId: snapshots[0]!.id, agentId: params.agent_id } };
       },
@@ -421,18 +404,12 @@ export class ExplorerService {
           id: randomUUID(), taskName: request.task_name, title: request.title.trim(), objective: request.objective.trim(),
           scope: request.scope.trim(), deliverable: request.deliverable.trim(), status: "queued", originToolCallId: toolCallId,
           ...(definition ? { agentId: definition.id, agentRole: definition.role } : {}),
-          ...(request.write_scope?.length ? { writeScope: [...request.write_scope] } : {}),
           provider: model.provider, modelId: model.id,
           thinkingLevel: thinkingOverride ?? definition?.thinkingLevel ?? "low",
           attempt: 1, maxAttempts: this.watchdog.maxAttempts, revision: 1, queuedAt: this.now(),
           lastActivityAt: this.now(), activity: "Queued",
         };
-        if (definition?.role === "editor") {
-          if (!request.write_scope?.length) throw new Error("编辑者任务必须声明 write_scope。");
-          this.writeLocks.acquire(parent.sessionManager.getCwd(), task.id, definition.id, request.write_scope);
-        } else if (request.write_scope?.length) {
-          throw new Error(`只有编辑者任务可以声明非空 write_scope：${definition?.name ?? request.task_name}`);
-        }
+        if (request.write_scope?.length) throw new Error("探索者只读，不能声明写入范围。");
         if (definition) {
           occupiedAgentIds.add(definition.id);
           this.taskAgents.set(task.id, {
@@ -453,7 +430,6 @@ export class ExplorerService {
       }
     } catch (error) {
       for (const task of created) {
-        this.writeLocks.release(task.id);
         this.taskAgents.delete(task.id);
         this.tasks.delete(task.id);
         const queuedIndex = this.queue.indexOf(task.id);
@@ -468,7 +444,7 @@ export class ExplorerService {
 
   private drainQueue(): void {
     if (this.disposed) return;
-    const maxConcurrent = Math.min(7, Math.max(1, this.options.getMaxConcurrent?.() ?? MAX_CONCURRENT_EXPLORERS));
+    const maxConcurrent = Math.min(MAX_CONCURRENT_EXPLORERS, Math.max(1, this.options.getMaxConcurrent?.() ?? MAX_CONCURRENT_EXPLORERS));
     while (this.controllers.size < maxConcurrent) {
       const id = this.queue.shift();
       if (!id) return;
@@ -537,7 +513,6 @@ export class ExplorerService {
       this.bump(task);
     } finally {
       this.controllers.delete(task.id);
-      this.writeLocks.release(task.id);
       if (generation === this.generation) {
         this.publish();
         this.resolveWaiters();
@@ -583,65 +558,13 @@ export class ExplorerService {
   }
 
   private roleToolDefinitions(
-    task: ExplorerTask,
     parent: AgentSession,
-    cwd: string,
     agent: ExplorerAgentSnapshot | undefined,
   ): ToolDefinition[] {
     const readOnlyNames = EXPLORER_TOOL_NAMES.filter((name) => !agent?.disabledTools.includes(name));
     const definitions = explorerToolDefinitions(parent, readOnlyNames);
     const codegraphDefinition = parent.getToolDefinition(CODEGRAPH_TOOL_NAME);
     if (codegraphDefinition && !agent?.disabledTools.includes(CODEGRAPH_TOOL_NAME)) definitions.push(codegraphDefinition);
-    if (agent?.role === "editor") {
-      const edit = createEditToolDefinition(cwd);
-      const write = createWriteToolDefinition(cwd);
-      const lockedEdit = {
-        ...edit,
-        label: "受锁编辑",
-        description: "在当前编辑任务已声明并锁定的 write_scope 内执行精确文本替换。",
-        execute: async (toolCallId: string, params: EditToolInput, signal: AbortSignal | undefined, onUpdate: Parameters<typeof edit.execute>[3], context: Parameters<typeof edit.execute>[4]) => {
-          this.writeLocks.assertPath(cwd, task.id, params.path);
-          return edit.execute(toolCallId, params, signal, onUpdate, context);
-        },
-      };
-      const lockedWrite = {
-        ...write,
-        label: "受锁写入",
-        description: "只在当前编辑任务已声明并锁定的 write_scope 内新建或完整覆盖文件。",
-        execute: async (toolCallId: string, params: WriteToolInput, signal: AbortSignal | undefined, onUpdate: Parameters<typeof write.execute>[3], context: Parameters<typeof write.execute>[4]) => {
-          this.writeLocks.assertPath(cwd, task.id, params.path);
-          return write.execute(toolCallId, params, signal, onUpdate, context);
-        },
-      };
-      definitions.push(lockedEdit as unknown as ToolDefinition, lockedWrite as unknown as ToolDefinition);
-    }
-    if (agent?.role === "editor" && this.options.runValidation) {
-      definitions.push({
-        name: "run_validation",
-        label: "运行固定验证",
-        description: "运行宿主固定的 typecheck、test、build 检查；不能指定或执行任意命令。",
-        parameters: Type.Object({}),
-        execute: async (toolCallId, _params, signal, onUpdate) => {
-          signal?.throwIfAborted();
-          const key = `${task.id}:${toolCallId}`;
-          const cleanup = (): void => { this.validationUpdates.delete(key); };
-          this.validationUpdates.set(key, (state) => {
-            if (signal?.aborted || task.status !== "running") return;
-            this.touch(task, `固定验证 · ${state.activeStep ?? state.status}`);
-            onUpdate?.({ content: [{ type: "text", text: validationResultText(state) }], details: state });
-          });
-          signal?.addEventListener("abort", cleanup, { once: true });
-          try {
-            const state = await this.options.runValidation!();
-            signal?.throwIfAborted();
-            return { content: [{ type: "text", text: validationResultText(state) }], details: state };
-          } finally {
-            cleanup();
-            signal?.removeEventListener("abort", cleanup);
-          }
-        },
-      });
-    }
     return definitions.filter((definition) => !agent?.disabledTools.includes(definition.name));
   }
 
@@ -726,7 +649,7 @@ export class ExplorerService {
     const sessionManager = reusable
       ? SessionManager.open(generation.sessionFile)
       : SessionManager.create(cwd, sessionRoot, { ...(parent.sessionFile ? { parentSession: parent.sessionFile } : {}) });
-    const toolDefinitions = this.roleToolDefinitions(task, parent, cwd, agent);
+    const toolDefinitions = this.roleToolDefinitions(parent, agent);
     const toolNames = toolDefinitions.map((definition) => definition.name);
     const created = await createAgentSessionFromServices({
       services,

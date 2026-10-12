@@ -105,11 +105,17 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 
 ## Project agents
 
-- Only `explorer` and `editor` are valid roles for new or saved agents. Legacy `reviewer` and `validator` roles are accepted only by storage migration and restored-task compatibility. Catalog migration removes obsolete built-in agents and maps custom legacy agents to `explorer`; restored legacy task roles map to `explorer`. IPC must reject legacy roles for create/save requests.
-- The default catalog has three explorers: 雅典娜 Athena, 阿波罗 Apollo, 赫尔墨斯 Hermes; and three editors: 赫淮斯托斯 Hephaestus, 普罗米修斯 Prometheus, 赫斯提亚 Hestia. Preserve custom names when migrating old catalogs.
-- Explorers are read-only. Editors use locked `edit`/`write` tools only within the declared `write_scope`; the main session must not modify files locked by an active editor.
-- Before completing authorized implementation work, editors reread modified files and run available host-owned fixed `typecheck`, `test`, and `build` checks. Their `run_validation` waits for the real terminal result and streams host progress. On failure, inspect logs, correct within the authorized scope, rerun checks, and report actual results and unavailable or unexecuted checks.
-- Main-session `run_validation` uses the background dispatch protocol; do not poll or duplicate runs. Editor checks do not replace main responsibility: after all editors finish, main runs final validation, reviews the diff and `git status`, and commits verified work. Later source edits invalidate previous results.
+- Only `explorer` is a valid role for new or saved agents. Legacy `editor`, `reviewer`, and `validator` roles are accepted only when reading storage: remove their built-in catalog entries, convert custom entries and restored tasks to `explorer`, and preserve custom names, configuration, and session history. IPC rejects legacy roles for create/save requests.
+- The default catalog has three read-only explorers named 甘、文、崔 with stable IDs `explorer-1/2/3`. Rename existing built-in explorers on migration; retain their model, thinking, prompt, and preferences. Concurrent execution is limited to three.
+- Explorers receive only `read`, `ffgrep`, `fffind`, and available read-only `codegraph_explore`. They cannot write files, run commands, or invoke validation; non-empty `write_scope` is rejected. The management UI configures existing agents without add or role controls.
+- The main session implements changes directly within the user's authorization, rereads changed files, runs final validation, reviews the diff and `git status`, and commits verified work.
+- Main-session `run_validation` uses the background dispatch protocol; do not poll or duplicate runs. Later source edits invalidate previous results.
+
+## MCP and extensions
+
+- Register pi 1.1 native MCP, tool search, and codemode extensions in each main-session runtime. Load global `mcp.json` and trusted project `.pi/mcp.json` through the SDK; do not load `pi-mcp-adapter` alongside native MCP.
+- The inspector MCP directory reflects tool definitions registered by the current main session, including deferred tools. Update it after discovery and tools/list changes, remove hidden withdrawn tools, and isolate directories across session replacement. Send only tool names, server names, descriptions, and exposure over IPC; credentials stay in main.
+- SoL-Pi has no managed settings or automatic package registration. Removing its global package registration disables future loading while retaining its installed checkout, original configuration, session records, and observation archives.
 
 ## Verification
 

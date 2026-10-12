@@ -26,16 +26,16 @@ afterEach(async () => {
 });
 
 describe("AgentCatalogService", () => {
-  it("creates the six project-scoped defaults with safe role boundaries", async () => {
+  it("creates three project-scoped read-only defaults with stable names", async () => {
     const test = await service();
     const catalog = await test.service.open("C:/work/demo");
 
     expect(catalog.maxConcurrent).toBe(3);
     expect(catalog.agents.map((agent) => agent.role)).toEqual([
-      "explorer", "explorer", "explorer", "editor", "editor", "editor",
+      "explorer", "explorer", "explorer",
     ]);
-    expect(catalog.agents.map((agent) => agent.id)).toEqual(["explorer-1", "explorer-2", "explorer-3", "editor-1", "editor-2", "editor-3"]);
-    expect(catalog.agents.map((agent) => agent.name)).toEqual(["雅典娜 Athena", "阿波罗 Apollo", "赫尔墨斯 Hermes", "赫淮斯托斯 Hephaestus", "普罗米修斯 Prometheus", "赫斯提亚 Hestia"]);
+    expect(catalog.agents.map((agent) => agent.id)).toEqual(["explorer-1", "explorer-2", "explorer-3"]);
+    expect(catalog.agents.map((agent) => agent.name)).toEqual(["甘", "文", "崔"]);
     expect(catalog.agents.every((agent) => agent.model.mode === "inherit" && agent.thinkingLevel === "low")).toBe(true);
     expect(catalog.agents.every((agent) => agent.autoCompaction.thresholdPercent === null)).toBe(true);
     expect(JSON.stringify(catalog)).toContain("不执行任意 shell 命令");
@@ -47,24 +47,25 @@ describe("AgentCatalogService", () => {
     const initial = await test.service.open("C:/work/demo");
     const [key] = await readdir(join(test.root, "projects"));
     const path = join(test.root, "projects", key!, "agents.json");
-    const oldAgents = initial.agents.filter((agent) => agent.id !== "editor-3").map((agent) => ({
-      ...agent, name: `${agent.role === "editor" ? "编辑者" : "探索者"} ${agent.id.split("-")[1]}`,
+    const oldAgents = initial.agents.filter((agent) => agent.id !== "explorer-3").map((agent) => ({
+      ...agent, name: `探索者 ${agent.id.split("-")[1]}`,
       model: { mode: "fixed", provider: "p", modelId: "m" }, thinkingLevel: "high",
     }));
     oldAgents[0]!.name = "自定义探索名";
-    const legacy = ["validator", "reviewer"].flatMap((role) => [
+    const legacy = ["editor", "validator", "reviewer"].flatMap((role) => [
       { ...initial.agents[0]!, id: `${role}-1`, role, builtIn: true },
       { ...initial.agents[0]!, id: `custom-${role}`, role, builtIn: false, name: "保留名字", prompt: "自定义提示", disabledTools: ["read"], enabled: false },
     ]);
-    await writeFile(path, JSON.stringify({ ...initial, agents: [...oldAgents, ...legacy] }));
+    await writeFile(path, JSON.stringify({ ...initial, maxConcurrent: 7, agents: [...oldAgents, ...legacy] }));
     const migrated = await new AgentCatalogService(test.root, () => 2_000).open("C:/work/demo");
-    expect(migrated.agents).toHaveLength(8);
-    expect(migrated.agents.find((agent) => agent.id === "explorer-1")?.name).toBe("自定义探索名");
-    expect(migrated.agents.find((agent) => agent.id === "editor-1")?.name).toBe("赫淮斯托斯 Hephaestus");
+    expect(migrated.agents).toHaveLength(6);
+    expect(migrated.maxConcurrent).toBe(3);
+    expect(migrated.agents.find((agent) => agent.id === "explorer-1")?.name).toBe("甘");
+    expect(migrated.agents.find((agent) => agent.id === "editor-1")).toBeUndefined();
     for (const original of legacy.filter((agent) => !agent.builtIn)) {
       expect(migrated.agents.find((agent) => agent.id === original.id)).toEqual({ ...original, role: "explorer" });
     }
-    expect(migrated.agents.find((agent) => agent.id === "editor-3")).toMatchObject({ model: { mode: "fixed", provider: "p", modelId: "m" }, thinkingLevel: "high" });
+    expect(migrated.agents.find((agent) => agent.id === "explorer-2")).toMatchObject({ model: { mode: "fixed", provider: "p", modelId: "m" }, thinkingLevel: "high" });
     const contents = await readFile(path, "utf8");
     expect(await new AgentCatalogService(test.root, () => 3_000).open("C:/work/demo")).toEqual(migrated);
     expect(await readFile(path, "utf8")).toBe(contents);
@@ -76,7 +77,7 @@ describe("AgentCatalogService", () => {
     const [key] = await readdir(join(test.root, "projects"));
     const directory = join(test.root, "projects", key!);
     const path = join(directory, "agents.json");
-    const old = JSON.stringify({ ...initial, agents: initial.agents.filter((agent) => agent.id !== "editor-3") });
+    const old = JSON.stringify({ ...initial, agents: initial.agents.filter((agent) => agent.id !== "explorer-3") });
     await writeFile(path, old);
     vi.mocked(rename).mockRejectedValueOnce(Object.assign(new Error("permission denied"), { code: "EACCES" }));
     await expect(test.service.open("C:/work/demo")).rejects.toThrow("permission denied");
@@ -85,18 +86,18 @@ describe("AgentCatalogService", () => {
     expect(await readdir(directory)).toEqual(["agents.json"]);
   });
 
-  it("补编辑者超过上限时保留原目录，混合设置使用默认", async () => {
+  it("补探索者超过上限时保留原目录与内存状态", async () => {
     const test = await service();
     const initial = await test.service.open("C:/work/demo");
     const [key] = await readdir(join(test.root, "projects"));
     const path = join(test.root, "projects", key!, "agents.json");
-    const agents = initial.agents.filter((agent) => agent.id !== "editor-3");
-    agents.find((agent) => agent.id === "editor-1")!.thinkingLevel = "max";
-    agents.find((agent) => agent.id === "editor-1")!.model = { mode: "fixed", provider: "p", modelId: "m" };
+    const agents = initial.agents.filter((agent) => agent.id !== "explorer-3");
+    agents[0]!.thinkingLevel = "max";
+    agents[0]!.model = { mode: "fixed", provider: "p", modelId: "m" };
     await writeFile(path, JSON.stringify({ ...initial, agents }));
     const migrated = await test.service.open("C:/work/demo");
-    expect(migrated.agents.find((agent) => agent.id === "editor-3")).toMatchObject({ model: { mode: "inherit" }, thinkingLevel: "low" });
-    const full = [...agents, ...Array.from({ length: 11 }, (_, index) => ({ ...agents[0]!, id: `custom-${index}`, builtIn: false }))];
+    expect(migrated.agents.find((agent) => agent.id === "explorer-3")).toMatchObject({ model: { mode: "inherit" }, thinkingLevel: "low" });
+    const full = [...agents, ...Array.from({ length: 14 }, (_, index) => ({ ...agents[0]!, id: `custom-${index}`, builtIn: false }))];
     const old = JSON.stringify({ ...initial, agents: full });
     await writeFile(path, old);
     await expect(test.service.open("C:/work/demo")).rejects.toThrow("16 个代理上限");
@@ -112,13 +113,13 @@ describe("AgentCatalogService", () => {
     explorer.model = { mode: "fixed", provider: "openai", modelId: "gpt-test" };
     explorer.autoCompaction.thresholdPercent = 70;
     await test.service.save(explorer);
-    await test.service.setMaxConcurrent(5);
+    await test.service.setMaxConcurrent(2);
 
     const reloaded = new AgentCatalogService(test.root, () => 3_000);
     const restored = await reloaded.open("C:/work/demo");
-    expect(restored.maxConcurrent).toBe(5);
+    expect(restored.maxConcurrent).toBe(2);
     expect(restored.agents[0]).toMatchObject({
-      name: "架构探索者",
+      name: "甘",
       model: { mode: "fixed", provider: "openai", modelId: "gpt-test" },
       autoCompaction: { enabled: true, thresholdPercent: 70 },
     });
@@ -182,6 +183,6 @@ describe("AgentCatalogService", () => {
     custom.autoCompaction.thresholdPercent = 95;
     await expect(test.service.save(custom)).rejects.toThrow("50%–90%");
     const removed = await test.service.remove(custom.id);
-    expect(removed.agents).toHaveLength(6);
+    expect(removed.agents).toHaveLength(3);
   });
 });

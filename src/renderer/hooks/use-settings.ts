@@ -107,7 +107,6 @@ export function useSettings(enabled: boolean) {
     if (!snapshot) return null;
     if (target === "global-settings") return snapshot.globalSettings;
     if (target === "project-settings") return snapshot.projectSettings;
-    if (target === "sol-pi") return snapshot.solPi;
     return target === "models" ? snapshot.models : snapshot.fff;
   }, [snapshot]);
 

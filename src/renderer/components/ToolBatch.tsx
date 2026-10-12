@@ -44,7 +44,6 @@ export function isScrollAreaAtBottom(scrollTop: number, clientHeight: number, sc
 
 const ROLE_LABEL_KEYS = {
   explorer: "agent.role.explorer",
-  editor: "agent.role.editor",
 } as const satisfies Record<AgentRole, MessageKey>;
 
 /**
@@ -54,7 +53,7 @@ const ROLE_LABEL_KEYS = {
 function compactBatchLabel(linkedExplorers: ExplorerTask[], t: Translate): string {
   const roles = new Set<AgentRole>();
   const everyTaskHasRole = linkedExplorers.every((task) => {
-    if (!task.agentRole) return false;
+    if (task.agentRole !== "explorer") return false;
     roles.add(task.agentRole);
     return true;
   });

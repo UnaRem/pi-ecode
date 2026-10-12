@@ -222,6 +222,7 @@ export default function App() {
       </section>
       <WorkspaceInspector
         tools={workspaceTools.tools}
+        mcpTools={state.mcpTools}
         selectedTool={inspectorSelectedTool}
         validation={state.validation}
         review={state.review}
@@ -238,8 +239,7 @@ export default function App() {
         onSelectExplorer={selectExplorer}
         onStopExplorer={(taskId) => void actions.stopExplorer(taskId)}
         onSaveProjectAgent={async (agent) => { await actions.saveProjectAgent(agent); }}
-  onSetAllProjectAgentPreferences={actions.setAllProjectAgentPreferences}
-        onCreateProjectAgent={async (request) => { await actions.createProjectAgent(request); }}
+        onSetAllProjectAgentPreferences={actions.setAllProjectAgentPreferences}
         onRemoveProjectAgent={async (agentId) => { await actions.removeProjectAgent(agentId); }}
         onSetAgentConcurrency={async (value) => { await actions.setAgentConcurrency(value); }}
         onSelectTool={workspaceTools.selectTool}

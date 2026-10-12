@@ -1,13 +1,12 @@
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
+import type { ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
 import type { ModelOption, ThinkingLevel } from "@shared/contracts";
 import { useI18n } from "../i18n/i18n";
 import { clampAgentThinkingLevel, resolveAgentThinkingLevels } from "../lib/agent-thinking-levels";
 import { AgentBulkPreferences } from "./AgentBulkPreferences";
 
-const ROLES: AgentRole[] = ["explorer", "editor"];
-const TOOLS = ["read", "ffgrep", "fffind", "run_validation", "edit", "write"];
+const TOOLS = ["read", "ffgrep", "fffind", "codegraph_explore"];
 
 export function AgentManager({
   catalog,
@@ -16,7 +15,6 @@ export function AgentManager({
   onBack,
   onSave,
   onSetAllPreferences,
-  onCreate,
   onRemove,
   onSetConcurrency,
 }: {
@@ -26,7 +24,6 @@ export function AgentManager({
   onBack: () => void;
   onSave: (agent: ProjectAgentDefinition) => Promise<void>;
   onSetAllPreferences: (request: SetAllProjectAgentPreferencesRequest) => Promise<void>;
-  onCreate: (request: CreateProjectAgentRequest) => Promise<void>;
   onRemove: (agentId: string) => Promise<void>;
   onSetConcurrency: (value: number) => Promise<void>;
 }) {
@@ -61,12 +58,6 @@ export function AgentManager({
     setSaving(true);
     try { await onSave({ ...draft, thinkingLevel: effectiveThinking }); } finally { setSaving(false); }
   };
-  const add = async (): Promise<void> => {
-    if (saving) return;
-    setSaving(true);
-    try { await onCreate({ name: `${t("agent.role.explorer")} ${catalog.agents.length + 1}`, role: "explorer" }); }
-    finally { setSaving(false); }
-  };
 
   return <section className="agent-manager" aria-label={t("agent.manage")}>
     <header className="agent-manager-header">
@@ -76,7 +67,7 @@ export function AgentManager({
     <label className="agent-manager-concurrency">
       <span>{t("agent.concurrent")}</span>
       <select value={catalog.maxConcurrent} disabled={saving} onChange={(event) => void onSetConcurrency(Number(event.target.value))}>
-        {[1, 2, 3, 4, 5, 6, 7].map((value) => <option value={value} key={value}>{value}</option>)}
+        {[1, 2, 3].map((value) => <option value={value} key={value}>{value}</option>)}
       </select>
     </label>
     <AgentBulkPreferences agents={catalog.agents} models={models} inheritedModel={inheritedModel} saving={saving} setSaving={setSaving}
@@ -85,11 +76,9 @@ export function AgentManager({
       {catalog.agents.map((agent) => <button type="button" key={agent.id} disabled={saving} className={agent.id === selected?.id ? "selected" : ""} onClick={() => setSelectedId(agent.id)}>
         <strong>{agent.name}</strong><small>{t(`agent.role.${agent.role}`)}</small>
       </button>)}
-      <button type="button" className="agent-add" disabled={saving} onClick={() => void add()}><Plus size={12} />{t("agent.add")}</button>
     </div>
     {draft && <form className="agent-editor" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <label><span>{t("agent.name")}</span><input value={draft.name} maxLength={80} onChange={(event) => update({ name: event.target.value })} /></label>
-      <label><span>{t("agent.role")}</span><select value={draft.role} onChange={(event) => update({ role: event.target.value as AgentRole })}>{ROLES.map((role) => <option key={role} value={role}>{t(`agent.role.${role}`)}</option>)}</select></label>
+      <label><span>{t("agent.name")}</span><input value={draft.name} readOnly={draft.builtIn} maxLength={80} onChange={(event) => update({ name: event.target.value })} /></label>
       <label className="agent-check"><input type="checkbox" checked={draft.enabled} onChange={(event) => update({ enabled: event.target.checked })} /><span>{t("agent.enabled")}</span></label>
       <label><span>{t("agent.model")}</span><select value={modelValue} disabled={saving} onChange={(event) => changeModel(event.target.value)}><option value="inherit">{t("agent.model.inherit")}</option>{modelValue !== "inherit" && !models.some((model) => `${model.provider}/${model.id}` === modelValue) && <option value={modelValue}>{modelValue}</option>}{models.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.name} · {model.provider}</option>)}</select></label>
       <label><span>{t("agent.thinking")}</span><select value={effectiveThinking} disabled={saving || supportedThinking.length === 0} onChange={(event) => update({ thinkingLevel: event.target.value as ThinkingLevel })}>{!effectiveThinking && <option value="" disabled />}{supportedThinking.map((level) => <option value={level} key={level}>{level}</option>)}</select></label>

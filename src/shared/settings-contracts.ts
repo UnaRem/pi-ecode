@@ -5,7 +5,7 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export interface JsonObject { [key: string]: JsonValue }
 
 export type SettingsScope = "global" | "project";
-export type ConfigTarget = "global-settings" | "project-settings" | "models" | "pi-fff" | "sol-pi";
+export type ConfigTarget = "global-settings" | "project-settings" | "models" | "pi-fff";
 export type InstructionFileTarget = "global-append-system" | "project-agents";
 export type AuthType = "api_key" | "oauth";
 
@@ -45,7 +45,6 @@ export interface SettingsSnapshot {
   effectiveSettings: JsonObject;
   models: ConfigDocument;
   fff: ConfigDocument;
-  solPi: ConfigDocument;
   instructionFiles: Record<InstructionFileTarget, InstructionFileDocument>;
   fffLoaded: boolean;
   projectTrusted: boolean;

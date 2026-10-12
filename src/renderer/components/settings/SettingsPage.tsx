@@ -8,7 +8,6 @@ import { GeneralSettingsForm } from "./GeneralSettingsForm";
 import { ModelsSettingsForm } from "./ModelsSettingsForm";
 import { AuthSettingsPanel } from "./AuthSettingsPanel";
 import { FffSettingsForm } from "./FffSettingsForm";
-import { SolPiSettingsForm } from "./SolPiSettingsForm";
 import { InstructionFilesEditor } from "./InstructionFilesEditor";
 
 type SettingsSection = ConfigTarget | "instructions" | "auth" | "app";
@@ -29,7 +28,6 @@ function SettingsNavigation(props: { target: SettingsSection; effectiveCount: nu
     ["instructions", t("settings.instructions")],
     ["auth", t("settings.auth")],
     ["pi-fff", t("settings.fff")],
-    ["sol-pi", t("settings.sol")],
     ["app", t("settings.app")],
   ];
   return (
@@ -95,8 +93,6 @@ function SettingsContent(props: SettingsContentProps) {
         <GeneralSettingsForm value={props.draft} disabled={props.readOnly || settings.loading} readOnly={props.readOnly} onChange={props.onDraftChange} />
       ) : props.target === "models" ? (
         <ModelsSettingsForm value={props.draft} disabled={settings.loading} onChange={props.onDraftChange} />
-      ) : props.target === "sol-pi" ? (
-        <SolPiSettingsForm value={props.draft} disabled={settings.loading} onChange={props.onDraftChange} />
       ) : (
         <FffSettingsForm value={props.draft} loaded={settings.snapshot?.fffLoaded ?? false} disabled={settings.loading} onChange={props.onDraftChange} />
       )}
@@ -111,7 +107,6 @@ function settingsHeading(target: SettingsSection, t: Translate): string {
   if (target === "instructions") return t("settings.instructions");
   if (target === "auth") return t("settings.auth");
   if (target === "app") return t("settings.app");
-  if (target === "sol-pi") return t("settings.sol");
   return t("settings.fff");
 }
 
@@ -183,7 +178,7 @@ export function SettingsPage(props: SettingsPageProps) {
         ? next.projectSettings
         : target === "models"
           ? next.models
-          : target === "sol-pi" ? next.solPi : next.fff;
+          : next.fff;
     setDraft(structuredClone(saved.value));
     setBaseRevision(saved.revision);
     setDirty(false);

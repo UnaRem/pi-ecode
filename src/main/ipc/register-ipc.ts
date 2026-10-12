@@ -80,7 +80,7 @@ function isAuthPromptResponse(value: unknown): value is AuthPromptResponse {
 function isSaveConfigRequest(value: unknown): value is SaveConfigRequest {
   if (!value || typeof value !== "object") return false;
   const request = value as Partial<SaveConfigRequest>;
-  const targets = ["global-settings", "project-settings", "models", "pi-fff", "sol-pi"];
+  const targets = ["global-settings", "project-settings", "models", "pi-fff"];
   return typeof request.target === "string"
     && targets.includes(request.target)
     && Boolean(request.value)
@@ -93,7 +93,7 @@ function isProjectAgentDefinition(value: unknown): value is ProjectAgentDefiniti
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const agent = value as Partial<ProjectAgentDefinition>;
   return typeof agent.id === "string" && typeof agent.name === "string" && typeof agent.prompt === "string"
-    && ["explorer", "editor"].includes(agent.role ?? "")
+    && agent.role === "explorer"
     && Boolean(agent.model) && typeof agent.model === "object"
     && Boolean(agent.autoCompaction) && typeof agent.autoCompaction === "object"
     && Array.isArray(agent.disabledTools);
@@ -113,7 +113,7 @@ function isSetAllProjectAgentPreferencesRequest(value: unknown): value is SetAll
 function isCreateProjectAgentRequest(value: unknown): value is CreateProjectAgentRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const request = value as Partial<CreateProjectAgentRequest>;
-  return typeof request.name === "string" && ["explorer", "editor"].includes(request.role ?? "");
+  return typeof request.name === "string" && request.role === "explorer";
 }
 
 function isSaveInstructionFileRequest(value: unknown): value is SaveInstructionFileRequest {
