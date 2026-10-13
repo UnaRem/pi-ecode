@@ -502,7 +502,7 @@ describe("AgentService prompt lifecycle", () => {
       sessionSummaryState.sessions = sessionSummaryState.sessions.filter((session) => session.path !== path);
     });
     const service = new AgentService(async () => undefined, trashItem);
-    const session = { sessionFile: activePath, isStreaming: false, isCompacting: false } as unknown as AgentSession;
+    const session = { sessionFile: activePath, sessionManager: SessionManager.inMemory("C:/project"), isStreaming: false, isCompacting: false } as unknown as AgentSession;
     Object.assign(service as unknown as { projectPath: string; runtime: { session: AgentSession } }, {
       projectPath: "C:/project",
       runtime: { session },
@@ -663,7 +663,7 @@ describe("AgentService prompt lifecycle", () => {
       let finish = (_sessions: SessionSummary[]): void => undefined;
       sessionSummaryState.pending = new Promise<SessionSummary[]>((resolve) => { finish = resolve; });
       const oldRefresh = internals.refreshSessions();
-      if (changeProject) Object.assign(service, { projectPath: "C:/new", runtime: { session: { sessionId: "new-project" } } });
+      if (changeProject) Object.assign(service, { projectPath: "C:/new", runtime: { session: { sessionId: "new-project", sessionManager: SessionManager.inMemory("C:/new") } } });
       else Object.assign(session, { sessionId: "new-session" });
       sessionSummaryState.pending = undefined;
       sessionSummaryState.sessions = [{ path: "new.jsonl", id: "new", title: "New", modifiedAt: 1, messageCount: 1 }];
@@ -710,6 +710,7 @@ describe("AgentService prompt lifecycle", () => {
       const oldRefresh = internals.refreshSessions();
       sessionSummaryState.pending = undefined;
       sessionSummaryState.sessions = [{ ...sessionSummaryState.sessions[0]!, title: "fresh title" }];
+      await internals.refreshSessions();
       await service.getSnapshot();
       finish([]);
       await oldRefresh;

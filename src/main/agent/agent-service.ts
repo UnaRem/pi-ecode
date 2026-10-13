@@ -63,6 +63,7 @@ import { ManagedProcessToolService } from "./managed-process-tool.js";
 import { toolStatisticsStore, type ToolStatisticsStore } from "./tool-statistics.js";
 import { toolAdvisorExtension } from "./tool-advisor.js";
 import { SessionTitleService } from "./session-title.js";
+import { readProjectProfile } from "./project-profile.js";
 import { configuredCompactionReserveTokens, contextBudgetReserveTokens } from "./context-budget.js";
 
 const HISTORY_PAGE_TURNS = 25;
@@ -97,6 +98,7 @@ export class AgentService {
     await this.managedProcesses.stop(id);
   }
   private projectPath: string | undefined;
+  private projectProfile: import("../../shared/contracts.js").ProjectProfile | undefined;
   private sessionSummaries: { projectPath: string; sessions: import("../../shared/contracts.js").SessionSummary[] } | undefined;
   private sessionSummaryRevision = 0;
   private startupError: string | undefined;
@@ -252,6 +254,7 @@ export class AgentService {
     this.startupError = undefined;
 
     try {
+      this.projectProfile = await readProjectProfile(cwd);
       this.runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
         cwd,
         agentDir: getAgentDir(),
@@ -411,7 +414,7 @@ export class AgentService {
     }
     const session = this.runtime.session;
     const [sessions, availableModels, { history, review }] = await Promise.all([
-      knownSessions ?? this.loadSessionSummaries(),
+      knownSessions ?? (this.sessionSummaries?.projectPath === this.projectPath ? this.sessionSummaries.sessions : this.loadSessionSummaries()),
       session.modelRuntime.getAvailable().catch(() => session.modelRuntime.getAvailableSnapshot()),
       this.history.getSnapshot(session),
     ]);
@@ -423,6 +426,7 @@ export class AgentService {
 
     return {
       projectPath: this.projectPath,
+      ...(this.projectProfile ? { projectProfile: this.projectProfile } : {}),
       projectName: basename(this.projectPath),
       sessionId: session.sessionId,
       sessionFile: session.sessionFile ?? null,
@@ -1173,7 +1177,7 @@ export class AgentService {
     const session = this.runtime?.session;
     const isCurrent = session ? this.sessionGuard(session) : () => this.projectPath === projectPath;
     const revision = ++this.sessionSummaryRevision;
-    const sessions = await listSessionSummaries(projectPath);
+    const sessions = await listSessionSummaries(projectPath, session?.sessionManager.getSessionDir());
     // SDK 会原地切换 session；旧项目、旧会话或较早刷新不得回写当前列表。
     if (projectPath && isCurrent() && revision === this.sessionSummaryRevision) {
       this.sessionSummaries = { projectPath, sessions };
