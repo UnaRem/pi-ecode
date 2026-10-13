@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ToolInfo } from "@earendil-works/pi-coding-agent";
 import { ToolStatisticsStore } from "./tool-statistics.js";
-import { recommendTools } from "./tool-advisor.js";
+import { toolCapability, toolSelectionAdvice } from "./tool-advisor.js";
 
 describe("local tool statistics", () => {
   it("persists concurrent results, separates nested calls and excludes cancellations from latency", async () => {
@@ -58,29 +58,44 @@ describe("local tool statistics", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
-  it("uses qualified nested samples without letting browser tools displace file candidates", () => {
-    const tools = [
-      { name: "read", description: "Read a file", exposure: "direct" },
-      { name: "mcp__fastctx__read_file", description: "Read a file", exposure: "codemode" },
-      ...Array.from({ length: 20 }, (_, index) => ({ name: `mcp__playwright__browser_${index}`, description: "Browser", exposure: "deferred" })),
-    ] as ToolInfo[];
+  it("reports direct and nested observations separately without ranking tools", () => {
+    const tools = [{ name: "read", description: "Read a file", exposure: "direct" }] as ToolInfo[];
     const entry = { capability: "file-read" as const, blocked: 0, cancelled: 0, p95Ms: 10, adjustment: "compare-latency" as const };
-    const metrics = [{ ...entry, name: "read", nested: false, successes: 9, failures: 1, medianMs: 10 },
-      { ...entry, name: "mcp__fastctx__read_file", nested: true, successes: 20, failures: 0, medianMs: 1 }];
-    const candidates = recommendTools(tools, metrics, "在浏览器检查界面，并读取源码文件");
-    expect(candidates.filter((tool) => tool.name.includes("read")).map((tool) => tool.name)).toEqual(["mcp__fastctx__read_file", "read"]);
-    expect(candidates.filter((tool) => tool.name.includes("playwright"))).toHaveLength(2);
+    const statistics = [{ ...entry, name: "read", nested: false, successes: 9, failures: 1, medianMs: 10 },
+      { ...entry, name: "read", nested: true, successes: 20, failures: 0, medianMs: 1 }];
+    const advice = toolSelectionAdvice(tools, ["read"], statistics);
+    expect(advice).toContain("currently declared tools (unranked)");
+    expect(advice.split("\n").filter((line) => line.startsWith("read:"))).toEqual([
+      "read: samples=10, sampleMode=direct, execution successes=9, failures=1, cancelled=0, blocked=0, medianMs=10",
+      "read: samples=20, sampleMode=nested, execution successes=20, failures=0, cancelled=0, blocked=0, medianMs=1",
+    ]);
   });
 
-  it("filters unavailable and unrelated tools before ranking by reliable samples", () => {
+  it("excludes inactive, hidden and withdrawn tools from execution observations", () => {
     const tools = [
       { name: "read", description: "Read a file", exposure: "direct" },
       { name: "mcp__fastctx__read_file", description: "Read a file", exposure: "deferred" },
-      { name: "web_search", description: "Web search", exposure: "direct" },
       { name: "mcp__hidden__read_file", description: "Read file", exposure: "hidden" },
     ] as ToolInfo[];
-    const statistics = [{ name: "read", capability: "file-read" as const, nested: false, successes: 1, failures: 9,
-      blocked: 0, cancelled: 0, medianMs: 1, p95Ms: 1, adjustment: "inspect-input" as const }];
-    expect(recommendTools(tools, statistics, "读取源码文件").map((tool) => tool.name)).toEqual(["mcp__fastctx__read_file", "read"]);
+    const statistics = ["read", "mcp__fastctx__read_file", "mcp__hidden__read_file", "withdrawn_tool"].map((name) => ({
+      name, capability: "file-read" as const, nested: false, successes: 0, failures: 0,
+      blocked: 1, cancelled: 2, medianMs: null, p95Ms: null, adjustment: "collect" as const,
+    }));
+    const advice = toolSelectionAdvice(tools, ["read", "mcp__hidden__read_file", "withdrawn_tool"], statistics);
+    expect(advice).toContain("read: samples=0, sampleMode=direct, execution successes=0, failures=0, cancelled=2, blocked=1, medianMs=unknown");
+    expect(advice).not.toContain("mcp__fastctx__read_file");
+    expect(advice).not.toContain("mcp__hidden__read_file");
+    expect(advice).not.toContain("withdrawn_tool");
+  });
+
+  it.each([
+    ["mcp__deepwiki__read_wiki_contents", "Read repository documentation", "web-search"],
+    ["mcp__context7__query_docs", "Read library documentation", "web-search"],
+    ["mcp__exa__get_contents", "Read web pages", "web-search"],
+    ["ask_user_question", "Ask questions. Examples include library choices.", "other"],
+    ["mcp__fastctx__read_file", "Read a local file", "file-read"],
+    ["mcp__git__git_status", "Shows the working tree status", "git"],
+  ])("classifies %s without confusing providers with generic verbs", (name, description, capability) => {
+    expect(toolCapability({ name, description })).toBe(capability);
   });
 });
