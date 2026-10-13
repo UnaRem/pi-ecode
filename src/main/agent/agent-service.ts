@@ -942,6 +942,7 @@ export class AgentService {
     this.compactionStatus = { status: "idle" };
     this.streamContinuity.install(session);
     this.confirmation.install(session);
+    this.taskPlan.install(session);
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";

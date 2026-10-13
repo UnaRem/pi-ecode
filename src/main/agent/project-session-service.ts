@@ -100,6 +100,7 @@ export class ProjectSessionService {
     }
     if (event.type === "sessions") slot.snapshot = { ...slot.snapshot, sessions: event.sessions };
     if (event.type === "state") slot.snapshot = { ...slot.snapshot, ...event.patch };
+    if (event.type === "task-plan") slot.snapshot = { ...slot.snapshot, taskPlan: event.taskPlan };
     if (event.type === "error") slot.snapshot = { ...slot.snapshot, error: event.message };
     if (event.type === "extension-ui") slot.snapshot = { ...slot.snapshot, extensionUi: event.request };
     if (event.type === "timeline-upsert") {
