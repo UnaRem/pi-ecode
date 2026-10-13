@@ -103,13 +103,13 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 - Comments should explain protocol constraints or non-obvious lifecycle decisions, not restate code.
 - Keep dependencies few. Add one only when it materially reduces complexity or accessibility risk.
 
-## Project agents
+## Main-session execution
 
-- Only `explorer` is a valid role for new or saved agents. Legacy `editor`, `reviewer`, and `validator` roles are accepted only when reading storage: remove their built-in catalog entries, convert custom entries and restored tasks to `explorer`, and preserve custom names, configuration, and session history. IPC rejects legacy roles for create/save requests.
-- The default catalog has three read-only explorers named 甘、文、崔 with stable IDs `explorer-1/2/3`. Rename existing built-in explorers on migration; retain their model, thinking, prompt, and preferences. Concurrent execution is limited to three.
-- Explorers receive only `read`, `ffgrep`, `fffind`, and available read-only `codegraph_explore`. They cannot write files, run commands, or invoke validation; non-empty `write_scope` is rejected. The management UI configures existing agents without add or role controls.
+- pi-ecode runs all work in the main session; it has no subagent runtimes, dispatch tools, catalog, or management UI.
 - The main session implements changes directly within the user's authorization, rereads changed files, runs final validation, reviews the diff and `git status`, and commits verified work.
 - Main-session `run_validation` uses the background dispatch protocol; do not poll or duplicate runs. Later source edits invalidate previous results.
+- Before loading sessions at startup, remove retired subagent catalogs/session directories and `pi-ecode.explorer-*` custom records from main histories. Preserve main messages, unrelated extension records, session IDs, tree references, compaction boundaries, and file modification times. Stream large JSONL files and replace them atomically; leave originals intact on failure.
+- Manual history cleanup must exclude any session still open in a running runtime; the next startup cleans that residual history before loading it.
 
 ## MCP and extensions
 

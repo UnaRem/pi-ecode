@@ -11,8 +11,6 @@
 .inspector-tabs button { position: relative; padding: 0; border: 0; color: var(--color-text-muted); background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
 .inspector-tabs button[aria-selected="true"] { color: var(--color-accent); }
 .inspector-tabs button[aria-selected="true"]::after { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; border-radius: var(--radius-pill); content: ""; background: var(--color-accent); }
-.inspector-tabs .inspector-tab-with-badge { padding-right: 8px; }
-.inspector-tabs .inspector-tab-with-badge::before { position: absolute; top: 5px; right: -8px; display: grid; min-width: 16px; height: 16px; padding: 0 4px; place-items: center; border-radius: var(--radius-pill); color: var(--color-text-muted); content: attr(data-count); background: var(--color-surface-muted); font-size: 9px; line-height: 1; }
 .inspector-scroll { min-height: 0; flex: 1; overflow-y: auto; }
 .inspector-tab-stack { position: relative; min-height: 100%; }
 .inspector-tab-panel.entering { animation: inspector-tab-enter var(--duration-fast) var(--ease-standard) both; }
@@ -82,75 +80,6 @@
 .inspector-validation-logs summary { padding: 6px 0; color: var(--color-accent); font-size: 10px; cursor: pointer; }
 .inspector-validation-logs summary:focus-visible { border-radius: 3px; outline: 2px solid var(--color-focus); outline-offset: 2px; }
 .inspector-validation-logs pre { max-height: 220px; margin: 0 0 var(--space-2); padding: var(--space-2); overflow: auto; border-radius: var(--radius-sm); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
-.explorer-panel-summary { margin: 0 0 var(--space-3); color: var(--color-text-faint); font-size: 10px; }
-.explorer-panel .explorer-manage { min-height: 24px; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0 6px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-muted); background: var(--color-surface); font-size: 9px; cursor: pointer; }
-.explorer-panel .explorer-manage:hover { border-color: var(--color-accent-border); color: var(--color-accent); }
-.agent-manager { min-width: 0; padding: var(--space-4); animation: agent-manager-enter 180ms var(--ease-standard) both; }
-@keyframes agent-manager-enter { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
-.agent-manager-header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); }
-.agent-manager-header strong { color: var(--color-text); font-size: 12px; }
-.agent-manager-header button, .agent-add, .agent-editor-actions button, .agent-manager-all button { display: inline-flex; min-height: 26px; align-items: center; justify-content: center; gap: 4px; padding: 0 7px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-muted); background: var(--color-surface); font-size: 9.5px; cursor: pointer; }
-.agent-manager-header button:hover, .agent-add:hover, .agent-editor-actions button:hover, .agent-manager-all button:hover { border-color: var(--color-accent-border); color: var(--color-accent); }
-.agent-manager-concurrency, .agent-editor > label:not(.agent-check), .agent-editor fieldset label:not(.agent-check) { display: grid; gap: 5px; color: var(--color-text-muted); font-size: 9.5px; }
-.agent-manager-concurrency { grid-template-columns: minmax(0, 1fr) 58px; align-items: center; margin-bottom: var(--space-3); }
-.agent-manager select, .agent-manager input[type="text"], .agent-manager input:not([type]), .agent-manager textarea { width: 100%; min-width: 0; padding: 6px 7px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); font: inherit; }
-.agent-manager textarea { resize: vertical; line-height: 1.5; }
-.agent-manager select:focus-visible, .agent-manager input:focus-visible, .agent-manager textarea:focus-visible { border-color: var(--color-focus); outline: 2px solid var(--color-focus-soft); outline-offset: 1px; }
-.agent-manager-all { display: grid; gap: var(--space-2); margin-bottom: var(--space-4); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
-.agent-manager-all > strong { font-size: 10px; color: var(--color-text); }
-.agent-manager-all-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.agent-manager-all-fields label { display: grid; gap: 5px; min-width: 0; color: var(--color-text-muted); font-size: 9.5px; }
-.agent-manager-all button { justify-self: end; }
-.agent-manager-all button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
-.agent-manager-all small, .agent-manager-all p { margin: 0; color: var(--color-text-muted); font-size: 9.5px; line-height: 1.45; }
-.agent-definition-list { display: grid; gap: 4px; margin-bottom: var(--space-4); }
-.agent-definition-list > button:not(.agent-add) { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 7px; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--color-text-muted); background: transparent; text-align: left; cursor: pointer; }
-.agent-definition-list > button.selected { border-color: var(--color-accent-border); background: var(--color-accent-soft); }
-.agent-definition-list strong { overflow: hidden; color: var(--color-text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.agent-definition-list small { color: var(--color-text-faint); font-size: 9px; }
-.agent-editor { display: grid; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
-.agent-editor fieldset { display: grid; gap: var(--space-2); margin: 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
-.agent-editor legend { padding: 0 4px; color: var(--color-text-muted); font-size: 9.5px; }
-.agent-editor fieldset > small { color: var(--color-text-faint); font-size: 9px; line-height: 1.4; }
-.agent-check { display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-size: 9.5px; }
-.agent-check input { margin: 0; }
-.agent-tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.agent-tool-grid code { overflow: hidden; font-size: 9px; text-overflow: ellipsis; }
-.agent-editor-actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding-bottom: var(--space-4); }
-.agent-editor-actions button[type="submit"], .agent-manager-all button { border-color: var(--color-accent-border); color: var(--color-accent); background: var(--color-accent-soft); }
-.agent-editor-actions button.danger { margin-right: auto; color: var(--color-danger); }
-.agent-manager button:disabled, .agent-manager select:disabled { opacity: .55; cursor: default; }
-.explorer-task-list { display: flex; flex-direction: column; gap: 5px; }
-.explorer-task-list > p { margin: 0; padding: var(--space-4) var(--space-2); color: var(--color-text-muted); font-size: 11px; text-align: center; }
-.explorer-task-list article { position: relative; min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); transition: border-color 140ms ease, background-color 140ms ease; }
-.explorer-task-list article.selected { border-color: var(--color-accent-border-strong); background: var(--color-accent-soft); }
-.explorer-task-main { width: 100%; min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 7px; padding: 8px 30px 8px 9px; border: 0; color: var(--color-text-muted); background: transparent; text-align: left; cursor: pointer; }
-.explorer-task-icon { display: inline-flex; padding-top: 2px; color: var(--color-text-faint); }
-.explorer-task-list article.running .explorer-task-icon { color: var(--color-accent); }
-.explorer-task-list article.completed .explorer-task-icon { color: var(--color-success); }
-.explorer-task-list article.failed .explorer-task-icon { color: var(--color-danger); }
-.explorer-task-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.explorer-task-copy strong, .explorer-task-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.explorer-task-copy strong { color: var(--color-text); font-size: 11px; }
-.explorer-task-copy small { color: var(--color-text-faint); font-size: 9.5px; }
-.explorer-task-copy small.inactive { color: var(--color-danger); }
-.explorer-task-main time { color: var(--color-text-faint); font-size: 9px; white-space: nowrap; }
-.explorer-task-stop { position: absolute; top: 7px; right: 7px; width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-sm); color: var(--color-danger); background: transparent; cursor: pointer; }
-.explorer-task-stop:hover, .explorer-task-stop:focus-visible { background: var(--color-danger-soft); }
-.explorer-agent-main { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; gap: 7px; padding: 8px 30px 8px 9px; }
-.explorer-agent-main .explorer-task-stop { top: 7px; right: 7px; }
-.explorer-agent-select { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 0; border: 0; color: var(--color-text-muted); background: transparent; text-align: left; cursor: pointer; }
-.explorer-agent-select:disabled { cursor: default; opacity: .72; }
-.explorer-agent-select strong, .explorer-agent-select small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.explorer-agent-select strong { color: var(--color-text); font-size: 11px; }
-.explorer-agent-select small { color: var(--color-text-faint); font-size: 9.5px; }
-.explorer-agent-main time { color: var(--color-text-faint); font-size: 9px; white-space: nowrap; }
-.explorer-agent-history { border-top: 1px solid var(--color-border); padding: 0 7px 6px; }
-.explorer-agent-history summary { padding: 6px 2px 4px; color: var(--color-text-faint); font-size: 9px; cursor: pointer; }
-.explorer-agent-history summary:focus-visible, .explorer-agent-select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: 3px; }
-.explorer-agent-history > div { display: flex; flex-direction: column; gap: 3px; }
-.explorer-history-task { border-color: var(--color-border) !important; border-radius: var(--radius-sm) !important; }
-.explorer-history-task .explorer-task-main { padding: 6px 26px 6px 6px; }
 .inspector-version-list { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2); }
 .inspector-version-list code { overflow: hidden; color: var(--color-text-faint); font: 9px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .inspector-file-list { max-height: 128px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; padding-right: 3px; }

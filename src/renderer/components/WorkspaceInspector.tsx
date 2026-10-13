@@ -1,13 +1,10 @@
 import { FileCode2, Play, Square, TerminalSquare } from "lucide-react";
 import { useState, type AnimationEvent, type KeyboardEvent } from "react";
-import type { ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
-import type { CandidateState, ChangeReview, ExplorerTask, ModelOption, ToolActivity, ValidationState } from "@shared/contracts";
+import type { CandidateState, ChangeReview, ToolActivity, ValidationState } from "@shared/contracts";
 import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
 import { GitPushButton } from "./GitPushButton";
 import { ValidationStepList, ValidationStepStatusIcon } from "./ValidationSteps";
-import { ExplorerPanel } from "./ExplorerPanel";
-import { AgentManager } from "./AgentManager";
 import type { ManagedProcess } from "@shared/process-contracts";
 import { ManagedProcessPanel } from "./ManagedProcessPanel";
 import { McpToolDirectory } from "./McpToolDirectory";
@@ -22,19 +19,8 @@ interface WorkspaceInspectorProps {
   candidate: CandidateState;
   projectPath: string;
   isStreaming: boolean;
-  explorers?: ExplorerTask[];
   processes?: ManagedProcess[];
   onStopManagedProcess?: (id: string) => Promise<void>;
-  agentCatalog?: ProjectAgentCatalog | null;
-  models?: ModelOption[];
-  selectedModel?: string | null;
-  selectedExplorerId?: string | null;
-  onSelectExplorer?: (taskId: string) => void;
-  onStopExplorer?: (taskId: string) => void;
-  onSaveProjectAgent?: (agent: ProjectAgentDefinition) => Promise<void>;
-  onSetAllProjectAgentPreferences?: (request: SetAllProjectAgentPreferencesRequest) => Promise<void>;
-  onRemoveProjectAgent?: (agentId: string) => Promise<void>;
-  onSetAgentConcurrency?: (value: number) => Promise<void>;
   onSelectTool: (toolId: string) => void;
   onRunValidation: () => void;
   onStopValidation: () => void;
@@ -175,16 +161,13 @@ function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFi
   );
 }
 
-type InspectorTab = "tools" | "validation" | "agents";
+type InspectorTab = "tools" | "validation";
 
 export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const { t } = useI18n();
   const [tab, setTab] = useState<InspectorTab>("tools");
   const [leavingTab, setLeavingTab] = useState<InspectorTab | null>(null);
-  const [managingAgents, setManagingAgents] = useState(false);
-  const explorers = props.explorers ?? [];
-  const agentCount = props.agentCatalog?.agents.length ?? 0;
-  const availableTabs: InspectorTab[] = ["tools", ...(props.validation.supported ? ["validation" as const] : []), "agents"];
+  const availableTabs: InspectorTab[] = props.validation.supported ? ["tools", "validation"] : ["tools"];
   const activeTab = availableTabs.includes(tab) ? tab : "tools";
   const selectTab = (nextTab: InspectorTab): void => {
     if (nextTab === activeTab) return;
@@ -197,24 +180,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     <ToolQueue {...props} onSelect={props.onSelectTool} />
     <OutputPanel {...props} />
     <ChangeFiles {...props} />
-  </> : target === "validation" ? <ValidationControls {...props} /> : managingAgents && props.agentCatalog ? <AgentManager
-    key={props.agentCatalog.projectPath}
-    catalog={props.agentCatalog}
-    models={props.models ?? []}
-    inheritedModel={props.selectedModel ?? null}
-    onBack={() => setManagingAgents(false)}
-    onSave={props.onSaveProjectAgent ?? (async () => undefined)}
-    onSetAllPreferences={props.onSetAllProjectAgentPreferences ?? (async () => undefined)}
-    onRemove={props.onRemoveProjectAgent ?? (async () => undefined)}
-    onSetConcurrency={props.onSetAgentConcurrency ?? (async () => undefined)}
-  /> : <ExplorerPanel
-    tasks={explorers}
-    {...(props.agentCatalog ? { agentCatalog: props.agentCatalog } : {})}
-    selectedTaskId={props.selectedExplorerId ?? null}
-    onSelect={props.onSelectExplorer ?? (() => undefined)}
-    onStop={props.onStopExplorer ?? (() => undefined)}
-    {...(props.agentCatalog ? { onManage: () => setManagingAgents(true) } : {})}
-  />;
+  </> : <ValidationControls {...props} />;
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, target: InspectorTab): void => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -233,7 +199,6 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
         <button id="inspector-tab-tools" type="button" role="tab" aria-selected={activeTab === "tools"} aria-controls="inspector-panel-tools" tabIndex={activeTab === "tools" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "tools")} onClick={() => selectTab("tools")}>{t("tool.panelTitle")}</button>
         {props.validation.supported && <button id="inspector-tab-validation" type="button" role="tab" aria-selected={activeTab === "validation"} aria-controls="inspector-panel-validation" tabIndex={activeTab === "validation" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "validation")} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
-        <button id="inspector-tab-agents" className="inspector-tab-with-badge" data-count={agentCount} type="button" role="tab" aria-label={`${t("explorer.tab")}: ${agentCount}`} aria-selected={activeTab === "agents"} aria-controls="inspector-panel-agents" tabIndex={activeTab === "agents" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "agents")} onClick={() => selectTab("agents")}>{t("explorer.tab")}</button>
       </div>
       <div className="inspector-scroll">
         <div className="inspector-tab-stack">

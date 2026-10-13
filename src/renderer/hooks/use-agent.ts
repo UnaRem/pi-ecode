@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { CreateProjectAgentRequest, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "@shared/agent-contracts";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "@shared/contracts";
 import { INITIAL_AGENT_STATE, optimisticTimeline, reduceAgentEvent } from "@renderer/lib/agent-state";
 
@@ -107,45 +106,6 @@ export function useAgent() {
     }
   }, [isLoadingOlder, state.timelineHasMore]);
 
-  const loadExplorerTimeline = useCallback(async (taskId: string) => {
-    const snapshot = await run(() => window.piDesktop.getExplorerTimeline(taskId));
-    if (snapshot) dispatch({ type: "explorer-timeline", snapshot });
-  }, [run]);
-
-  const stopExplorer = useCallback(async (taskId: string) => {
-    await run(() => window.piDesktop.stopExplorer(taskId));
-  }, [run]);
-
-  const getExplorerToolOutput = useCallback(async (taskId: string, toolCallId: string) => (
-    run(() => window.piDesktop.getExplorerToolOutput(taskId, toolCallId))
-  ), [run]);
-
-  const saveProjectAgent = useCallback(async (agent: ProjectAgentDefinition) => {
-    const catalog = await run(() => window.piDesktop.saveProjectAgent(agent));
-    if (catalog) dispatch({ type: "agent-catalog", catalog });
-  }, [run]);
-
-  const setAllProjectAgentPreferences = useCallback(async (request: SetAllProjectAgentPreferencesRequest) => {
-    // 管理页需要真实的成功/失败信号，不能用 run() 吞掉 IPC 错误后显示成功。
-    const catalog = await window.piDesktop.setAllProjectAgentPreferences(request);
-    dispatch({ type: "agent-catalog", catalog });
-  }, []);
-
-  const createProjectAgent = useCallback(async (request: CreateProjectAgentRequest) => {
-    const catalog = await run(() => window.piDesktop.createProjectAgent(request));
-    if (catalog) dispatch({ type: "agent-catalog", catalog });
-  }, [run]);
-
-  const removeProjectAgent = useCallback(async (agentId: string) => {
-    const catalog = await run(() => window.piDesktop.removeProjectAgent(agentId));
-    if (catalog) dispatch({ type: "agent-catalog", catalog });
-  }, [run]);
-
-  const setAgentConcurrency = useCallback(async (value: number) => {
-    const catalog = await run(() => window.piDesktop.setAgentConcurrency(value));
-    if (catalog) dispatch({ type: "agent-catalog", catalog });
-  }, [run]);
-
   const continueAfterError = useCallback(async () => {
     dispatch({ type: "state", patch: { error: null, canContinue: false } });
     await run(() => window.piDesktop.continueAfterError());
@@ -237,14 +197,6 @@ export function useAgent() {
       stopManagedProcess,
       renameSession,
       loadOlderTimeline,
-      loadExplorerTimeline,
-      stopExplorer,
-      getExplorerToolOutput,
-      saveProjectAgent,
-      setAllProjectAgentPreferences,
-      createProjectAgent,
-      removeProjectAgent,
-      setAgentConcurrency,
       continueAfterError,
       send,
       editorRestored,

@@ -1,4 +1,3 @@
-import type { AgentRole, CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "./agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
 import type { ManagedProcess } from "./process-contracts.js";
 import type { McpToolSummary } from "./mcp-contracts.js";
@@ -11,14 +10,6 @@ export const IPC_CHANNELS = {
   loadOlderTimeline: "agent:load-older-timeline",
   getToolOutput: "agent:get-tool-output",
   getConversationImage: "agent:get-conversation-image",
-  getExplorerTimeline: "agent:get-explorer-timeline",
-  getExplorerToolOutput: "agent:get-explorer-tool-output",
-  stopExplorer: "agent:stop-explorer",
-  saveProjectAgent: "agent:save-project-agent",
-  setAllProjectAgentPreferences: "agent:set-all-project-agent-preferences",
-  createProjectAgent: "agent:create-project-agent",
-  removeProjectAgent: "agent:remove-project-agent",
-  setAgentConcurrency: "agent:set-agent-concurrency",
   newSession: "agent:new-session",
   switchSession: "agent:switch-session",
   deleteSession: "agent:delete-session",
@@ -136,44 +127,6 @@ export interface ToolActivity {
   status: "running" | "success" | "error";
   startedAt?: number;
   endedAt?: number;
-}
-
-export type ExplorerStatus = "queued" | "running" | "completed" | "failed" | "interrupted";
-
-export interface ExplorerTask {
-  id: string;
-  taskName: string;
-  title: string;
-  objective: string;
-  scope: string;
-  deliverable: string;
-  status: ExplorerStatus;
-  originToolCallId: string;
-  sessionId?: string;
-  agentId?: string;
-  agentRole?: AgentRole;
-  provider?: string;
-  modelId?: string;
-  thinkingLevel: ThinkingLevel;
-  attempt: number;
-  maxAttempts: number;
-  revision: number;
-  queuedAt: number;
-  startedAt?: number;
-  endedAt?: number;
-  lastActivityAt?: number;
-  activity?: string;
-  finalText?: string;
-  errorMessage?: string;
-  compactionMethod?: CompactionMethod;
-  compactionError?: string;
-  writeScope?: string[];
-}
-
-export interface ExplorerTimelineSnapshot {
-  taskId: string;
-  revision: number;
-  timeline: ConversationItem[];
 }
 
 export type TaskPlanItemStatus = "pending" | "in_progress" | "completed";
@@ -356,8 +309,6 @@ export interface AgentSnapshot {
   error: string | null;
   canContinue: boolean;
   taskPlan: TaskPlan | null;
-  explorers: ExplorerTask[];
-  agentCatalog: ProjectAgentCatalog | null;
   processes: ManagedProcess[];
   mcpTools: McpToolSummary[];
   extensionUi: ExtensionUiRequest | null;
@@ -376,9 +327,6 @@ export type AgentEvent =
   | { type: "timeline-upsert"; item: ConversationItem }
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
-  | { type: "explorers"; explorers: ExplorerTask[] }
-  | { type: "agent-catalog"; catalog: ProjectAgentCatalog }
-  | { type: "explorer-timeline"; snapshot: ExplorerTimelineSnapshot }
   | { type: "extension-ui"; request: ExtensionUiRequest | null }
   | { type: "state"; patch: Partial<Pick<AgentSnapshot, "sessionTitle" | "isStreaming" | "workingStartedAt" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error" | "canContinue">> }
   | { type: "sessions"; sessions: SessionSummary[] }
@@ -409,14 +357,6 @@ export interface DesktopApi {
   loadOlderTimeline(): Promise<AgentTimelinePage>;
   getToolOutput(toolCallId: string): Promise<string>;
   getConversationImage(sourceId: string): Promise<ConversationImagePayload | null>;
-  getExplorerTimeline(taskId: string): Promise<ExplorerTimelineSnapshot>;
-  getExplorerToolOutput(taskId: string, toolCallId: string): Promise<string>;
-  stopExplorer(taskId: string): Promise<void>;
-  saveProjectAgent(agent: ProjectAgentDefinition): Promise<ProjectAgentCatalog>;
-  setAllProjectAgentPreferences(request: SetAllProjectAgentPreferencesRequest): Promise<ProjectAgentCatalog>;
-  createProjectAgent(request: CreateProjectAgentRequest): Promise<ProjectAgentCatalog>;
-  removeProjectAgent(agentId: string): Promise<ProjectAgentCatalog>;
-  setAgentConcurrency(value: number): Promise<ProjectAgentCatalog>;
   newSession(): Promise<AgentSnapshot>;
   switchSession(path: string): Promise<AgentSnapshot>;
   deleteSession(path: string): Promise<void>;

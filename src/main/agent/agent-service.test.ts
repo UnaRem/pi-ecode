@@ -71,7 +71,7 @@ describe("AgentService 托管进程", () => {
     const order: string[] = [];
     const internal = service as unknown as {
       managedProcesses: { configure: (path: string) => Promise<void>; dispose: () => Promise<void> };
-      agentCatalog: { open: (path: string) => Promise<void> };
+      createRuntimeFactory: () => unknown;
       disposeRuntime: () => Promise<void>;
       projectPath: string | undefined;
     };
@@ -79,16 +79,17 @@ describe("AgentService 托管进程", () => {
     const cleanup = vi.fn(async () => { order.push("process-cleanup"); });
     const processService = { configure, dispose: cleanup };
     internal.managedProcesses = processService;
-    internal.agentCatalog = { open: async () => { throw new Error("catalog unavailable"); } };
+    const runtimeFactory = vi.spyOn(internal, "createRuntimeFactory").mockImplementation(() => { throw new Error("runtime unavailable"); });
     const runtimeCleanup = vi.spyOn(internal, "disposeRuntime").mockImplementation(async () => { order.push("runtime-cleanup"); });
 
-    await expect(service.openProject(process.cwd())).rejects.toThrow("catalog unavailable");
+    await expect(service.openProject(process.cwd())).rejects.toThrow("runtime unavailable");
 
     expect(order).toEqual(["runtime-cleanup", "configure", "runtime-cleanup", "process-cleanup"]);
     expect(configure).toHaveBeenCalledWith(process.cwd());
     expect(internal.projectPath).toBeUndefined();
     expect(internal.managedProcesses).not.toBe(processService);
     runtimeCleanup.mockRestore();
+    runtimeFactory.mockRestore();
   });
 
   it("preserves the old project and registered stop entry when configure cleanup fails", async () => {
@@ -103,11 +104,11 @@ describe("AgentService 托管进程", () => {
     const processService = { current: records, configure, dispose: cleanup, stop };
     const internal = service as unknown as {
       projectPath: string; managedProcesses: typeof processService; disposeRuntime: () => Promise<void>;
-      agentCatalog: { open: (path: string) => Promise<void> };
+      createRuntimeFactory: () => unknown;
     };
     internal.projectPath = oldProject;
     internal.managedProcesses = processService;
-    const openCatalog = vi.spyOn(internal.agentCatalog, "open");
+    const runtimeFactory = vi.spyOn(internal, "createRuntimeFactory");
     const runtimeCleanup = vi.spyOn(internal, "disposeRuntime");
 
     await expect(service.openProject(process.cwd())).rejects.toThrow("taskkill failed");
@@ -117,13 +118,13 @@ describe("AgentService 托管进程", () => {
     expect(runtimeCleanup).toHaveBeenCalledTimes(1);
     expect(configure).toHaveBeenCalledWith(process.cwd());
     expect(cleanup).not.toHaveBeenCalled();
-    expect(openCatalog).not.toHaveBeenCalled();
+    expect(runtimeFactory).not.toHaveBeenCalled();
     expect(internal.projectPath).toBe(oldProject);
     expect(internal.managedProcesses).toBe(processService);
     expect(snapshot).toMatchObject({ projectPath: oldProject, projectName: "old-project", sessionId: null, processes: records,
       error: expect.stringContaining("taskkill failed") });
     expect(stop).toHaveBeenCalledWith("old-process");
-    openCatalog.mockRestore();
+    runtimeFactory.mockRestore();
     runtimeCleanup.mockRestore();
   });
 

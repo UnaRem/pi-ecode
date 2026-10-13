@@ -1,9 +1,10 @@
 import { join } from "node:path";
-import { app, BrowserWindow, screen, shell } from "electron";
+import { app, BrowserWindow, dialog, screen, shell } from "electron";
 import { AgentService } from "./agent/agent-service.js";
 import { AppConfigService } from "./app-config/app-config-service.js";
 import { registerIpc } from "./ipc/register-ipc.js";
 import { SettingsService } from "./settings/settings-service.js";
+import { cleanupSubagentHistory } from "./history/subagent-history-cleanup.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
 const APP_ID = "com.piecode.desktop";
@@ -13,7 +14,6 @@ if (process.platform === "win32" && !IS_BRANDED_DEVELOPMENT_RUNTIME) app.setAppU
 const service = new AgentService(
   (url) => shell.openExternal(url),
   (path) => shell.trashItem(path),
-  join(app.getPath("userData"), "agents"),
 );
 const settings = new SettingsService({
   agentDir: service.agentDirectory,
@@ -121,6 +121,14 @@ if (!hasSingleInstanceLock) {
   app.on("second-instance", () => focusMainWindow());
 
   void app.whenReady().then(async () => {
+    // Run before SessionManager loads anything, so no active runtime can rewrite cleaned history from memory.
+    const cleanup = await cleanupSubagentHistory({
+      agentDir: service.agentDirectory,
+      catalogDirectory: join(app.getPath("userData"), "agents"),
+    });
+    if (cleanup.failures.length) {
+      dialog.showErrorBox("子代理历史清理未完成", cleanup.failures.map((failure) => `${failure.path}\n${failure.message}`).join("\n\n"));
+    }
     await service.initialize();
     await settings.start();
     await appConfig.load();

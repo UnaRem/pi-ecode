@@ -19,8 +19,6 @@ export const EMPTY_AGENT_SNAPSHOT: AgentSnapshot = {
   error: null,
   canContinue: false,
   taskPlan: null,
-  explorers: [],
-  agentCatalog: null,
   processes: [],
   mcpTools: [],
   extensionUi: null,

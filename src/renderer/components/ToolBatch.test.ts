@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ConversationItem, ExplorerTask, ToolActivity, ValidationState } from "@shared/contracts";
+import type { ConversationItem, ToolActivity, ValidationState } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
 import { groupConsecutiveTools, isScrollAreaAtBottom, ToolBatch } from "./ToolBatch";
 
@@ -23,28 +23,6 @@ function tool(id: string): ConversationItem {
 
 function message(id: string, role: "user" | "assistant" = "assistant"): ConversationItem {
   return { kind: "message", id, message: { id, role, text: id, timestamp: 1 } };
-}
-
-function explorerTask(id: string, originToolCallId: string, agentRole?: ExplorerTask["agentRole"] | "editor"): ExplorerTask {
-  return {
-    id, taskName: id, title: `Explorer ${id}`, objective: "Inspect behavior", scope: `src/${id}`,
-    deliverable: "Evidence", status: "running", originToolCallId, thinkingLevel: "low",
-    attempt: 1, maxAttempts: 2, revision: 1, queuedAt: 1,
-    // 历史时间线可能携带旧角色，UI 应回退到中性标签。
-    ...(agentRole ? { agentRole: agentRole as NonNullable<ExplorerTask["agentRole"]> } : {}),
-  };
-}
-
-function renderBatch(props: { tools: ToolActivity[]; explorers?: ExplorerTask[] }): string {
-  vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
-  return renderToStaticMarkup(
-    createElement(I18nProvider, null, createElement(ToolBatch, {
-      tools: props.tools,
-      ...(props.explorers ? { explorers: props.explorers } : {}),
-      selectedToolId: null,
-      onSelectTool: vi.fn(),
-    })),
-  );
 }
 
 describe("ToolBatch", () => {
@@ -101,65 +79,6 @@ describe("ToolBatch", () => {
 
     expect(markup).toMatch(/class="tool-plaintext-row[^\"]*entering/);
     expect(markup).toContain('class="tool-plaintext-row  "');
-  });
-
-  it("replaces large Explorer cards with one compact dispatch summary", () => {
-    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
-    const markup = renderToStaticMarkup(
-      createElement(I18nProvider, null, createElement(ToolBatch, {
-        tools: [{ ...activity("dispatch-call"), name: "dispatch_explorers" }],
-        explorers: [explorerTask("linked", "dispatch-call"), explorerTask("other", "other-call")],
-        selectedToolId: null,
-        onSelectTool: vi.fn(),
-      })),
-    );
-
-    expect(markup).toContain("Agents · 1 active / 1 total");
-    expect(markup).not.toContain("Explorer linked");
-    expect(markup).not.toContain("Explorer other");
-    expect(markup).not.toContain("explorer-cards");
-  });
-
-  it("labels a single-role batch with the translated role name", () => {
-    const editor = renderBatch({
-      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
-      explorers: [explorerTask("linked", "dispatch-call", "editor")],
-    });
-    expect(editor).toContain("Agents · 1 active / 1 total");
-
-    const explorers = renderBatch({
-      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
-      explorers: [explorerTask("one", "dispatch-call", "explorer"), explorerTask("two", "dispatch-call", "explorer")],
-    });
-    expect(explorers).toContain("Explorer · 2 active / 2 total");
-  });
-
-  it("uses the neutral agent label for mixed roles or a missing role", () => {
-    const mixed = renderBatch({
-      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
-      explorers: [explorerTask("one", "dispatch-call", "editor"), explorerTask("two", "dispatch-call", "explorer")],
-    });
-    expect(mixed).toContain("Agents · 2 active / 2 total");
-    expect(mixed).not.toContain("Editor ·");
-    expect(mixed).not.toContain("Explorer ·");
-
-    const partiallyKnown = renderBatch({
-      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
-      explorers: [explorerTask("one", "dispatch-call", "editor"), explorerTask("legacy", "dispatch-call")],
-    });
-    expect(partiallyKnown).toContain("Agents · 2 active / 2 total");
-    expect(partiallyKnown).not.toContain("Editor ·");
-  });
-
-  it("keeps the original tool title when no task is linked to the batch", () => {
-    const markup = renderBatch({
-      tools: [{ ...activity("dispatch-call"), name: "agent_dispatch" }],
-      explorers: [explorerTask("other", "other-call", "editor")],
-    });
-
-    expect(markup).toContain("read · dispatch-call");
-    expect(markup).not.toContain("Agents ·");
-    expect(markup).not.toContain("Editor ·");
   });
 
   it("renders the validation state only under its originating tool call", () => {

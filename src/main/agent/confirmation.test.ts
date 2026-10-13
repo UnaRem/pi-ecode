@@ -202,7 +202,7 @@ describe("ConfirmationService", () => {
     const unsubscribe = session.subscribe(async (event) => {
       if (event.type !== "agent_settled" || notified) return;
       notified = true;
-      await session.sendCustomMessage({ customType: "explorer-finished", content: "子代理已完成", display: false },
+      await session.sendCustomMessage({ customType: "background-finished", content: "后台任务已完成", display: false },
         { triggerTurn: true, deliverAs: "followUp" });
     });
     await session.prompt("确认方案");
@@ -212,7 +212,7 @@ describe("ConfirmationService", () => {
     expect(provider).toHaveBeenCalledTimes(1);
     expect(session.isIdle).toBe(true);
     const notifications = session.sessionManager.getBranch().filter((candidate) => candidate.type === "custom_message");
-    expect(notifications.map((candidate) => candidate.customType)).toEqual(["explorer-finished", "validation-finished"]);
+    expect(notifications.map((candidate) => candidate.customType)).toEqual(["background-finished", "validation-finished"]);
     const wire = createConfirmationResponse(request, true, "先检查验证结果");
     service.assertResponse(session, wire);
     await session.prompt(wire);

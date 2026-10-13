@@ -1,6 +1,5 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { AppThemeColors, ConversationIdentityRole, ConversationNicknameUpdate } from "../../shared/app-config-contracts.js";
-import type { CreateProjectAgentRequest, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "../../shared/agent-contracts.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "../../shared/work-animator.js";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
@@ -89,33 +88,6 @@ function isSaveConfigRequest(value: unknown): value is SaveConfigRequest {
     && (request.expectedRevision === null || typeof request.expectedRevision === "string");
 }
 
-function isProjectAgentDefinition(value: unknown): value is ProjectAgentDefinition {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const agent = value as Partial<ProjectAgentDefinition>;
-  return typeof agent.id === "string" && typeof agent.name === "string" && typeof agent.prompt === "string"
-    && agent.role === "explorer"
-    && Boolean(agent.model) && typeof agent.model === "object"
-    && Boolean(agent.autoCompaction) && typeof agent.autoCompaction === "object"
-    && Array.isArray(agent.disabledTools);
-}
-
-function isSetAllProjectAgentPreferencesRequest(value: unknown): value is SetAllProjectAgentPreferencesRequest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const request = value as Record<string, unknown>;
-  if (!request.model || typeof request.model !== "object" || Array.isArray(request.model)) return false;
-  const model = request.model as Record<string, unknown>;
-  return ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(request.thinkingLevel))
-    && (model.mode === "inherit" || (model.mode === "fixed"
-      && typeof model.provider === "string" && Boolean(model.provider.trim())
-      && typeof model.modelId === "string" && Boolean(model.modelId.trim())));
-}
-
-function isCreateProjectAgentRequest(value: unknown): value is CreateProjectAgentRequest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const request = value as Partial<CreateProjectAgentRequest>;
-  return typeof request.name === "string" && request.role === "explorer";
-}
-
 function isSaveInstructionFileRequest(value: unknown): value is SaveInstructionFileRequest {
   if (!value || typeof value !== "object") return false;
   const request = value as Partial<SaveInstructionFileRequest>;
@@ -147,38 +119,6 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.getConversationImage, (_event, sourceId: unknown) => {
     if (typeof sourceId !== "string") throw new Error("Invalid conversation image id.");
     return service.getConversationImage(sourceId);
-  });
-  ipcMain.handle(IPC_CHANNELS.getExplorerTimeline, (_event, taskId: unknown) => {
-    if (typeof taskId !== "string") throw new Error("Invalid Explorer task id.");
-    return service.getExplorerTimeline(taskId);
-  });
-  ipcMain.handle(IPC_CHANNELS.getExplorerToolOutput, (_event, taskId: unknown, toolCallId: unknown) => {
-    if (typeof taskId !== "string" || typeof toolCallId !== "string") throw new Error("Invalid Explorer tool output request.");
-    return service.getExplorerToolOutput(taskId, toolCallId);
-  });
-  ipcMain.handle(IPC_CHANNELS.stopExplorer, (_event, taskId: unknown) => {
-    if (typeof taskId !== "string") throw new Error("Invalid Explorer task id.");
-    return service.stopExplorer(taskId);
-  });
-  ipcMain.handle(IPC_CHANNELS.saveProjectAgent, (_event, agent: unknown) => {
-    if (!isProjectAgentDefinition(agent)) throw new Error("代理配置无效。");
-    return service.saveProjectAgent(agent);
-  });
-  ipcMain.handle(IPC_CHANNELS.setAllProjectAgentPreferences, (_event, request: unknown) => {
-    if (!isSetAllProjectAgentPreferencesRequest(request)) throw new Error("批量代理设置无效。");
-    return service.setAllProjectAgentPreferences(request);
-  });
-  ipcMain.handle(IPC_CHANNELS.createProjectAgent, (_event, request: unknown) => {
-    if (!isCreateProjectAgentRequest(request)) throw new Error("新增代理请求无效。");
-    return service.createProjectAgent(request);
-  });
-  ipcMain.handle(IPC_CHANNELS.removeProjectAgent, (_event, agentId: unknown) => {
-    if (typeof agentId !== "string") throw new Error("代理 ID 无效。");
-    return service.removeProjectAgent(agentId);
-  });
-  ipcMain.handle(IPC_CHANNELS.setAgentConcurrency, (_event, value: unknown) => {
-    if (typeof value !== "number") throw new Error("代理并发上限无效。");
-    return service.setAgentConcurrency(value);
   });
   ipcMain.handle(IPC_CHANNELS.newSession, () => service.newSession());
   ipcMain.handle(IPC_CHANNELS.switchSession, (_event, path: string) => service.switchSession(path));

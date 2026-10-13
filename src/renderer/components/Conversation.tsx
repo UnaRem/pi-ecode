@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type AnimationEvent, type RefObject } from "react";
 import { ArrowDown, Sparkles } from "lucide-react";
-import type { ChangeReview, ConversationItem, ExplorerTask, ValidationState } from "@shared/contracts";
+import type { ChangeReview, ConversationItem, ValidationState } from "@shared/contracts";
 import type { ConversationIdentity } from "@shared/app-config-contracts";
 import { confirmationDisplayText, findPendingConfirmation } from "../../shared/confirmation.js";
 import { ConfirmationPrompt } from "./ConfirmationPrompt";
@@ -16,7 +16,6 @@ import { useScrollFollow } from "../hooks/use-scroll-follow";
 interface ConversationProps {
   timeline: ConversationItem[];
   viewKey?: string;
-  explorers?: ExplorerTask[];
   validation?: ValidationState;
   isStreaming: boolean;
   workingStartedAt: number | null;
@@ -300,7 +299,6 @@ function ConversationBody(props: ConversationBodyProps) {
             animateNewTools={props.isStreaming && groupIndex === renderGroups.length - 1}
             selectedToolId={props.selectedToolId}
             onSelectTool={props.onSelectTool}
-            explorers={props.explorers ?? []}
             {...(props.validation ? { validation: props.validation } : {})}
           />)}
           <ChangedFilesPresence review={!props.isStreaming && props.review?.available && lastItem?.kind === "message" && lastItem.message.role === "assistant" ? props.review : null} />

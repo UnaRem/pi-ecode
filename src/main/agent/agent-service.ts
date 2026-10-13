@@ -1,4 +1,4 @@
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
@@ -13,7 +13,6 @@ import {
   getAgentDir,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { CreateProjectAgentRequest, ProjectAgentCatalog, ProjectAgentDefinition, SetAllProjectAgentPreferencesRequest } from "../../shared/agent-contracts.js";
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, ProviderStatus } from "../../shared/settings-contracts.js";
 import type {
   AgentEvent,
@@ -47,17 +46,13 @@ import { ExtensionUiBridge } from "./extension-ui-bridge.js";
 import { AuthService } from "./auth-service.js";
 import {
   EDIT_TOOL_COMPATIBILITY_GUIDANCE,
-  EXPLORER_ORCHESTRATION_GUIDANCE,
   PARALLEL_TOOL_EXECUTION_GUIDANCE,
-  SUBAGENT_ORCHESTRATION_GUIDANCE,
   VALIDATION_ORCHESTRATION_GUIDANCE,
 } from "./agent-guidance.js";
 import { PromptLifecycle } from "./prompt-lifecycle.js";
 import { listSessionSummaries } from "./session-summaries.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { providerFailure, PROVIDER_RECOVERY_PROMPT } from "./provider-recovery.js";
-import { ExplorerService } from "./explorer-service.js";
-import { AgentCatalogService } from "./agent-catalog-service.js";
 import { CodegraphToolService } from "./codegraph-tool.js";
 import { ValidationToolService } from "./validation-tool.js";
 import { ManagedProcessService } from "../processes/managed-process-service.js";
@@ -124,22 +119,6 @@ export class AgentService {
   private readonly streamContinuity = new StreamContinuity();
   private readonly confirmation = new ConfirmationService();
   private readonly taskPlan = new TaskPlanService((taskPlan) => this.emit({ type: "task-plan", taskPlan }));
-  private readonly agentCatalog: AgentCatalogService;
-  private readonly explorers = new ExplorerService({
-    getParentSession: () => this.runtime?.session,
-    getAgentDefinitions: () => this.agentCatalog?.enabled() ?? [],
-    getMaxConcurrent: () => this.agentCatalog?.current?.maxConcurrent ?? 3,
-    getSessionRoot: (parent) => this.agentCatalog.sessionRoot(parent.sessionId),
-    onChange: (explorers) => {
-      this.emit({ type: "explorers", explorers });
-      const session = this.runtime?.session;
-      if (session) this.emit({ type: "state", patch: {
-        isStreaming: this.isAgentActive(session),
-        workingStartedAt: this.workingStartedAt,
-      } });
-    },
-    onTimeline: (snapshot) => this.emit({ type: "explorer-timeline", snapshot }),
-  });
   private readonly extensionUi = new ExtensionUiBridge(
     (request) => this.emit({ type: "extension-ui", request }),
     (message) => this.emit({ type: "notice", message }),
@@ -186,10 +165,8 @@ export class AgentService {
   constructor(
     openExternal: (url: string) => Promise<void> = async () => undefined,
     trashItem: (path: string) => Promise<void> = async () => { throw new Error("System trash is unavailable."); },
-    agentCatalogDirectory = join(getAgentDir(), "state", "pi-ecode-agents"),
   ) {
     this.trashItem = trashItem;
-    this.agentCatalog = new AgentCatalogService(agentCatalogDirectory);
     this.auth = new AuthService(
       () => this.runtime?.session.modelRuntime,
       (event) => {
@@ -263,7 +240,6 @@ export class AgentService {
     this.startupError = undefined;
 
     try {
-      await this.agentCatalog.open(cwd);
       this.runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
         cwd,
         agentDir: getAgentDir(),
@@ -303,51 +279,6 @@ export class AgentService {
   getConversationImage(sourceId: string): ConversationImagePayload | null {
     if (!/^\d+:\d+$/u.test(sourceId)) throw new Error("Invalid conversation image id.");
     return this.runtime ? conversationImagePayload(historyMessages(this.runtime.session.sessionManager.getBranch()), sourceId) : null;
-  }
-
-  getExplorerTimeline(taskId: string) {
-    return this.explorers.getTimeline(taskId);
-  }
-
-  async setAllProjectAgentPreferences(request: SetAllProjectAgentPreferencesRequest): Promise<ProjectAgentCatalog> {
-    const catalog = await this.agentCatalog.setAllPreferences(request);
-    this.emit({ type: "agent-catalog", catalog });
-    return catalog;
-  }
-
-  async saveProjectAgent(agent: ProjectAgentDefinition): Promise<ProjectAgentCatalog> {
-    const catalog = await this.agentCatalog.save(agent);
-    this.emit({ type: "agent-catalog", catalog });
-    return catalog;
-  }
-
-  async createProjectAgent(request: CreateProjectAgentRequest): Promise<ProjectAgentCatalog> {
-    const catalog = await this.agentCatalog.create(request);
-    this.emit({ type: "agent-catalog", catalog });
-    return catalog;
-  }
-
-  async removeProjectAgent(agentId: string): Promise<ProjectAgentCatalog> {
-    if (this.explorers.current.some((task) => task.agentId === agentId && (task.status === "queued" || task.status === "running"))) {
-      throw new Error("运行中的代理不能删除。");
-    }
-    const catalog = await this.agentCatalog.remove(agentId);
-    this.emit({ type: "agent-catalog", catalog });
-    return catalog;
-  }
-
-  async setAgentConcurrency(value: number): Promise<ProjectAgentCatalog> {
-    const catalog = await this.agentCatalog.setMaxConcurrent(value);
-    this.emit({ type: "agent-catalog", catalog });
-    return catalog;
-  }
-
-  getExplorerToolOutput(taskId: string, toolCallId: string): Promise<string> {
-    return this.explorers.getToolOutput(taskId, toolCallId);
-  }
-
-  stopExplorer(taskId: string): Promise<void> {
-    return this.explorers.interrupt(taskId);
   }
 
   private timelinePage(session: AgentSession): AgentTimelinePage {
@@ -403,12 +334,11 @@ export class AgentService {
   }
 
   private isAgentActive(session: AgentSession): boolean {
-    return this.promptLifecycle.isActive(session) || this.explorers.isActive || this.validation.getState().status === "running";
+    return this.promptLifecycle.isActive(session) || this.validation.getState().status === "running";
   }
 
   private get workingStartedAt(): number | null {
     return this.promptLifecycle.workingStartedAt
-      ?? this.explorers.workingStartedAt
       ?? this.validation.getState().startedAt;
   }
 
@@ -490,8 +420,6 @@ export class AgentService {
       error: failure?.message ?? this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
       canContinue: failure?.canContinue ?? false,
       taskPlan: this.taskPlan.current,
-      explorers: this.explorers.current,
-      agentCatalog: this.agentCatalog.current,
       processes: this.managedProcesses.current,
       mcpTools: this.sessionMcp.get(session)?.current ?? [],
       extensionUi: this.extensionUi.current,
@@ -553,14 +481,6 @@ export class AgentService {
     if (!target) throw new Error("That session does not belong to the active project.");
     if (target.path === runtime.session.sessionFile) throw new Error("The active session cannot be deleted.");
     await this.trashItem(target.path);
-    const explorerDirectory = join(dirname(target.path), ".explorers", target.id);
-    if (await stat(explorerDirectory).then((details) => details.isDirectory()).catch(() => false)) {
-      await this.trashItem(explorerDirectory);
-    }
-    const agentDirectory = this.agentCatalog.parentSessionRoot(target.id);
-    if (agentDirectory && await stat(agentDirectory).then((details) => details.isDirectory()).catch(() => false)) {
-      await this.trashItem(agentDirectory);
-    }
     await this.refreshSessions();
   }
 
@@ -632,13 +552,12 @@ export class AgentService {
 
   async stop(): Promise<void> {
     const session = this.requireRuntime().session;
-    const explorerStop = this.explorers.interruptAll();
     const validationStop = this.validation.stop();
     this.flushStreamItems();
     this.extensionUi.cancelPending();
     if (session.isCompacting) session.abortCompaction();
     const promptStop = this.promptLifecycle.stop(session);
-    await Promise.all([explorerStop, validationStop, promptStop]);
+    await Promise.all([validationStop, promptStop]);
     await this.history.settlePending(session);
     await this.emitHistory(session);
   }
@@ -877,16 +796,6 @@ export class AgentService {
     });
   }
 
-  private agentCatalogPrompt(): string {
-    const catalog = this.agentCatalog.current;
-    if (!catalog) return "";
-    const agents = catalog.agents.filter((agent) => agent.enabled).map((agent) => {
-      const model = agent.model.mode === "inherit" ? "继承主会话模型" : `${agent.model.provider}/${agent.model.modelId}`;
-      return `- ${agent.id}｜${agent.name}｜${agent.role}｜${model}｜thinking=${agent.thinkingLevel}`;
-    }).join("\n");
-    return `## 项目代理目录\n主会话是唯一编排总线。使用 agent_dispatch 按 agent_id 派发任务；完成通知只表示可取结果，必须调用 agent_result 获取报告。不要把子代理 transcript 塞入主上下文。\n当前最大并发：${catalog.maxConcurrent}\n${agents}\n角色边界：仅 explorer（只读探索者），默认甘、文、崔三个；没有编辑子代理，主会话直接编辑、验证和提交。\n编排摘要：简单任务由主会话直接处理；复杂任务先探索并综合证据，主会话在已授权范围内实施，完成最终验证、审查 diff 与 git status、提交。完整策略见 Subagent orchestration 章节。`;
-  }
-
   private createRuntimeFactory(): CreateAgentSessionRuntimeFactory {
     return async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
       let owner: AgentSession | undefined;
@@ -902,9 +811,8 @@ export class AgentService {
             this.nativeCompaction.asExtension(),
             this.confirmation.asExtension(),
             this.taskPlan.asExtension(),
-            this.explorers.asExtension(),
             this.validationTool.asExtension(),
-          this.managedProcessTool.asExtension(),
+            this.managedProcessTool.asExtension(),
             this.codegraphTool.asExtension(),
           ],
           eventBus: this.extensionEventBus,
@@ -912,9 +820,6 @@ export class AgentService {
             ...base,
             EDIT_TOOL_COMPATIBILITY_GUIDANCE,
             PARALLEL_TOOL_EXECUTION_GUIDANCE,
-            SUBAGENT_ORCHESTRATION_GUIDANCE,
-            EXPLORER_ORCHESTRATION_GUIDANCE,
-            this.agentCatalogPrompt(),
             VALIDATION_ORCHESTRATION_GUIDANCE,
           ],
           extensionsOverride: (base) => ({
@@ -1232,7 +1137,6 @@ export class AgentService {
     this.pendingStreamContext = undefined;
     this.extensionUi.cancelPending();
     this.validationTool.reset();
-    await this.explorers.reset();
     await this.validation.stop();
     // 项目切换与窗口关闭都必须先丢弃待启动意图，再停掉在途同步，否则旧目录可能被继续写入。
     this.codegraphSyncIntent = undefined;

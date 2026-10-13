@@ -94,51 +94,6 @@ describe("reduceAgentEvent", () => {
     expect(state.timeline).toEqual([]);
   });
 
-  it("applies Explorer updates without changing the conversation timeline", () => {
-    const explorers = [{
-      id: "explorer-1", taskName: "inspect", title: "Inspect", objective: "Find behavior",
-      scope: "src/", deliverable: "Evidence", status: "running" as const,
-      originToolCallId: "dispatch-1", thinkingLevel: "low" as const,
-      attempt: 1, maxAttempts: 2, revision: 1, queuedAt: 1,
-    }];
-    const state = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "explorers", explorers });
-    expect(state.explorers).toEqual(explorers);
-    expect(state.timeline).toEqual([]);
-  });
-
-  it("does not let an older Explorer task revision restore a running status", () => {
-    const baseTask = {
-      id: "explorer-1", taskName: "inspect", title: "Inspect", objective: "Find behavior", scope: "src/",
-      deliverable: "Evidence", originToolCallId: "dispatch-1", thinkingLevel: "low" as const,
-      attempt: 1, maxAttempts: 2, queuedAt: 1,
-    };
-    const completed = reduceAgentEvent(INITIAL_AGENT_STATE, {
-      type: "explorers",
-      explorers: [{ ...baseTask, revision: 4, status: "completed", endedAt: 4 }],
-    });
-    const regressed = reduceAgentEvent(completed, {
-      type: "explorers",
-      explorers: [{ ...baseTask, revision: 3, status: "running" }],
-    });
-
-    expect(regressed.explorers[0]?.status).toBe("completed");
-    expect(regressed.explorers[0]?.revision).toBe(4);
-  });
-
-  it("does not let an older Explorer timeline revision overwrite completed content", () => {
-    const completed = reduceAgentEvent(INITIAL_AGENT_STATE, {
-      type: "explorer-timeline",
-      snapshot: { taskId: "explorer-1", revision: 4, timeline: [{ kind: "message", id: "done", message: { id: "done", role: "assistant", text: "done", timestamp: 2 } }] },
-    });
-    const regressed = reduceAgentEvent(completed, {
-      type: "explorer-timeline",
-      snapshot: { taskId: "explorer-1", revision: 3, timeline: [] },
-    });
-
-    expect(regressed.explorerTimelines["explorer-1"]?.revision).toBe(4);
-    expect(regressed.explorerTimelines["explorer-1"]?.timeline).toHaveLength(1);
-  });
-
   it("tracks the active extension UI request", () => {
     const request = { id: "question-1", method: "select" as const, title: "Choose", options: [{ value: "one", label: "One" }] };
     const opened = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "extension-ui", request });

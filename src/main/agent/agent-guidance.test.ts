@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EDIT_TOOL_COMPATIBILITY_GUIDANCE,
-  EXPLORER_ORCHESTRATION_GUIDANCE,
   PARALLEL_TOOL_EXECUTION_GUIDANCE,
-  SUBAGENT_ORCHESTRATION_GUIDANCE,
   VALIDATION_ORCHESTRATION_GUIDANCE,
 } from "./agent-guidance.js";
 
@@ -38,26 +36,4 @@ describe("agent guidance", () => {
     expect(VALIDATION_ORCHESTRATION_GUIDANCE).not.toContain("In an editor session");
   });
 
-  it("keeps implementation in the main session and investigation read-only", () => {
-    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("甘, 文, 崔");
-    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("main session edits directly");
-    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Explorers cannot edit files or execute commands");
-    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Review their evidence before implementation");
-    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("run the host-owned checks");
-    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).toContain("Later source changes invalidate validation");
-    expect(SUBAGENT_ORCHESTRATION_GUIDANCE).not.toMatch(/reviewer|validator|write_scope/u);
-  });
-
-  it("teaches every model the pi-ecode Explorer protocol", () => {
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("dispatch_explorers");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("read, ffgrep, and fffind");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("thinking defaults to low");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("At most three run concurrently");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("do not poll or wait");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("attention marker");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("retry once after an inactivity abort or another non-user error");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("After a second failure");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("stop after 10 minutes total");
-    expect(EXPLORER_ORCHESTRATION_GUIDANCE).toContain("cannot edit files or execute commands");
-  });
 });

@@ -5,24 +5,6 @@ export const VALIDATION_ORCHESTRATION_GUIDANCE = `## Host-owned validation
 - Any source change during validation makes the result stale. A passed result applies only to its recorded source revision.
 - Never describe a validation as passed until the delivered terminal result reports status passed.`;
 
-export const SUBAGENT_ORCHESTRATION_GUIDANCE = `## Subagent orchestration
-- Answer purely conversational questions and simple read-only lookups directly in the main session. Do not dispatch when a few parallel root read, ffgrep, and fffind calls can finish the work.
-- The default subagents are three read-only explorers: 甘, 文, 崔. There are no editor subagents; the main session edits directly within the user's authorized scope.
-- For work with an unknown root cause or a cross-module reach, dispatch an explorer first. Use agent_dispatch for one investigation; use dispatch_explorers for independent investigations that each require substantial reading. Review their evidence before implementation.
-- Explorers cannot edit files or execute commands. The main session owns implementation, verification, diff review and Git commits.
-- After implementation, reread changed files, run the host-owned checks, review the diff and git status, then commit. Later source changes invalidate validation.`;
-
-export const EXPLORER_ORCHESTRATION_GUIDANCE = `## Read-only Explorer subagents
-- Use dispatch_explorers only when a request contains at least two independent, non-overlapping repository investigations that each require substantial reading or searching.
-- Each Explorer task must define one objective, an exact read-only scope, and a concrete evidence-based deliverable. Use a concise Chinese title for task_name/title visible to users; keep snake_case task_name only as the protocol identifier. Explorers use the parent's read, ffgrep, and fffind tools and cannot edit files or execute commands.
-- Explorer thinking defaults to low. Set the batch to medium only for genuinely complex cross-module synthesis; high and above are unavailable.
-- Dispatch all independent Explorer tasks in one call. At most three run concurrently; additional tasks queue automatically.
-- After dispatch, do not poll or wait in a loop. Use agent_wait when the current turn has an explicit dependency; it returns task status or an attention marker and never injects reports. On attention, call agent_status once, then decide whether to keep waiting, stop and reassign, or explicitly degrade to the main session.
-- Subagents warn after 60 seconds without activity, retry once after an inactivity abort or another non-user error, and stop after 10 minutes total. After a second failure, call agent_result for the saved error, supply a missing dependency when possible, reassign to an idle agent with the same role, or tell the user that the main session is taking over. Never present degraded main-session work as proof that the original subagent passed.
-- Otherwise each subagent sends a lightweight completion notice without its report. When notified, call agent_result with that task_id to retrieve the saved report; use agent_status only for an intentional one-time status check.
-- Do not dispatch sequential questions, duplicate scopes, simple lookups, or work that a few parallel root read/search calls can finish efficiently.
-- Treat Explorer reports as evidence to review, not authority to claim implementation or validation.`;
-
 export const PARALLEL_TOOL_EXECUTION_GUIDANCE = `## Parallel tool execution
 - When two or more tool calls are independent and all inputs are already known, issue them together in one assistant response so the runtime can execute them in parallel.
 - Prefer parallel batches for independent reads, searches, and non-mutating diagnostic checks across different targets.

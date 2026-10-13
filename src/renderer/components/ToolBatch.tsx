@@ -1,9 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import type { ConversationItem, ExplorerTask, ToolActivity, ValidationState } from "@shared/contracts";
-import type { AgentRole } from "@shared/agent-contracts";
-import { useI18n, type Translate } from "../i18n/i18n";
-import type { MessageKey } from "../i18n/messages";
+import type { ConversationItem, ToolActivity, ValidationState } from "@shared/contracts";
+import { useI18n } from "../i18n/i18n";
 import { useScrollFollow } from "../hooks/use-scroll-follow";
 import { ValidationCard } from "./ValidationCard";
 
@@ -42,39 +40,17 @@ export function isScrollAreaAtBottom(scrollTop: number, clientHeight: number, sc
   return scrollHeight - scrollTop - clientHeight <= BOTTOM_THRESHOLD;
 }
 
-const ROLE_LABEL_KEYS = {
-  explorer: "agent.role.explorer",
-} as const satisfies Record<AgentRole, MessageKey>;
-
-/**
- * 只有全部关联任务都带同一个已知角色时才显示该角色名；混合角色或缺少 agentRole（历史任务）
- * 一律回退到中性标签，避免把混合批次误标成某一种角色。
- */
-function compactBatchLabel(linkedExplorers: ExplorerTask[], t: Translate): string {
-  const roles = new Set<AgentRole>();
-  const everyTaskHasRole = linkedExplorers.every((task) => {
-    if (task.agentRole !== "explorer") return false;
-    roles.add(task.agentRole);
-    return true;
-  });
-  const [onlyRole] = roles;
-  if (everyTaskHasRole && roles.size === 1 && onlyRole) return t(ROLE_LABEL_KEYS[onlyRole]);
-  return t("explorer.compactAgents");
-}
-
 export function ToolBatch({
   tools,
   animateNewTools = false,
   selectedToolId,
   onSelectTool,
-  explorers = [],
   validation,
 }: {
   tools: ToolActivity[];
   animateNewTools?: boolean;
   selectedToolId: string | null;
   onSelectTool: (toolId: string) => void;
-  explorers?: ExplorerTask[];
   validation?: ValidationState;
 }) {
   const { t } = useI18n();
@@ -103,11 +79,7 @@ export function ToolBatch({
 
   const firstTool = tools[0];
   const toolIds = new Set(tools.map((tool) => tool.id));
-  const linkedExplorers = explorers.filter((task) => toolIds.has(task.originToolCallId));
-  const activeExplorers = linkedExplorers.filter((task) => task.status === "queued" || task.status === "running").length;
-  const summaryTitle = linkedExplorers.length > 0
-    ? t("explorer.compactSummary", { label: compactBatchLabel(linkedExplorers, t), active: activeExplorers, total: linkedExplorers.length })
-    : firstTool?.title ?? t("tool.panelTitle");
+  const summaryTitle = firstTool?.title ?? t("tool.panelTitle");
   const linkedValidation = validation?.originToolCallId && toolIds.has(validation.originToolCallId) ? validation : null;
   return (
     <section className="tool-batch plaintext-tool-batch" aria-label={t("tool.batch", { count: tools.length })}>
