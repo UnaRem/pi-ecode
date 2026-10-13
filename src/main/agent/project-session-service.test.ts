@@ -4,8 +4,9 @@ import { AgentService } from "./agent-service.js";
 import { ProjectSessionService } from "./project-session-service.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { SessionWorkspaceRegistry } from "./session-workspaces.js";
+import { listSessionSummaries } from "./session-summaries.js";
 
-vi.mock("./session-summaries.js", () => ({ listSessionSummaries: async () => [] }));
+vi.mock("./session-summaries.js", () => ({ listSessionSummaries: vi.fn(async () => []) }));
 
 function serviceFixture(id: string, cwd: string) {
   let busy = false;
@@ -23,7 +24,7 @@ function serviceFixture(id: string, cwd: string) {
     getSnapshot: vi.fn(async () => snapshot),
     subscribe: (listener: (event: AgentEvent) => void) => { listeners.add(listener); return () => listeners.delete(listener); },
     subscribeAuth: () => () => undefined,
-    openProject: vi.fn(async (path: string, sessionPath?: string) => {
+    openProject: vi.fn(async (path: string, sessionPath?: string, _startNewSession = false) => {
       snapshot = { ...snapshot, projectPath: path, sessionFile: sessionPath ?? `${path}/${id}.jsonl`,
         sessions: [{ path: sessionPath ?? `${path}/${id}.jsonl`, id, title: id, messageCount: 1, modifiedAt: 1, byteSize: 12 }] };
       publish({ type: "snapshot", snapshot });
@@ -38,6 +39,9 @@ function serviceFixture(id: string, cwd: string) {
       publish({ type: "state", patch: { isStreaming: false } });
     }),
     undo: vi.fn(async () => ({ message: "restored" })),
+    redo: vi.fn(async () => ({ message: "restored" })),
+    rejectReviewFile: vi.fn(async (_path: string) => ({ available: false, baseCommit: null, headCommit: null, files: [], patch: "", truncated: false, message: null })),
+    deleteSession: vi.fn(async (_path: string) => undefined),
     stop: vi.fn(async () => { finish(); await Promise.resolve(); }),
     dispose: vi.fn(async () => { finish(); await Promise.resolve(); }),
   };
@@ -47,7 +51,7 @@ function serviceFixture(id: string, cwd: string) {
 async function fixture(configureChild?: (child: ReturnType<typeof serviceFixture>) => void) {
   const root = serviceFixture("root", "/project");
   const children: ReturnType<typeof serviceFixture>[] = [];
-  const workspaces = { canCreate: true, current: [], configure: vi.fn(async () => undefined), create: vi.fn(async () => `/worktree/${children.length + 1}`) };
+  const workspaces = { current: [] as Array<{ cwd: string }>, configure: vi.fn(async () => undefined) };
   const owner = new ProjectSessionService({ root: root.service, workspaces: workspaces as unknown as SessionWorkspaceRegistry,
     createService: () => { const child = serviceFixture(`child-${children.length + 1}`, ""); configureChild?.(child); children.push(child); return child.service; } });
   await owner.initialize();
@@ -61,8 +65,14 @@ describe("parallel project sessions", () => {
     test.owner.subscribe((event) => events.push(event));
     const rootRun = test.owner.prompt("root task");
     const childSnapshot = await test.owner.newSession();
-    expect(childSnapshot).toMatchObject({ projectPath: "/project", workspacePath: "/worktree/1", parallel: { runningCount: 1 } });
+    expect(childSnapshot).toMatchObject({ projectPath: "/project", workspacePath: "/project", parallel: { runningCount: 1 } });
+    expect(childSnapshot.sessionFile).not.toBe("/project/root.jsonl");
+    expect(test.children[0]!.mock.openProject).toHaveBeenCalledWith("/project", undefined, true);
     const childRun = test.owner.prompt("child task");
+    const sharedSessions = [...(await test.root.service.getSnapshot()).sessions, ...(await test.children[0]!.service.getSnapshot()).sessions];
+    test.root.publish({ type: "sessions", sessions: sharedSessions });
+    test.children[0]!.publish({ type: "sessions", sessions: sharedSessions });
+    expect((await test.owner.getSnapshot()).sessions.filter((session) => session.runStatus === "running")).toHaveLength(2);
     events.length = 0;
     test.root.publish({ type: "notice", message: "background only" });
     test.root.publish({ type: "extension-ui", request: { id: "root-question", method: "input", title: "Root input" } });
@@ -79,7 +89,7 @@ describe("parallel project sessions", () => {
     expect(test.children[0]!.service.runtimeBusy).toBe(true);
     await test.owner.switchSession("/project/root.jsonl");
     expect(test.owner.activeService).toBe(test.root.service);
-    await test.owner.stopSession("/worktree/1/child-1.jsonl");
+    await test.owner.stopSession("/project/child-1.jsonl");
     await childRun;
     await expect(test.owner.stopSession("/outside/session.jsonl")).rejects.toThrow("登记");
     await test.owner.dispose();
@@ -123,22 +133,28 @@ describe("parallel project sessions", () => {
     await test.owner.stopSession("/project/root.jsonl");
     await rootRun;
     const thirdRun = test.owner.prompt("third allowed");
-    await test.owner.stopSession("/worktree/2/child-2.jsonl");
+    await test.owner.stopSession("/project/child-2.jsonl");
     await thirdRun;
-    await test.owner.stopSession("/worktree/1/child-1.jsonl");
+    await test.owner.stopSession("/project/child-1.jsonl");
     await childRun;
     await test.owner.dispose();
   });
 
   it("rejects unowned session paths and serializes transitions", async () => {
-    const test = await fixture();
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    const test = await fixture((child) => {
+      const open = child.mock.openProject.getMockImplementation()!;
+      child.mock.openProject.mockImplementation(async (path, sessionPath, startNewSession) => {
+        await gate;
+        return open(path, sessionPath, startNewSession);
+      });
+    });
     await expect(test.owner.switchSession("/outside/session.jsonl")).rejects.toThrow("active project");
-    let finish!: (path: string) => void;
-    test.workspaces.create.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     const creating = test.owner.newSession();
     await expect(test.owner.newSession()).rejects.toThrow("正在切换");
     await expect(test.owner.prompt("wrong target")).rejects.toThrow("切换完成");
-    finish("/worktree/1");
+    finish();
     await creating;
     await test.owner.dispose();
   });
@@ -170,29 +186,66 @@ describe("parallel project sessions", () => {
     await test.owner.dispose();
   });
 
-  it("reopens an evicted idle session in its registered worktree rather than the original project", async () => {
+  it("reopens an evicted idle session in the selected project directory", async () => {
     const test = await fixture();
     const first = await test.owner.newSession();
     await test.owner.newSession();
     await test.owner.newSession();
     expect(test.children[0]!.mock.dispose).toHaveBeenCalledOnce();
     const restored = await test.owner.switchSession(first.sessionFile!);
-    expect(test.children[3]!.mock.openProject).toHaveBeenCalledWith("/worktree/1", first.sessionFile);
-    expect(restored.workspacePath).toBe("/worktree/1");
+    expect(test.children[3]!.mock.openProject).toHaveBeenCalledWith("/project", first.sessionFile);
+    expect(restored.workspacePath).toBe("/project");
     await test.owner.dispose();
   });
 
-  it("prevents historical sessions from executing beside a task in their shared original directory", async () => {
+  it("allows historical sessions to run beside a task in the same original directory", async () => {
     const test = await fixture();
     const snapshot = await test.root.service.getSnapshot();
     const history = { path: "/project/history.jsonl", id: "history", title: "History", messageCount: 1, modifiedAt: 1 };
     test.root.publish({ type: "sessions", sessions: [...snapshot.sessions, history] });
     const running = test.owner.prompt("root task");
     await test.owner.switchSession(history.path);
-    await expect(test.owner.prompt("unsafe shared task")).rejects.toThrow("共享目录");
-    expect(test.children[0]!.mock.prompt).not.toHaveBeenCalled();
+    const historyRun = test.owner.prompt("shared task");
+    expect(test.children[0]!.mock.prompt).toHaveBeenCalledOnce();
+    expect((await test.owner.getSnapshot()).parallel?.runningCount).toBe(2);
+    await test.owner.stopSession(history.path);
+    await historyRun;
+    expect(test.root.service.runtimeBusy).toBe(true);
     await test.owner.stopSession("/project/root.jsonl");
     await running;
+    await test.owner.dispose();
+  });
+
+  it("resumes legacy worktree conversations in the selected project and preserves discovery for deletion", async () => {
+    const test = await fixture();
+    const legacy = { path: "/legacy/conversation.jsonl", id: "legacy", title: "Legacy", messageCount: 1, modifiedAt: 1 };
+    test.workspaces.current = [{ cwd: "/legacy" }];
+    vi.mocked(listSessionSummaries).mockResolvedValueOnce([legacy]);
+    await test.owner.openProject("/project");
+    const restored = await test.owner.switchSession(legacy.path);
+    expect(test.children[0]!.mock.openProject).toHaveBeenCalledWith("/project", legacy.path);
+    expect(restored.workspacePath).toBe("/project");
+    await test.owner.newSession();
+    await test.owner.newSession();
+    expect(test.children[0]!.mock.dispose).toHaveBeenCalledOnce();
+    await test.owner.deleteSession(legacy.path);
+    expect(test.children[3]!.mock.openProject).toHaveBeenCalledWith("/legacy");
+    expect(test.children[3]!.mock.deleteSession).toHaveBeenCalledWith(legacy.path);
+    expect((await test.owner.getSnapshot()).sessions.some((session) => session.path === legacy.path)).toBe(false);
+    await test.owner.dispose();
+  });
+
+  it.each(["undo", "redo", "rejectReviewFile"] as const)("blocks %s in an idle foreground while a background task owns the shared directory", async (operation) => {
+    const test = await fixture();
+    const running = test.owner.prompt("root task");
+    await test.owner.newSession();
+    const restore = () => operation === "rejectReviewFile" ? test.owner.rejectReviewFile("source.ts") : test.owner[operation]();
+    await expect(restore()).rejects.toThrow("所有对话");
+    expect(test.children[0]!.mock[operation]).not.toHaveBeenCalled();
+    await test.owner.stopSession("/project/root.jsonl");
+    await running;
+    await restore();
+    expect(test.children[0]!.mock[operation]).toHaveBeenCalledOnce();
     await test.owner.dispose();
   });
 
@@ -226,16 +279,15 @@ describe("parallel project sessions", () => {
     await running;
   });
 
-  it("preserves single-session behavior for non-Git projects", async () => {
+  it("creates additional shared-directory sessions without requiring a Git registry", async () => {
     const test = await fixture();
-    test.workspaces.canCreate = false;
     const running = test.owner.prompt("task");
-    await expect(test.owner.newSession()).rejects.toThrow("非 Git 项目");
+    expect((await test.owner.getSnapshot()).parallel).toMatchObject({ canCreate: true, reason: null });
+    await test.owner.newSession();
+    expect(test.children[0]!.mock.openProject).toHaveBeenCalledWith("/project", undefined, true);
+    expect(test.root.mock.newSession).not.toHaveBeenCalled();
     await test.owner.stopSession("/project/root.jsonl");
     await running;
-    await test.owner.newSession();
-    expect(test.root.mock.newSession).toHaveBeenCalledOnce();
-    expect(test.workspaces.create).not.toHaveBeenCalled();
     await test.owner.dispose();
   });
 });

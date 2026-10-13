@@ -124,6 +124,9 @@ export class ProjectSessionService {
     const sessions = new Map(this.persistedSessions.map((session) => [session.path, session]));
     for (const slot of this.slots) {
       for (const summary of slot.snapshot.sessions) sessions.set(summary.path, { ...summary, workspacePath: slot.snapshot.projectPath ?? this.projectPath! });
+    }
+    // Shared-directory inventories overlap; apply live statuses after all inventory rows to keep background stop controls.
+    for (const slot of this.slots) {
       const snapshot = slot.snapshot;
       if (!snapshot.sessionFile || !snapshot.sessionId) continue;
       const existing = sessions.get(snapshot.sessionFile);
@@ -149,8 +152,8 @@ export class ProjectSessionService {
     return { ...snapshot, projectPath: this.projectPath ?? snapshot.projectPath,
       projectName: this.projectPath ? basename(this.projectPath) : snapshot.projectName,
       workspacePath: snapshot.projectPath, sessions: this.sessionSummaries(),
-      parallel: { maxRunning: 2, runningCount, canCreate: !this.transitioning && !this.workspaceOperation && (this.workspaces.canCreate || runningCount === 0),
-        reason: this.workspaces.canCreate ? null : "非 Git 项目或尚无提交：仅支持单会话执行。" } };
+      parallel: { maxRunning: 2, runningCount, canCreate: !this.transitioning && !this.workspaceOperation,
+        reason: null } };
   }
 
   async getSnapshot(): Promise<AgentSnapshot> {
@@ -183,19 +186,12 @@ export class ProjectSessionService {
 
   async newSession(): Promise<AgentSnapshot> {
     return this.transition(async () => {
-      if (!this.workspaces.canCreate) {
-        if (this.runtimeBusy) throw new Error("非 Git 项目必须先停止当前任务再创建会话。");
-        const snapshot = await this.root.newSession();
-        this.active = [...this.slots].find((slot) => slot.service === this.root)!;
-        this.active.snapshot = snapshot;
-        return snapshot;
-      }
-      const cwd = await this.workspaces.create();
+      if (!this.projectPath) throw new Error("No project selected.");
       const slot = this.addSlot(this.options.createService());
       const previous = this.active;
       this.active = slot;
       try {
-        slot.snapshot = await slot.service.openProject(cwd);
+        slot.snapshot = await slot.service.openProject(this.projectPath, undefined, true);
         await this.releaseIdleChildren();
         return slot.snapshot;
       } catch (error) {
@@ -217,11 +213,10 @@ export class ProjectSessionService {
         this.slots.add(cached);
         cached.snapshot = await cached.service.getSnapshot();
       } else {
-        const cwd = known.workspacePath ?? this.projectPath;
         const slot = this.addSlot(this.options.createService());
         const previous = this.active;
         this.active = slot;
-        try { slot.snapshot = await slot.service.openProject(cwd, path); }
+        try { slot.snapshot = await slot.service.openProject(this.projectPath, path); }
         catch (error) { this.active = previous; await this.removeSlot(slot); throw error; }
       }
       await this.releaseIdleChildren();
@@ -253,9 +248,6 @@ export class ProjectSessionService {
     if (this.workspaceOperation) throw new Error("请等待文件恢复完成。");
     const running = this.runningServices();
     if (!running.has(service) && running.size >= 2) throw new Error("已有 2 个会话执行中，请先停止或等待其中一个完成。");
-    if ([...running].some((other) => other !== service && other.activeProjectPath === service.activeProjectPath)) {
-      throw new Error("该历史会话与后台任务共享目录。请新建独立会话，或等待共享目录中的任务结束。");
-    }
   }
 
   async prompt(message: string, images: ImageAttachment[] = []): Promise<void> {
@@ -295,7 +287,7 @@ export class ProjectSessionService {
   private async changeWorkspace<T>(operation: (service: AgentService) => Promise<T>): Promise<T> {
     const service = this.activeService;
     this.assertCanRun(service);
-    if (service.runtimeBusy || this.reservations.has(service)) throw new Error("请等待会话当前操作结束。");
+    if (this.runningServices().size > 0) throw new Error("请等待所有对话结束后恢复共享项目文件。");
     this.reservations.add(service);
     const pending = operation(service);
     this.workspaceOperation = pending;
@@ -335,7 +327,9 @@ export class ProjectSessionService {
       if (loaded) await this.removeSlot(loaded);
       const service = this.options.createService();
       try {
-        await service.openProject(summary.workspacePath ?? this.projectPath!);
+        // Legacy transcript discovery still needs its original cwd; this temporary service never starts a task.
+        const sourceCwd = this.persistedSessions.find((session) => session.path === path)?.workspacePath ?? this.projectPath!;
+        await service.openProject(sourceCwd);
         if ((await service.getSnapshot()).sessionFile === path) await service.newSession();
         await service.deleteSession(path);
       } finally { await service.dispose(); }
@@ -357,7 +351,8 @@ export class ProjectSessionService {
   private async removeSlot(slot: SessionSlot): Promise<void> {
     await slot.service.dispose();
     this.persistedSessions = [...this.persistedSessions.filter((summary) => !slot.snapshot.sessions.some((session) => session.path === summary.path)),
-      ...slot.snapshot.sessions.map((summary) => ({ ...summary, workspacePath: slot.snapshot.projectPath ?? this.projectPath! }))];
+      ...slot.snapshot.sessions.map((summary) => ({ ...summary, workspacePath:
+        this.persistedSessions.find((session) => session.path === summary.path)?.workspacePath ?? slot.snapshot.projectPath ?? this.projectPath! }))];
     slot.unsubscribe();
     if (slot === this.active) this.active = [...this.slots].find((entry) => entry.service === this.root)!;
     this.slots.delete(slot);

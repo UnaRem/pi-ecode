@@ -235,7 +235,7 @@ export class AgentService {
     this.pendingStreamContext = undefined;
   }
 
-  async openProject(inputPath: string, sessionPath?: string): Promise<AgentSnapshot> {
+  async openProject(inputPath: string, sessionPath?: string, startNewSession = false): Promise<AgentSnapshot> {
     const cwd = resolve(inputPath);
     const details = await stat(cwd);
     if (!details.isDirectory()) throw new Error("Selected project is not a directory.");
@@ -258,7 +258,9 @@ export class AgentService {
       this.runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
         cwd,
         agentDir: getAgentDir(),
-        sessionManager: sessionPath ? SessionManager.open(sessionPath, undefined, cwd) : SessionManager.continueRecent(cwd),
+        // A shared cwd must still get a distinct conversation file; continuing recent could reopen a running session.
+        sessionManager: sessionPath ? SessionManager.open(sessionPath, undefined, cwd)
+          : startNewSession ? SessionManager.create(cwd) : SessionManager.continueRecent(cwd),
       });
       this.runtime.setRebindSession(async (session) => this.bindSession(session));
       await this.bindSession(this.runtime.session);
@@ -508,7 +510,7 @@ export class AgentService {
   async deleteSession(sessionPath: string): Promise<void> {
     const runtime = this.requireRuntime();
     if (this.runtimeBusy) throw new Error("Stop the active agent run before deleting a session.");
-    const sessions = await listSessionSummaries(this.projectPath);
+    const sessions = await this.loadSessionSummaries();
     const target = sessions.find((session) => session.path === sessionPath);
     if (!target) throw new Error("That session does not belong to the active project.");
     if (target.path === runtime.session.sessionFile) throw new Error("The active session cannot be deleted.");
@@ -778,7 +780,7 @@ export class AgentService {
   }
 
   private async assertValidationCurrent(session: AgentSession, message: string): Promise<void> {
-    if (this.options.allowSelfUpdate === false) throw new Error("独立会话工作目录不能激活自更新候选，请回到原项目会话。");
+    if (this.options.allowSelfUpdate === false) throw new Error("该会话不负责自更新，请回到项目主会话。");
     const validation = this.validation.getState();
     if (!validation.isSelfProject) throw new Error("Candidate updates are available only for the pi-ecode source project.");
     if (validation.status !== "passed" || !validation.sourceRevision) throw new Error(message);
@@ -1177,7 +1179,8 @@ export class AgentService {
     const session = this.runtime?.session;
     const isCurrent = session ? this.sessionGuard(session) : () => this.projectPath === projectPath;
     const revision = ++this.sessionSummaryRevision;
-    const sessions = await listSessionSummaries(projectPath, session?.sessionManager.getSessionDir());
+    // Legacy conversations keep their files in the old session directory even when their runtime uses the selected project.
+    const sessions = await listSessionSummaries(session?.sessionManager.getHeader()?.cwd ?? projectPath, session?.sessionManager.getSessionDir());
     // SDK 会原地切换 session；旧项目、旧会话或较早刷新不得回写当前列表。
     if (projectPath && isCurrent() && revision === this.sessionSummaryRevision) {
       this.sessionSummaries = { projectPath, sessions };

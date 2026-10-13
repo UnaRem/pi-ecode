@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionManager, type AgentSession, type AgentSessionEvent, type PromptOptions } from "@earendil-works/pi-coding-agent";
+import { SessionManager, type AgentSession, type AgentSessionEvent, type CreateAgentSessionRuntimeFactory, type PromptOptions } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, SessionSummary, ValidationState } from "../../shared/contracts.js";
 
 const sessionSummaryState = vi.hoisted(() => ({ sessions: [] as SessionSummary[], scans: 0,
@@ -90,6 +90,34 @@ describe("AgentService 托管进程", () => {
     expect(internal.managedProcesses).not.toBe(processService);
     runtimeCleanup.mockRestore();
     runtimeFactory.mockRestore();
+  });
+
+  it("opens distinct new conversation files in a shared cwd without resuming the most recent session", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "pi-ecode-shared-session-"));
+    const managers: SessionManager[] = [];
+    const service = new AgentService();
+    const internal = service as unknown as { createRuntimeFactory: () => CreateAgentSessionRuntimeFactory };
+    const recent = vi.spyOn(SessionManager, "continueRecent").mockReturnValue(SessionManager.inMemory(cwd));
+    const factory = vi.spyOn(internal, "createRuntimeFactory").mockReturnValue(async ({ sessionManager }) => {
+      managers.push(sessionManager);
+      // Stop before model/network startup while retaining the actual SDK-created conversation identities.
+      throw new Error("fixture startup boundary");
+    });
+    try {
+      await expect(service.openProject(cwd, undefined, true)).rejects.toThrow("fixture startup boundary");
+      await expect(service.openProject(cwd, undefined, true)).rejects.toThrow("fixture startup boundary");
+      expect(recent).not.toHaveBeenCalled();
+      expect(managers).toHaveLength(2);
+      expect(managers[0]!.getSessionFile()).toBeDefined();
+      expect(managers[0]!.getSessionFile()).not.toBe(managers[1]!.getSessionFile());
+      expect(managers.map((manager) => manager.getCwd())).toEqual([cwd, cwd]);
+    } finally {
+      factory.mockRestore();
+      recent.mockRestore();
+      await service.dispose();
+      for (const directory of new Set(managers.map((manager) => manager.getSessionDir()))) await rm(directory, { recursive: true, force: true });
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
   it("preserves the old project and registered stop entry when configure cleanup fails", async () => {

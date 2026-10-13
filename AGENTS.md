@@ -13,7 +13,7 @@ The first usable release includes:
 - selecting a local working directory;
 - persistent pi sessions scoped to that directory;
 - creating and switching sessions, displaying session file sizes with a 10 MiB reminder, and generating a short title after the first message;
-- up to two user sessions executing in parallel in independent Git worktrees, with per-session stopping and explicit workspace paths;
+- up to two user sessions executing in parallel in the selected project directory, with separate conversation files, per-session stopping, and an explicit shared workspace path;
 - local tool capability recommendations and per-device execution statistics;
 - streaming assistant text and visible tool activity;
 - sending, steering, and stopping work;
@@ -48,7 +48,8 @@ src/main      windows, native dialogs, pi SDK, filesystem/session lifecycle
 - Keep one selected project and one foreground session per window. `ProjectSessionService` owns independent `AgentService` instances, allows at most two executing sessions, and never disposes an executing session just because the foreground changes. Project replacement and shutdown must await every runtime and managed-process cleanup; retain failed registrations for retry.
 - Only the two most recently viewed idle child runtimes are retained for fast session switching; executing runtimes and runtimes with owned background resources are protected from eviction. Project replacement and shutdown still await cleanup of every retained runtime.
 - Session summaries reuse scans while JSONL inventory, sizes and modification metadata are unchanged. Read-only snapshots reuse the service's published summary list; writes and session lifecycle events refresh it. A transition publishes one authoritative snapshot without rereading it a second time.
-- New Git conversations use retained worktrees outside the project, based on HEAD at creation; do not copy uncommitted changes, merge results, or delete worktrees automatically. Non-Git or unborn repositories remain single-session. Historical sessions sharing the original cwd may be viewed during background work, but must not execute concurrently in that same cwd.
+- New conversations use independent runtimes and conversation files in the selected project cwd, including non-Git and unborn repositories. Up to two conversations may execute concurrently in that shared directory; file changes and task reviews therefore reflect shared project state. Never resume the most recent conversation when creating another runtime for a new conversation.
+- Retained worktree ledgers are read only to discover historical conversations; do not create, merge or delete worktrees automatically. Resume those conversation files with the selected project cwd while keeping their original transcript directories for discovery and deletion. Historical workspace checkpoints remain tied to their original cwd and must not be restored across directories.
 - The active working directory is explicit state. Never silently fall back to the app repository or home directory after the user selected another project.
 
 ## State and event rules
@@ -56,7 +57,7 @@ src/main      windows, native dialogs, pi SDK, filesystem/session lifecycle
 - Main process owns authoritative agent state: project, active session, model, thinking level, streaming status, available sessions, workspace history, and validation results.
 - Renderer owns ephemeral presentation state: composer drafts per session, expanded tool cards, sidebar visibility, and scroll position. Recover failed background sends in their originating session.
 - `projectPath` identifies the selected project; `workspacePath` identifies the foreground agent's actual cwd. Route narrow IPC operations to that foreground service at request acceptance. Tag foreground events with session IDs and discard stale events; project-wide session summaries and parallel counts remain unscoped.
-- `agent:stop-session` accepts only a bounded session-file string and resolves it against the current project's loaded service registrations; never accept PID, command, or arbitrary runtime targets. Workspace undo, redo and file rejection reserve the active runtime, block session transitions until restoration finishes, and finish before shutdown disposes the runtime; apply deferred configuration only when all sessions are idle and shutdown has not started.
+- `agent:stop-session` accepts only a bounded session-file string and resolves it against the current project's loaded service registrations; never accept PID, command, or arbitrary runtime targets. Workspace undo, redo and file rejection require every project runtime to be idle, reserve the active runtime, block new sends and session transitions until restoration finishes, and finish before shutdown disposes the runtime; apply deferred configuration only when all sessions are idle and shutdown has not started.
 - Title generation uses the selected model in a separate bounded request after the first user message is persisted. Persist the attempt, preserve user renames, and cancel requests when their runtime is disposed.
 - Tool advice is transient request context. Match capabilities before ranking local samples; fewer than five completed calls is insufficient evidence. Record execution success/failure, cancellation, blocking and nested calls separately; none of these proves task completion. Store only aggregate counts and the latest 128 durations, outside the project, using a shared atomic writer keyed by device, hostname, OS and architecture.
 - On startup or project change, renderer requests one snapshot and then applies ordered events.
@@ -155,7 +156,7 @@ For UI changes, manually verify project selection, session switching, send/strea
 - Workspace history is a core project module. Keep its storage outside the selected workspace and do not make correctness depend on a globally installed checkpoint extension.
 - Validation commands are selected from an internal allowlist. Never accept an arbitrary executable or shell command from the renderer for the self-hosting pipeline.
 - A successful validation becomes stale after a new agent run, workspace restore, or observed source change. Do not present stale checks as proof that the current source is safe to adopt.
-- Candidate preparation requires a current successful validation and the recognized pi-ecode source project. Retained worktree services cannot prepare or activate self-update candidates. Stage candidates outside the workspace.
+- Candidate preparation requires a current successful validation and the recognized pi-ecode source project. Only the root project service may prepare or activate self-update candidates; retained child services remain ineligible even when they share the project cwd. Stage candidates outside the workspace.
 - Never overwrite the frozen previous runtime after validation has rebuilt `out/`. The supervisor must retain an immutable fallback until candidate health is confirmed.
 - Candidate health requires main, preload, renderer, IPC, and initial project/runtime restoration to complete. A process merely staying alive is not healthy.
 - Keep self-update disabled for packaged builds until a packaging-aware external launcher is implemented.
