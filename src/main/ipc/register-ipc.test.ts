@@ -11,11 +11,16 @@ const harness = vi.hoisted(() => ({
   removeHandler: vi.fn(),
   invoke: vi.fn(),
   expose: vi.fn(),
+  showMessageBox: vi.fn(),
+  focus: vi.fn(),
+  isFocused: vi.fn(),
+  isDestroyed: vi.fn(),
+  fromWebContents: vi.fn(),
 }));
 vi.mock("electron", () => ({
-  BrowserWindow: { getAllWindows: () => [] },
+  BrowserWindow: { getAllWindows: () => [], fromWebContents: harness.fromWebContents },
   Notification: {},
-  dialog: {},
+  dialog: { showMessageBox: harness.showMessageBox },
   ipcMain: {
     handle: (channel: string, handler: (_event: unknown, input: unknown) => unknown) => harness.handlers.set(channel, handler),
     removeHandler: harness.removeHandler,
@@ -29,6 +34,13 @@ beforeEach(() => {
   harness.removeHandler.mockReset();
   harness.invoke.mockReset().mockResolvedValue(undefined);
   harness.expose.mockReset();
+  harness.showMessageBox.mockReset().mockResolvedValue({ response: 1 });
+  harness.focus.mockReset();
+  harness.isFocused.mockReset().mockReturnValue(true);
+  harness.isDestroyed.mockReset().mockReturnValue(false);
+  harness.fromWebContents.mockReset().mockReturnValue({
+    isDestroyed: harness.isDestroyed, isFocused: harness.isFocused, webContents: { focus: harness.focus },
+  });
 });
 
 function register(stopManagedProcess = vi.fn().mockResolvedValue(undefined)) {
@@ -38,6 +50,29 @@ function register(stopManagedProcess = vi.fn().mockResolvedValue(undefined)) {
   const stop = (input: unknown) => harness.handlers.get(IPC_CHANNELS.stopManagedProcess)!(undefined, input);
   return { stopManagedProcess, stop, unregister, unsubscribe };
 }
+
+describe("所属窗口确认框", () => {
+  const request = { message: "恢复文件？", confirmLabel: "确认", cancelLabel: "取消" };
+  function confirm(input: unknown) {
+    register();
+    return harness.handlers.get(IPC_CHANNELS.showConfirmation)!({ sender: {} }, input);
+  }
+  it.each([null, {}, { ...request, message: "" }, { ...request, message: "x".repeat(2_001) }, { ...request, cancelLabel: 12 }])("拒绝越界请求 %j", async (input) => {
+    await expect(confirm(input)).rejects.toThrow("Invalid confirmation");
+    expect(harness.showMessageBox).not.toHaveBeenCalled();
+  });
+  it("使用默认取消并在所属窗口仍活跃时恢复键盘焦点", async () => {
+    await expect(confirm(request)).resolves.toBe(true);
+    expect(harness.showMessageBox).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      buttons: ["取消", "确认"], defaultId: 0, cancelId: 0,
+    }));
+    expect(harness.focus).toHaveBeenCalledOnce();
+    harness.isFocused.mockReturnValue(false);
+    harness.showMessageBox.mockResolvedValue({ response: 0 });
+    await expect(confirm(request)).resolves.toBe(false);
+    expect(harness.focus).toHaveBeenCalledOnce();
+  });
+});
 
 describe("托管进程窄停止接口", () => {
   it.each([undefined, null, 123, {}, { pid: 123 }, { command: "taskkill" }, [], "", " \t\n", "x".repeat(201)])("拒绝无效输入 %j 且不调用 service", (input) => {

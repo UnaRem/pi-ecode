@@ -6,6 +6,7 @@ import { IPC_CHANNELS } from "../shared/contracts.js";
 
 const api: DesktopApi = {
   chooseProject: () => ipcRenderer.invoke(IPC_CHANNELS.chooseProject),
+  showConfirmation: (request) => ipcRenderer.invoke(IPC_CHANNELS.showConfirmation, request),
   openProject: (path) => ipcRenderer.invoke(IPC_CHANNELS.openProject, path),
   getSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.getSnapshot),
   loadOlderTimeline: () => ipcRenderer.invoke(IPC_CHANNELS.loadOlderTimeline),

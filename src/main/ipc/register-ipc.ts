@@ -1,7 +1,7 @@
 import { BrowserWindow, Notification, dialog, ipcMain } from "electron";
 import type { AppThemeColors, ConversationIdentityRole, ConversationNicknameUpdate } from "../../shared/app-config-contracts.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "../../shared/work-animator.js";
-import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
+import type { ConfirmationDialogRequest, ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
 import type { ProjectSessionService } from "../agent/project-session-service.js";
@@ -97,14 +97,35 @@ function isSaveInstructionFileRequest(value: unknown): value is SaveInstructionF
     && (request.expectedRevision === null || typeof request.expectedRevision === "string");
 }
 
+function isConfirmationDialogRequest(value: unknown): value is ConfirmationDialogRequest {
+  if (!value || typeof value !== "object") return false;
+  const request = value as Partial<ConfirmationDialogRequest>;
+  return typeof request.message === "string" && request.message.trim().length > 0 && request.message.length <= 2_000
+    && [request.confirmLabel, request.cancelLabel].every((label) => typeof label === "string" && label.trim().length > 0 && label.length <= 80);
+}
+
 export function registerIpc(service: AgentService | ProjectSessionService, settings: SettingsService, appConfig: AppConfigService): () => void {
   const active = (): AgentService => "activeService" in service ? service.activeService : service;
   const projectGit = new ProjectGitService(() => active().activeProjectPath ?? null);
+  ipcMain.handle(IPC_CHANNELS.showConfirmation, async (event, request: unknown) => {
+    if (!isConfirmationDialogRequest(request)) throw new Error("Invalid confirmation request.");
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (!owner || owner.isDestroyed()) return false;
+    const result = await dialog.showMessageBox(owner, {
+      type: "question", title: "PiECode", message: request.message,
+      buttons: [request.cancelLabel, request.confirmLabel], defaultId: 0, cancelId: 0, noLink: true,
+    });
+    if (owner.isDestroyed()) return false;
+    // Repair Chromium's keyboard focus after a Windows dialog without stealing another window's focus.
+    if (owner.isFocused()) owner.webContents.focus();
+    return result.response === 1;
+  });
   ipcMain.handle(IPC_CHANNELS.chooseProject, async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
     const result = owner
       ? await dialog.showOpenDialog(owner, { properties: ["openDirectory", "createDirectory"] })
       : await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+    if (owner && !owner.isDestroyed() && owner.isFocused()) owner.webContents.focus();
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
   ipcMain.handle(IPC_CHANNELS.openProject, async (_event, path: string) => {

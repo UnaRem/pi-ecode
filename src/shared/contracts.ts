@@ -6,6 +6,7 @@ import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from
 
 export const IPC_CHANNELS = {
   chooseProject: "desktop:choose-project",
+  showConfirmation: "desktop:show-confirmation",
   openProject: "agent:open-project",
   getSnapshot: "agent:get-snapshot",
   loadOlderTimeline: "agent:load-older-timeline",
@@ -295,8 +296,16 @@ export interface AgentTimelinePage {
   hasMore: boolean;
 }
 
+export interface ProjectProfile {
+  description: string | null;
+  technologies: string[];
+  features: Array<"sessions" | "mcp" | "history">;
+  hasTests: boolean;
+}
+
 export interface AgentSnapshot {
   projectPath: string | null;
+  projectProfile?: ProjectProfile;
   projectName: string | null;
   workspacePath?: string | null;
   parallel?: { maxRunning: number; runningCount: number; canCreate: boolean; reason: string | null };
@@ -361,8 +370,15 @@ export interface ProjectGitStatus {
 
 import type { AppConfigSnapshot, AppConfigChangedEvent, AppThemeColors } from "./app-config-contracts.js";
 
+export interface ConfirmationDialogRequest {
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+}
+
 export interface DesktopApi {
   chooseProject(): Promise<string | null>;
+  showConfirmation(request: ConfirmationDialogRequest): Promise<boolean>;
   openProject(path: string): Promise<AgentSnapshot>;
   getSnapshot(): Promise<AgentSnapshot>;
   loadOlderTimeline(): Promise<AgentTimelinePage>;
