@@ -1,6 +1,6 @@
 import { FolderOpen, LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { Composer } from "./components/Composer";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Composer, type ComposerDraft } from "./components/Composer";
 import { Conversation } from "./components/Conversation";
 import { Sidebar } from "./components/Sidebar";
 import { StartupScreen } from "./components/StartupScreen";
@@ -31,7 +31,9 @@ export default function App() {
   const selectedModel = state.models.find((model) => `${model.provider}/${model.id}` === state.selectedModel);
   const activeSession = state.sessions.find((session) => session.path === state.sessionFile);
   const sessionTitle = state.sessionTitle ?? (activeSession?.messageCount ? activeSession.title : null);
-  const activeViewKey = `main:${state.sessionFile ?? "new-session"}`;
+  const activeViewKey = `main:${state.projectPath}:${state.sessionId ?? state.sessionFile ?? "new-session"}`;
+  const composerDrafts = useRef(new Map<string, ComposerDraft>());
+  const saveComposerDraft = useCallback((draft: ComposerDraft) => { composerDrafts.current.set(activeViewKey, draft); }, [activeViewKey]);
   const workspaceTools = useWorkspaceTools(state.timeline, activeViewKey);
 
   const leaveSettings = useCallback((): boolean => {
@@ -84,6 +86,8 @@ export default function App() {
         sessions={state.sessions}
         activeSessionFile={state.sessionFile}
         disabled={state.isStreaming}
+        parallel={state.parallel}
+        onStopSession={(path) => void actions.stopSession(path)}
         taskPlan={state.taskPlan}
         workAnimator={appConfig?.workAnimator}
         settingsActive={settingsOpen}
@@ -103,13 +107,17 @@ export default function App() {
         <Topbar
           sidebarOpen={sidebarOpen}
           projectName={state.projectName}
-          projectPath={state.projectPath}
+          projectPath={state.workspacePath ?? state.projectPath}
           sessionTitle={sessionTitle}
           policy={state.policy}
           onOpenSidebar={() => setSidebarOpen(true)}
           onRenameSession={(title) => void actions.renameSession(title)}
         />
+        {state.workspacePath && state.workspacePath !== state.projectPath && <div className="session-workspace-note">
+          {t("sidebar.isolatedWorkspace")}<code>{state.workspacePath}</code>
+        </div>}
         <Conversation
+          key={activeViewKey}
           timeline={state.timeline}
           viewKey={activeViewKey}
           validation={state.validation}
@@ -131,6 +139,9 @@ export default function App() {
         />
         <div>
           <Composer
+          key={activeViewKey}
+          initialDraft={composerDrafts.current.get(activeViewKey)}
+          onDraftChange={saveComposerDraft}
           isStreaming={state.isStreaming}
           pendingCount={state.pendingCount}
           modelReady={Boolean(state.selectedModel)}
@@ -162,13 +173,15 @@ export default function App() {
         )}
       </section>
       <WorkspaceInspector
+        key={activeViewKey}
         tools={workspaceTools.tools}
         mcpTools={state.mcpTools}
+        toolStatistics={state.toolStatistics ?? []}
         selectedTool={workspaceTools.selectedTool}
         validation={state.validation}
         review={state.review}
         candidate={state.candidate}
-        projectPath={state.projectPath}
+        projectPath={state.workspacePath ?? state.projectPath}
         isStreaming={state.isStreaming}
         processes={state.processes}
         onStopManagedProcess={actions.stopManagedProcess}

@@ -43,6 +43,26 @@ describe("Sidebar", () => {
     expect(markup).not.toContain("sidebar-task-section");
   });
 
+  it("shows the exact reminder boundary and keeps parallel navigation enabled during a run", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(<I18nProvider><Sidebar
+      projectName="demo" projectPath="C:/demo" iconSrc="./ecode-icon.png" activeSessionFile="large.jsonl"
+      sessions={[
+        { path: "small.jsonl", id: "small", title: "Small", modifiedAt: 1, messageCount: 1, byteSize: 10 * 1024 * 1024 - 1 },
+        { path: "large.jsonl", id: "large", title: "Large", modifiedAt: 2, messageCount: 1, byteSize: 10 * 1024 * 1024, runStatus: "running" },
+      ]}
+      disabled parallel={{ maxRunning: 2, runningCount: 1, canCreate: true, reason: null }}
+      taskPlan={null} settingsActive={false} open onStopSession={vi.fn()} onChooseProject={vi.fn()} onNewSession={vi.fn()}
+      onSwitchSession={vi.fn()} onDeleteSession={vi.fn()} onOpenSettings={vi.fn()} onCollapse={vi.fn()}
+    /></I18nProvider>);
+    expect(markup.match(/Consider a new thread/g)).toHaveLength(1);
+    expect(markup).toContain("10.0 MiB");
+    expect(markup).toContain("1/2 running");
+    expect(markup).toContain('aria-label="Stop “Large”"');
+    expect(markup).not.toMatch(/class="session-row-main"[^>]*disabled/u);
+    expect(markup).not.toMatch(/class="new-thread-button"[^>]*disabled/u);
+  });
+
   it("keeps the sidebar mounted and animates collapse through a reversible transition", () => {
     const stylesheet = readFileSync(new URL("../styles/components/legacy.css", import.meta.url), "utf8");
     expect(stylesheet).toMatch(/\.sidebar\s*\{[^}]*margin-left:\s*calc\(0px - var\(--sidebar-width\)\);[^}]*opacity:\s*0;/u);

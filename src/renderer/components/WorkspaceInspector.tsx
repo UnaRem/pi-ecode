@@ -8,11 +8,14 @@ import { ValidationStepList, ValidationStepStatusIcon } from "./ValidationSteps"
 import type { ManagedProcess } from "@shared/process-contracts";
 import { ManagedProcessPanel } from "./ManagedProcessPanel";
 import { McpToolDirectory } from "./McpToolDirectory";
+import { ToolStatisticsPanel } from "./ToolStatisticsPanel";
+import type { ToolStatistic } from "../../shared/tool-statistics";
 import type { McpToolSummary } from "../../shared/mcp-contracts.js";
 
 interface WorkspaceInspectorProps {
   tools: ToolActivity[];
   mcpTools?: McpToolSummary[];
+  toolStatistics?: ToolStatistic[];
   selectedTool: ToolActivity | null;
   validation: ValidationState;
   review: ChangeReview;
@@ -177,6 +180,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const renderTab = (target: InspectorTab) => target === "tools" ? <>
     <ManagedProcessPanel key={props.projectPath} processes={props.processes ?? []} onStop={props.onStopManagedProcess ?? (async () => { throw new Error(t("process.stopUnavailable")); })} />
     <McpToolDirectory tools={props.mcpTools ?? []} />
+    <ToolStatisticsPanel statistics={props.toolStatistics ?? []} />
     <ToolQueue {...props} onSelect={props.onSelectTool} />
     <OutputPanel {...props} />
     <ChangeFiles {...props} />

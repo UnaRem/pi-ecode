@@ -18,6 +18,7 @@ const api: DesktopApi = {
   continueAfterError: () => ipcRenderer.invoke(IPC_CHANNELS.continueAfterError),
   prompt: (message, images) => ipcRenderer.invoke(IPC_CHANNELS.prompt, message, images),
   stop: () => ipcRenderer.invoke(IPC_CHANNELS.stop),
+  stopSession: (path) => ipcRenderer.invoke(IPC_CHANNELS.stopSession, path),
   setModel: (provider, modelId) => ipcRenderer.invoke(IPC_CHANNELS.setModel, provider, modelId),
   setThinkingLevel: (level: ThinkingLevel) => ipcRenderer.invoke(IPC_CHANNELS.setThinkingLevel, level),
   undo: () => ipcRenderer.invoke(IPC_CHANNELS.undo),

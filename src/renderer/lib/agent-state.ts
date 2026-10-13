@@ -12,7 +12,8 @@ export interface PendingPrompt {
 export type AgentViewEvent = AgentEvent
   | { type: "prompt-started"; prompt: Omit<PendingPrompt, "settled"> }
   | { type: "prompt-finished"; id: string }
-  | { type: "prompt-failed"; id: string; error: string }
+  | { type: "prompt-failed"; id: string; error: string; prompt?: PendingPrompt }
+  | { type: "prompt-recovered"; prompts: PendingPrompt[]; error: string }
   | { type: "editor-restored"; version: number }
   | { type: "timeline-page"; page: AgentTimelinePage };
 
@@ -167,7 +168,8 @@ function finishPendingPrompt(
   event: Extract<AgentViewEvent, { type: "prompt-failed" | "prompt-finished" }>,
 ): AgentViewState {
   const pending = state.pendingPrompts.find((prompt) => prompt.id === event.id);
-  if (!pending) return state; // Already accepted, or the user switched sessions.
+  if (!pending) return event.type === "prompt-failed" && event.prompt
+    ? restorePendingPrompts({ ...state, error: event.error }, [event.prompt]) : state;
   if (event.type === "prompt-finished" && state.isStreaming) {
     return { ...state, pendingPrompts: state.pendingPrompts.map((prompt) => prompt.id === event.id ? { ...prompt, settled: true } : prompt) };
   }
@@ -177,6 +179,8 @@ function finishPendingPrompt(
 }
 
 export function reduceAgentEvent(state: AgentViewState, event: AgentViewEvent): AgentViewState {
+  if ("sessionId" in event && event.sessionId && event.type !== "snapshot" && event.sessionId !== state.sessionId) return state;
+  if (event.type === "prompt-recovered") return restorePendingPrompts({ ...state, error: event.error }, event.prompts);
   if (event.type === "timeline-page") {
     return { ...state, timeline: event.page.timeline, timelineHasMore: event.page.hasMore };
   }
@@ -218,6 +222,8 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
       return { ...state, timeline: upsertTimeline(state.timeline, event.item) };
     case "mcp-tools":
       return { ...state, mcpTools: event.tools };
+    case "tool-statistics":
+      return { ...state, toolStatistics: event.statistics };
     case "context":
       return { ...state, context: event.context };
     case "task-plan":
@@ -228,6 +234,8 @@ function reduceServerEvent(state: AgentViewState, event: AgentEvent): AgentViewS
       return { ...state, extensionUi: event.request };
     case "state":
       return { ...state, ...event.patch };
+    case "parallel":
+      return { ...state, parallel: event.parallel };
     case "sessions":
       return { ...state, sessions: event.sessions };
     case "history":

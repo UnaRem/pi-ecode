@@ -4,6 +4,7 @@ import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "../../shared/contracts.js";
 import { IPC_CHANNELS } from "../../shared/contracts.js";
 import type { AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest } from "../../shared/settings-contracts.js";
+import type { ProjectSessionService } from "../agent/project-session-service.js";
 import type { AgentService } from "../agent/agent-service.js";
 import type { AppConfigService } from "../app-config/app-config-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
@@ -96,8 +97,9 @@ function isSaveInstructionFileRequest(value: unknown): value is SaveInstructionF
     && (request.expectedRevision === null || typeof request.expectedRevision === "string");
 }
 
-export function registerIpc(service: AgentService, settings: SettingsService, appConfig: AppConfigService): () => void {
-  const projectGit = new ProjectGitService(() => service.activeProjectPath ?? null);
+export function registerIpc(service: AgentService | ProjectSessionService, settings: SettingsService, appConfig: AppConfigService): () => void {
+  const active = (): AgentService => "activeService" in service ? service.activeService : service;
+  const projectGit = new ProjectGitService(() => active().activeProjectPath ?? null);
   ipcMain.handle(IPC_CHANNELS.chooseProject, async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
     const result = owner
@@ -111,39 +113,43 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
     return snapshot;
   });
   ipcMain.handle(IPC_CHANNELS.getSnapshot, () => service.getSnapshot());
-  ipcMain.handle(IPC_CHANNELS.loadOlderTimeline, () => service.loadOlderTimeline());
+  ipcMain.handle(IPC_CHANNELS.loadOlderTimeline, () => active().loadOlderTimeline());
   ipcMain.handle(IPC_CHANNELS.getToolOutput, (_event, toolCallId: unknown) => {
     if (typeof toolCallId !== "string") throw new Error("Invalid tool call id.");
-    return service.getToolOutput(toolCallId);
+    return active().getToolOutput(toolCallId);
   });
   ipcMain.handle(IPC_CHANNELS.getConversationImage, (_event, sourceId: unknown) => {
     if (typeof sourceId !== "string") throw new Error("Invalid conversation image id.");
-    return service.getConversationImage(sourceId);
+    return active().getConversationImage(sourceId);
   });
   ipcMain.handle(IPC_CHANNELS.newSession, () => service.newSession());
   ipcMain.handle(IPC_CHANNELS.switchSession, (_event, path: string) => service.switchSession(path));
   ipcMain.handle(IPC_CHANNELS.deleteSession, (_event, path: string) => service.deleteSession(path));
-  ipcMain.handle(IPC_CHANNELS.renameSession, (_event, title: string) => service.renameSession(title));
+  ipcMain.handle(IPC_CHANNELS.renameSession, (_event, title: string) => active().renameSession(title));
   ipcMain.handle(IPC_CHANNELS.continueAfterError, () => service.continueAfterError());
   ipcMain.handle(IPC_CHANNELS.prompt, (_event, message: string, images?: ImageAttachment[]) => service.prompt(message, images));
-  ipcMain.handle(IPC_CHANNELS.stop, () => service.stop());
-  ipcMain.handle(IPC_CHANNELS.setModel, (_event, provider: string, modelId: string) => service.setModel(provider, modelId));
-  ipcMain.handle(IPC_CHANNELS.setThinkingLevel, (_event, level: ThinkingLevel) => service.setThinkingLevel(level));
+  ipcMain.handle(IPC_CHANNELS.stop, () => active().stop());
+  ipcMain.handle(IPC_CHANNELS.stopSession, (_event, path: unknown) => {
+    if (typeof path !== "string" || !path || path.length > 4096 || !("stopSession" in service)) throw new Error("会话停止目标无效。");
+    return service.stopSession(path);
+  });
+  ipcMain.handle(IPC_CHANNELS.setModel, (_event, provider: string, modelId: string) => active().setModel(provider, modelId));
+  ipcMain.handle(IPC_CHANNELS.setThinkingLevel, (_event, level: ThinkingLevel) => active().setThinkingLevel(level));
   ipcMain.handle(IPC_CHANNELS.undo, () => service.undo());
   ipcMain.handle(IPC_CHANNELS.redo, () => service.redo());
   ipcMain.handle(IPC_CHANNELS.runValidation, () => service.runValidation());
-  ipcMain.handle(IPC_CHANNELS.stopValidation, () => service.stopValidation());
+  ipcMain.handle(IPC_CHANNELS.stopValidation, () => active().stopValidation());
   ipcMain.handle(IPC_CHANNELS.stopManagedProcess, (_event, id: unknown) => {
     if (typeof id !== "string" || !id.trim() || id.length > 200) throw new Error("托管进程 ID 无效。");
-    return service.stopManagedProcess(id);
+    return active().stopManagedProcess(id);
   });
-  ipcMain.handle(IPC_CHANNELS.getReview, () => service.getReview());
+  ipcMain.handle(IPC_CHANNELS.getReview, () => active().getReview());
   ipcMain.handle(IPC_CHANNELS.rejectReviewFile, (_event, path: string) => service.rejectReviewFile(path));
-  ipcMain.handle(IPC_CHANNELS.prepareCandidate, () => service.prepareCandidate());
-  ipcMain.handle(IPC_CHANNELS.activateCandidate, () => service.activateCandidate());
-  ipcMain.handle(IPC_CHANNELS.rendererReady, () => service.rendererReady());
-  ipcMain.handle(IPC_CHANNELS.compact, () => service.compact());
-  ipcMain.handle(IPC_CHANNELS.cancelCompact, () => service.cancelCompaction());
+  ipcMain.handle(IPC_CHANNELS.prepareCandidate, () => active().prepareCandidate());
+  ipcMain.handle(IPC_CHANNELS.activateCandidate, () => active().activateCandidate());
+  ipcMain.handle(IPC_CHANNELS.rendererReady, () => ("rootService" in service ? service.rootService : active()).rendererReady());
+  ipcMain.handle(IPC_CHANNELS.compact, () => active().compact());
+  ipcMain.handle(IPC_CHANNELS.cancelCompact, () => active().cancelCompaction());
   ipcMain.handle(IPC_CHANNELS.notifyCompactionComplete, (_event, title: unknown, body: unknown) => {
     if (typeof title !== "string" || typeof body !== "string" || !Notification.isSupported()) return false;
     const safeTitle = title.trim().slice(0, 80);
@@ -153,7 +159,7 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
     return true;
   });
   ipcMain.handle(IPC_CHANNELS.respondExtensionUi, (_event, response: unknown) => (
-    isExtensionUiResponse(response) && service.respondExtensionUi(response)
+    isExtensionUiResponse(response) && active().respondExtensionUi(response)
   ));
   ipcMain.handle(IPC_CHANNELS.getSettings, () => settings.getSnapshot());
   ipcMain.handle(IPC_CHANNELS.saveConfig, (_event, request: unknown) => {
@@ -167,18 +173,18 @@ export function registerIpc(service: AgentService, settings: SettingsService, ap
   ipcMain.handle(IPC_CHANNELS.reloadSettings, () => settings.reload());
   ipcMain.handle(IPC_CHANNELS.loginProvider, async (_event, providerId: unknown, type: unknown) => {
     if (typeof providerId !== "string" || !isAuthType(type)) throw new Error("Invalid authentication request.");
-    await service.loginProvider(providerId, type);
+    await active().loginProvider(providerId, type);
     await settings.runtimeStateChanged();
   });
   ipcMain.handle(IPC_CHANNELS.logoutProvider, async (_event, providerId: unknown) => {
     if (typeof providerId !== "string") throw new Error("Invalid provider id.");
-    await service.logoutProvider(providerId);
+    await active().logoutProvider(providerId);
     return settings.reload();
   });
   ipcMain.handle(IPC_CHANNELS.respondAuthPrompt, (_event, response: unknown) => (
-    isAuthPromptResponse(response) && service.respondAuthPrompt(response)
+    isAuthPromptResponse(response) && active().respondAuthPrompt(response)
   ));
-  ipcMain.handle(IPC_CHANNELS.cancelAuth, () => service.cancelAuth());
+  ipcMain.handle(IPC_CHANNELS.cancelAuth, () => active().cancelAuth());
   ipcMain.handle(IPC_CHANNELS.getProjectGitStatus, () => projectGit.getStatus());
   ipcMain.handle(IPC_CHANNELS.pushProject, () => projectGit.push());
   ipcMain.handle(IPC_CHANNELS.getAppConfig, () => appConfig.getSnapshot());

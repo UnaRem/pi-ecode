@@ -12,7 +12,9 @@ The first usable release includes:
 
 - selecting a local working directory;
 - persistent pi sessions scoped to that directory;
-- creating and switching sessions;
+- creating and switching sessions, displaying session file sizes with a 10 MiB reminder, and generating a short title after the first message;
+- up to two user sessions executing in parallel in independent Git worktrees, with per-session stopping and explicit workspace paths;
+- local tool capability recommendations and per-device execution statistics;
 - streaming assistant text and visible tool activity;
 - sending, steering, and stopping work;
 - selecting an available model and thinking level;
@@ -43,13 +45,18 @@ src/main      windows, native dialogs, pi SDK, filesystem/session lifecycle
 - Only `src/main/agent/` and `src/main/history/` may import `@earendil-works/pi-coding-agent` or `@earendil-works/pi-ai`.
 - IPC contracts live in `src/shared/`. Main, preload, and renderer must use those shared types.
 - Do not send class instances over IPC. Map SDK values and events to small serializable view models.
-- Keep one active pi runtime per application window for the MVP. Replacing project or session must dispose the previous runtime and unsubscribe its listeners.
+- Keep one selected project and one foreground session per window. `ProjectSessionService` owns independent `AgentService` instances, allows at most two executing sessions, and never disposes an executing session just because the foreground changes. Project replacement and shutdown must await every runtime and managed-process cleanup; retain failed registrations for retry.
+- New Git conversations use retained worktrees outside the project, based on HEAD at creation; do not copy uncommitted changes, merge results, or delete worktrees automatically. Non-Git or unborn repositories remain single-session. Historical sessions sharing the original cwd may be viewed during background work, but must not execute concurrently in that same cwd.
 - The active working directory is explicit state. Never silently fall back to the app repository or home directory after the user selected another project.
 
 ## State and event rules
 
 - Main process owns authoritative agent state: project, active session, model, thinking level, streaming status, available sessions, workspace history, and validation results.
-- Renderer owns ephemeral presentation state: composer text, expanded tool cards, sidebar visibility, and scroll position.
+- Renderer owns ephemeral presentation state: composer drafts per session, expanded tool cards, sidebar visibility, and scroll position. Recover failed background sends in their originating session.
+- `projectPath` identifies the selected project; `workspacePath` identifies the foreground agent's actual cwd. Route narrow IPC operations to that foreground service at request acceptance. Tag foreground events with session IDs and discard stale events; project-wide session summaries and parallel counts remain unscoped.
+- `agent:stop-session` accepts only a bounded session-file string and resolves it against the current project's loaded service registrations; never accept PID, command, or arbitrary runtime targets. Workspace undo, redo and file rejection reserve the active runtime, block session transitions until restoration finishes, and finish before shutdown disposes the runtime; apply deferred configuration only when all sessions are idle and shutdown has not started.
+- Title generation uses the selected model in a separate bounded request after the first user message is persisted. Persist the attempt, preserve user renames, and cancel requests when their runtime is disposed.
+- Tool advice is transient request context. Match capabilities before ranking local samples; fewer than five completed calls is insufficient evidence. Record execution success/failure, cancellation, blocking and nested calls separately; none of these proves task completion. Store only aggregate counts and the latest 128 durations, outside the project, using a shared atomic writer keyed by device, hostname, OS and architecture.
 - On startup or project change, renderer requests one snapshot and then applies ordered events.
 - Treat the final SDK `message_end` payload as authoritative. Streaming deltas are temporary display state.
 - Correlate tool activity by `toolCallId`; updates replace prior partial output, and end events finalize it.
@@ -105,7 +112,7 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 
 ## Main-session execution
 
-- pi-ecode runs all work in the main session; it has no subagent runtimes, dispatch tools, catalog, or management UI.
+- Each user conversation performs all work in its own main session. Parallel user conversations are independent main-session runtimes, not subagents; there are no subagent dispatch tools, catalog, or management UI.
 - The main session implements changes directly within the user's authorization, rereads changed files, runs final validation, reviews the diff and `git status`, and commits verified work.
 - Main-session `run_validation` uses the background dispatch protocol; do not poll or duplicate runs. Later source edits invalidate previous results.
 - Before loading sessions at startup, remove retired subagent catalogs/session directories and `pi-ecode.explorer-*` custom records from main histories. Preserve main messages, unrelated extension records, session IDs, tree references, compaction boundaries, and file modification times. Stream large JSONL files and replace them atomically; leave originals intact on failure.
@@ -127,7 +134,7 @@ npm test
 npm run build
 ```
 
-For UI changes, also launch `npm run dev` and manually verify project selection, session switching, send/stream/stop, keyboard input, long tool output, and an error state. Tests should cover pure event reducers and SDK-to-view-model mapping before pixel-level component snapshots.
+For UI changes, manually verify project selection, session switching, send/stream/stop, keyboard input, long tool output, error states and reduced motion. The owner launches the development runtime; do not automatically start dev or preview servers. Tests should cover pure event reducers and SDK-to-view-model mapping before pixel-level component snapshots.
 
 ## Delivery workflow
 
@@ -142,7 +149,7 @@ For UI changes, also launch `npm run dev` and manually verify project selection,
 - Workspace history is a core project module. Keep its storage outside the selected workspace and do not make correctness depend on a globally installed checkpoint extension.
 - Validation commands are selected from an internal allowlist. Never accept an arbitrary executable or shell command from the renderer for the self-hosting pipeline.
 - A successful validation becomes stale after a new agent run, workspace restore, or observed source change. Do not present stale checks as proof that the current source is safe to adopt.
-- Candidate preparation requires a current successful validation and the recognized pi-ecode source project. Stage candidates outside the workspace.
+- Candidate preparation requires a current successful validation and the recognized pi-ecode source project. Retained worktree services cannot prepare or activate self-update candidates. Stage candidates outside the workspace.
 - Never overwrite the frozen previous runtime after validation has rebuilt `out/`. The supervisor must retain an immutable fallback until candidate health is confirmed.
 - Candidate health requires main, preload, renderer, IPC, and initial project/runtime restoration to complete. A process merely staying alive is not healthy.
 - Keep self-update disabled for packaged builds until a packaging-aware external launcher is implemented.

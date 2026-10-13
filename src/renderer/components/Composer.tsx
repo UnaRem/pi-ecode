@@ -7,7 +7,16 @@ import { useI18n, type Translate } from "../i18n/i18n";
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
+export interface ComposerDraft {
+  text: string;
+  images: ImageAttachment[];
+  pastedTexts: PastedTextAttachment[];
+  pdfFile: File | null;
+}
+
 export interface ComposerProps {
+  initialDraft?: ComposerDraft | undefined;
+  onDraftChange?: ((draft: ComposerDraft) => void) | undefined;
   isStreaming: boolean;
   pendingCount: number;
   modelReady: boolean;
@@ -72,13 +81,17 @@ function clipboardImages(event: ClipboardEvent<HTMLTextAreaElement>): File[] {
 
 export function Composer(props: ComposerProps) {
   const { t } = useI18n();
-  const [text, setText] = useState("");
-  const [images, setImages] = useState<ImageAttachment[]>([]);
-  const [pastedTexts, setPastedTexts] = useState<PastedTextAttachment[]>([]);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [text, setText] = useState(props.initialDraft?.text ?? "");
+  const [images, setImages] = useState<ImageAttachment[]>(props.initialDraft?.images ?? []);
+  const [pastedTexts, setPastedTexts] = useState<PastedTextAttachment[]>(props.initialDraft?.pastedTexts ?? []);
+  const [pdfFile, setPdfFile] = useState<File | null>(props.initialDraft?.pdfFile ?? null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    props.onDraftChange?.({ text, images, pastedTexts, pdfFile });
+  }, [text, images, pastedTexts, pdfFile, props.onDraftChange]);
 
   useEffect(() => {
     if (props.restoredText !== null) {
@@ -87,8 +100,8 @@ export function Composer(props: ComposerProps) {
         ? [restored.message, current].filter(Boolean).join("\n\n") : restored.message);
       setPastedTexts((current) => props.restoreMode === "merge" ? [...restored.attachments, ...current] : restored.attachments);
     }
-    setImages((current) => props.restoreMode === "merge" ? [...props.restoredImages, ...current] : props.restoredImages);
     if (props.restoredText !== null || props.restoredImages.length > 0) {
+      setImages((current) => props.restoreMode === "merge" ? [...props.restoredImages, ...current] : props.restoredImages);
       requestAnimationFrame(() => textareaRef.current?.focus());
     }
     props.onEditorRestored?.(props.restoreVersion);

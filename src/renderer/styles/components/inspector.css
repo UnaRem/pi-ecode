@@ -95,15 +95,28 @@
 .inspector-patch.open .inspector-patch-reveal { grid-template-rows: 1fr; opacity: 1; }
 .inspector-patch-reveal pre { min-height: 0; max-height: 220px; margin: 0; padding: 0 var(--space-3); overflow: hidden; border-radius: var(--radius-md); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre; transition: padding var(--duration-standard) var(--ease-standard); }
 .inspector-patch.open .inspector-patch-reveal pre { padding-block: var(--space-3); overflow: auto; }
+.tool-statistics-note, .tool-statistics-detail { color: var(--color-text-muted); font-size: 10px; line-height: 1.5; }
+.tool-statistics-detail { max-height: 240px; padding: 0 var(--space-2) var(--space-2); overflow: auto; }
+.tool-statistics-detail p { margin: 6px 0; }
+.tool-statistics-detail dl { margin: 0; font-variant-numeric: tabular-nums; }
+.tool-statistics-detail dl > div { display: flex; justify-content: space-between; gap: var(--space-2); }
+.tool-statistics-detail dd { margin: 0; color: var(--color-text); }
 .inspector-mcp > p { color: var(--color-text-muted); font-size: 11px; line-height: 1.5; }
-.inspector-mcp-server { border-bottom: 1px solid var(--color-border); }
-.inspector-mcp-server summary { padding: var(--space-2); cursor: pointer; color: var(--color-text-muted); transition: color 120ms ease; }
-.inspector-mcp-server summary:hover { color: var(--color-text); }
-.inspector-mcp-server summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
-.inspector-mcp-server summary span { float: right; font-size: 11px; }
+.inspector-mcp-server { border-bottom: 1px solid var(--color-border); interpolate-size: allow-keywords; }
+.inspector-mcp-server summary { display: flex; align-items: center; gap: var(--space-2); min-height: 36px; padding: var(--space-2); list-style: none; cursor: pointer; color: var(--color-text-muted); font-size: 11px; line-height: 1.5; transition: color 120ms ease, background-color 120ms ease; }
+.inspector-mcp-server summary::-webkit-details-marker { display: none; }
+.inspector-mcp-server summary > svg { flex: 0 0 auto; transition: transform 180ms var(--ease-standard); }
+.inspector-mcp-server[open] summary > svg { transform: rotate(90deg); }
+.inspector-mcp-server summary strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; font-weight: 600; }
+.inspector-mcp-server summary:hover { color: var(--color-text); background: var(--color-surface-muted); }
+.inspector-mcp-server summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
+.inspector-mcp-server summary span { flex: 0 0 auto; min-width: 24px; color: var(--color-text-faint); font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
+/* Native details owns hidden focusability; its content transition can reverse without delayed unmounts. */
+.inspector-mcp-server::details-content { height: 0; overflow: clip; opacity: 0; transition: height 180ms var(--ease-standard), opacity 180ms ease, content-visibility 180ms allow-discrete; }
+.inspector-mcp-server[open]::details-content { height: auto; opacity: 1; }
 .inspector-mcp-server ul { max-height: 300px; margin: 0; padding: 0 var(--space-2); overflow: auto; list-style: none; }
 .inspector-mcp-server li { padding-block: var(--space-2); }
 .inspector-mcp-server code { display: block; font-size: 10px; overflow-wrap: anywhere; }
 .inspector-mcp-exposure { color: var(--color-text-faint); font-size: 10px; }
 .inspector-mcp-server li p { margin: 4px 0 0; color: var(--color-text-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-@media (prefers-reduced-motion: reduce) { .inspector-mcp-server summary { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .inspector-mcp-server summary, .inspector-mcp-server summary > svg, .inspector-mcp-server::details-content { transition: none; } }

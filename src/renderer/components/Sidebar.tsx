@@ -1,7 +1,8 @@
-import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings, Trash2 } from "lucide-react";
+import { FolderOpen, MessageSquarePlus, PanelLeftClose, Settings, Square, Trash2 } from "lucide-react";
 import type { SessionSummary, TaskPlan } from "@shared/contracts";
 import type { WorkAnimatorSettings } from "@shared/work-animator";
 import { TaskPlanPresence, TaskWorkStatus } from "./TaskPlanPanel";
+import { formatSessionSize, LARGE_SESSION_BYTES } from "../../shared/session-size";
 import { useI18n } from "../i18n/i18n";
 
 interface SidebarProps {
@@ -11,6 +12,8 @@ interface SidebarProps {
   sessions: SessionSummary[];
   activeSessionFile: string | null;
   disabled: boolean;
+  parallel?: { runningCount: number; maxRunning: number; canCreate: boolean; reason: string | null } | undefined;
+  onStopSession?: ((path: string) => void) | undefined;
   taskPlan: TaskPlan | null;
   workAnimator?: WorkAnimatorSettings | undefined;
   settingsActive: boolean;
@@ -50,36 +53,48 @@ export function Sidebar(props: SidebarProps) {
         </button>
       </div>
 
-      <button className="new-thread-button" onClick={props.onNewSession} disabled={props.disabled}>
+      <button className="new-thread-button" onClick={props.onNewSession} disabled={props.parallel ? !props.parallel.canCreate : props.disabled} title={props.parallel?.reason ?? undefined}>
         <MessageSquarePlus size={16} />
         {t("sidebar.newThread")}
         <kbd>Ctrl N</kbd>
       </button>
 
-      <div className="sidebar-label">{t("sidebar.threads")}</div>
+      <div className="sidebar-label">{t("sidebar.threads")}{props.parallel && <small>{t("sidebar.parallelCount", { count: props.parallel.runningCount, max: props.parallel.maxRunning })}</small>}</div>
+      {props.parallel?.reason && <p className="sidebar-parallel-note">{t("sidebar.singleSession")}</p>}
       <nav className="session-list" aria-label={t("sidebar.sessions")}>
         {props.sessions.length === 0 ? (
           <p className="sidebar-empty">{t("sidebar.empty")}</p>
         ) : (
           props.sessions.map((session) => {
             const active = session.path === props.activeSessionFile;
+            const large = (session.byteSize ?? 0) >= LARGE_SESSION_BYTES;
+            const size = session.byteSize == null ? t("sidebar.sizeUnknown") : formatSessionSize(session.byteSize);
             return (
               <div key={session.path} className={`session-row ${active ? "active" : ""}`}>
                 <button
                   className="session-row-main"
                   onClick={() => props.onSwitchSession(session.path)}
-                  disabled={props.disabled}
+                  disabled={!props.parallel && props.disabled}
+                  title={session.workspacePath}
                 >
-                  <span>{session.title}</span>
+                  <span className="session-title">{session.title}</span>
                   <time>{relativeTime(session.modifiedAt, locale)}</time>
+                  <small className="session-meta" title={t("sidebar.fileSize", { size })}>
+                    <span className={`session-size ${large ? "large" : ""}`}>{size}{large ? ` · ${t("sidebar.largeSession")}` : ""}</span>
+                    {session.runStatus && <span className={`session-run-status ${session.runStatus}`}>{t(`sidebar.run.${session.runStatus}`)}</span>}
+                  </small>
                 </button>
-                {!active && (
+                {session.runStatus === "running" && props.onStopSession ? (
+                  <button className="session-stop-button" onClick={() => props.onStopSession?.(session.path)} aria-label={t("sidebar.stopSession", { title: session.title })} title={t("composer.stop")}>
+                    <Square size={12} fill="currentColor" aria-hidden="true" />
+                  </button>
+                ) : !active && (
                   <button
                     className="session-delete-button"
                     onClick={() => {
                       if (window.confirm(t("sidebar.confirmDelete", { title: session.title }))) props.onDeleteSession(session.path);
                     }}
-                    disabled={props.disabled}
+                    disabled={!props.parallel && props.disabled}
                     aria-label={t("sidebar.deleteSession")}
                     title={t("sidebar.deleteSession")}
                   >

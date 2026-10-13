@@ -47,16 +47,18 @@ vi.mock("electron", () => ({
   screen: { getPrimaryDisplay: () => ({ workArea: { width: 1100, height: 720, y: 0 } }) },
   shell: {},
 }));
-vi.mock("./agent/agent-service.js", () => ({
-  AgentService: class {
+vi.mock("./agent/agent-service.js", async () => {
+  const { EMPTY_AGENT_SNAPSHOT } = await import("./agent/empty-agent-snapshot.js");
+  return { AgentService: class {
     agentDirectory = "test-agents";
     initialize() { return Promise.resolve(); }
+    getSnapshot() { return Promise.resolve({ ...EMPTY_AGENT_SNAPSHOT }); }
     subscribe() { return () => undefined; }
     subscribeAuth() { return () => undefined; }
     dispose = harness.serviceDispose;
     reportError = harness.reportError;
-  },
-}));
+  } };
+});
 vi.mock("./settings/settings-service.js", () => ({
   SettingsService: class {
     start() { return Promise.resolve(); }

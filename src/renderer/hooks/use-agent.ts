@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ExtensionUiResponse, ImageAttachment, ThinkingLevel } from "@shared/contracts";
-import { INITIAL_AGENT_STATE, optimisticTimeline, reduceAgentEvent } from "@renderer/lib/agent-state";
+import { INITIAL_AGENT_STATE, optimisticTimeline, reduceAgentEvent, type PendingPrompt } from "@renderer/lib/agent-state";
 
 const LAST_PROJECT_KEY = "pi-ecode:last-project";
 
@@ -13,19 +13,38 @@ export function useAgent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const switchingSession = useRef(false);
+  const activeSession = useRef(state.sessionId);
+  const failedPrompts = useRef(new Map<string, { prompts: PendingPrompt[]; error: string }>());
+  const submissions = useRef(new Map<string, { sessionId: string | null; accepted: boolean }>());
   const timeline = useMemo(() => optimisticTimeline(state), [state.timeline, state.pendingPrompts]);
 
   const run = useCallback(async <T,>(operation: () => Promise<T>): Promise<T | undefined> => {
+    const sessionId = activeSession.current;
     try {
       return await operation();
     } catch (error) {
-      dispatch({ type: "error", message: messageFromError(error) });
+      if (activeSession.current === sessionId) dispatch({ type: "error", message: messageFromError(error) });
       return undefined;
     }
   }, []);
 
   useEffect(() => {
-    const unsubscribe = window.piDesktop.subscribe((event) => dispatch(event));
+    const unsubscribe = window.piDesktop.subscribe((event) => {
+      if (event.type === "snapshot") activeSession.current = event.snapshot.sessionId;
+      if (event.type === "timeline-upsert" && event.item.kind === "message" && event.item.message.role === "user") {
+        const sessionId = event.sessionId ?? activeSession.current;
+        const pending = [...submissions.current.values()].find((submission) => submission.sessionId === sessionId && !submission.accepted);
+        if (pending) pending.accepted = true;
+      }
+      dispatch(event);
+      if (event.type === "snapshot" && event.snapshot.sessionId) {
+        const failed = failedPrompts.current.get(event.snapshot.sessionId);
+        if (failed) {
+          failedPrompts.current.delete(event.snapshot.sessionId);
+          dispatch({ type: "prompt-recovered", ...failed });
+        }
+      }
+    });
     const restore = async (): Promise<void> => {
       let snapshot = await run(() => window.piDesktop.getSnapshot());
       if (!snapshot?.projectPath) {
@@ -36,6 +55,7 @@ export function useAgent() {
         }
       }
       if (snapshot) {
+        activeSession.current = snapshot.sessionId;
         dispatch({ type: "snapshot", snapshot });
         if (snapshot.projectPath) localStorage.setItem(LAST_PROJECT_KEY, snapshot.projectPath);
       }
@@ -53,18 +73,18 @@ export function useAgent() {
     const snapshot = await run(() => window.piDesktop.openProject(path));
     if (snapshot) {
       localStorage.setItem(LAST_PROJECT_KEY, path);
+      activeSession.current = snapshot.sessionId;
       dispatch({ type: "snapshot", snapshot });
     }
     setIsLoading(false);
   }, [run]);
 
   const newSession = useCallback(async () => {
-    const snapshot = await run(() => window.piDesktop.newSession());
-    if (snapshot) dispatch({ type: "snapshot", snapshot });
+    await run(() => window.piDesktop.newSession());
   }, [run]);
 
   const switchSession = useCallback(async (path: string) => {
-    if (path === state.sessionFile || state.isStreaming || switchingSession.current) return;
+    if (path === state.sessionFile || (!state.parallel && state.isStreaming) || switchingSession.current) return;
     switchingSession.current = true;
     try {
       // Main 广播权威快照；请求返回值不再重复应用同一份状态。
@@ -72,12 +92,16 @@ export function useAgent() {
     } finally {
       switchingSession.current = false;
     }
-  }, [run, state.isStreaming, state.sessionFile]);
+  }, [run, state.isStreaming, state.sessionFile, state.parallel]);
 
   const deleteSession = useCallback(async (path: string) => {
-    if (path === state.sessionFile || state.isStreaming) return;
+    if (path === state.sessionFile || (!state.parallel && state.isStreaming)) return;
     await run(() => window.piDesktop.deleteSession(path));
-  }, [run, state.isStreaming, state.sessionFile]);
+  }, [run, state.isStreaming, state.sessionFile, state.parallel]);
+
+  const stopSession = useCallback(async (path: string) => {
+    await run(() => window.piDesktop.stopSession(path));
+  }, [run]);
 
   const stopManagedProcess = useCallback(async (id: string): Promise<void> => {
     try {
@@ -95,12 +119,13 @@ export function useAgent() {
 
   const loadOlderTimeline = useCallback(async () => {
     if (!state.timelineHasMore || isLoadingOlder) return;
+    const sessionId = activeSession.current;
     setIsLoadingOlder(true);
     try {
       const page = await window.piDesktop.loadOlderTimeline();
-      dispatch({ type: "timeline-page", page });
+      if (activeSession.current === sessionId) dispatch({ type: "timeline-page", page });
     } catch (error) {
-      dispatch({ type: "error", message: messageFromError(error) });
+      if (activeSession.current === sessionId) dispatch({ type: "error", message: messageFromError(error) });
     } finally {
       setIsLoadingOlder(false);
     }
@@ -113,14 +138,24 @@ export function useAgent() {
 
   const send = useCallback(async (message: string, images: ImageAttachment[] = []) => {
     const id = `pending-user-${crypto.randomUUID()}`;
+    const sessionId = activeSession.current;
+    const prompt: PendingPrompt = { id, text: message, images, timestamp: Date.now(), settled: false };
+    const submission = { sessionId, accepted: false };
+    submissions.current.set(id, submission);
     // Show the local echo before IPC; its completion can mean queueing, not acceptance.
-    dispatch({ type: "prompt-started", prompt: { id, text: message, images, timestamp: Date.now() } });
+    dispatch({ type: "prompt-started", prompt });
     try {
       await window.piDesktop.prompt(message, images);
       dispatch({ type: "prompt-finished", id });
     } catch (error) {
-      dispatch({ type: "prompt-failed", id, error: messageFromError(error) });
-    }
+      const failure = messageFromError(error);
+      if (submission.accepted) {
+        if (activeSession.current === sessionId) dispatch({ type: "error", message: failure });
+      } else if (sessionId && activeSession.current !== sessionId) {
+        const previous = failedPrompts.current.get(sessionId);
+        failedPrompts.current.set(sessionId, { prompts: [...(previous?.prompts ?? []), prompt], error: failure });
+      } else dispatch({ type: "prompt-failed", id, error: failure, prompt });
+    } finally { submissions.current.delete(id); }
   }, []);
 
   const editorRestored = useCallback((version: number) => {
@@ -194,6 +229,7 @@ export function useAgent() {
       newSession,
       switchSession,
       deleteSession,
+      stopSession,
       stopManagedProcess,
       renameSession,
       loadOlderTimeline,

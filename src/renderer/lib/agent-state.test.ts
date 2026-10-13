@@ -11,6 +11,22 @@ const snapshot: AgentSnapshot = {
 };
 
 describe("reduceAgentEvent", () => {
+  it("ignores stale session events while accepting project-wide session status", () => {
+    const state = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "snapshot", snapshot });
+    expect(reduceAgentEvent(state, { type: "state", sessionId: "other", patch: { isStreaming: true, error: "other failure" } })).toBe(state);
+    expect(reduceAgentEvent(state, { type: "extension-ui", sessionId: "other", request: { id: "other-question", method: "input", title: "Other" } })).toBe(state);
+    const parallel = { maxRunning: 2, runningCount: 1, canCreate: true, reason: null };
+    expect(reduceAgentEvent(state, { type: "parallel", parallel }).parallel).toEqual(parallel);
+  });
+
+  it("restores a failed background send into its session editor when revisited", () => {
+    const state = reduceAgentEvent(INITIAL_AGENT_STATE, { type: "snapshot", snapshot });
+    const prompt = { id: "failed-background", text: "我的原始任务", images: [], timestamp: 1, settled: false };
+    const recovered = reduceAgentEvent(state, { type: "prompt-recovered", prompts: [prompt], error: "offline" });
+    expect(recovered.restoredEditorText).toBe("我的原始任务");
+    expect(recovered.editorRestoreMode).toBe("merge");
+    expect(recovered.error).toBe("offline");
+  });
   it("replaces managed process state from events and authoritative snapshots", () => {
     const processes = [{ id: "process-1", projectPath: "C:/project", sessionId: "session", originToolCallId: "call",
       command: "bun run dev", status: "running" as const, pid: 123, startedAt: 1, endedAt: null,

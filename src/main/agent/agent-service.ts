@@ -1,3 +1,5 @@
+import { hostname } from "node:os";
+import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
@@ -6,6 +8,7 @@ import {
   type AgentSessionEvent,
   type AgentSessionRuntime,
   type CreateAgentSessionRuntimeFactory,
+  type SettingsManager,
   createAgentSessionFromServices,
   createAgentSessionRuntime,
   createAgentSessionServices,
@@ -57,6 +60,9 @@ import { CodegraphToolService } from "./codegraph-tool.js";
 import { ValidationToolService } from "./validation-tool.js";
 import { ManagedProcessService } from "../processes/managed-process-service.js";
 import { ManagedProcessToolService } from "./managed-process-tool.js";
+import { toolStatisticsStore, type ToolStatisticsStore } from "./tool-statistics.js";
+import { toolAdvisorExtension } from "./tool-advisor.js";
+import { SessionTitleService } from "./session-title.js";
 import { configuredCompactionReserveTokens, contextBudgetReserveTokens } from "./context-budget.js";
 
 const HISTORY_PAGE_TURNS = 25;
@@ -75,6 +81,10 @@ export class AgentService {
   });
   private runtime: AgentSessionRuntime | undefined;
   private readonly sessionMcp = new WeakMap<AgentSession, NativeMcp>();
+  private readonly sessionTitles = new SessionTitleService((message) => this.emit({ type: "notice", message }));
+  private statistics: ToolStatisticsStore | undefined;
+  private statisticsError: string | null = null;
+  private unsubscribeStatistics: (() => void) | undefined;
 
   private createManagedProcesses(): ManagedProcessService {
     return new ManagedProcessService((processes) => this.emit({ type: "processes", processes }));
@@ -97,6 +107,7 @@ export class AgentService {
   private readonly liveTools = new Map<string, ToolActivity>();
   private liveAssistantId: string | undefined;
   private liveAssistantText = "";
+  private assistantStreaming = false;
   private liveAssistantSequence = 0;
   private readonly pendingStreamItems = new Map<string, ConversationItem>();
   private pendingStreamContext: AgentSession | undefined;
@@ -148,7 +159,7 @@ export class AgentService {
   private readonly validation = new ValidationService((validation) => {
     if (validation.status === "stale") this.candidate.invalidate();
     this.validationTool.onValidationChanged(validation);
-    this.emit({ type: "validation", validation });
+    this.emit({ type: "validation", validation: { ...validation, isSelfProject: this.options.allowSelfUpdate !== false && validation.isSelfProject } });
     this.scheduleCodegraphSync(validation);
     const session = this.runtime?.session;
     if (session) this.emit({ type: "state", patch: {
@@ -165,6 +176,7 @@ export class AgentService {
   constructor(
     openExternal: (url: string) => Promise<void> = async () => undefined,
     trashItem: (path: string) => Promise<void> = async () => { throw new Error("System trash is unavailable."); },
+    private readonly options: { allowSelfUpdate?: boolean } = {},
   ) {
     this.trashItem = trashItem;
     this.auth = new AuthService(
@@ -221,7 +233,7 @@ export class AgentService {
     this.pendingStreamContext = undefined;
   }
 
-  async openProject(inputPath: string): Promise<AgentSnapshot> {
+  async openProject(inputPath: string, sessionPath?: string): Promise<AgentSnapshot> {
     const cwd = resolve(inputPath);
     const details = await stat(cwd);
     if (!details.isDirectory()) throw new Error("Selected project is not a directory.");
@@ -243,12 +255,12 @@ export class AgentService {
       this.runtime = await createAgentSessionRuntime(this.createRuntimeFactory(), {
         cwd,
         agentDir: getAgentDir(),
-        sessionManager: SessionManager.continueRecent(cwd),
+        sessionManager: sessionPath ? SessionManager.open(sessionPath, undefined, cwd) : SessionManager.continueRecent(cwd),
       });
       this.runtime.setRebindSession(async (session) => this.bindSession(session));
       await this.bindSession(this.runtime.session);
       await this.validation.configure(cwd);
-      this.candidate.configure(cwd);
+      if (this.options.allowSelfUpdate !== false) this.candidate.configure(cwd);
       const snapshot = await this.getSnapshot();
       this.emit({ type: "snapshot", snapshot });
       return snapshot;
@@ -283,7 +295,18 @@ export class AgentService {
 
   private timelinePage(session: AgentSession): AgentTimelinePage {
     const window = recentMessageWindow(historyMessages(session.sessionManager.getBranch()), this.visibleTimelineTurns);
-    return { timeline: mapTimeline(window.messages, window.startIndex), hasMore: window.hasMore };
+    return { timeline: this.withLiveTimeline(mapTimeline(window.messages, window.startIndex)), hasMore: window.hasMore };
+  }
+
+  private withLiveTimeline(timeline: ConversationItem[]): ConversationItem[] {
+    const visible = [...timeline];
+    for (const tool of this.liveTools.values()) {
+      if (tool.status === "running" && !visible.some((item) => item.id === tool.id)) visible.push(toolItem(tool));
+    }
+    if (this.assistantStreaming && this.liveAssistantId && this.liveAssistantText) {
+      visible.push(messageItem({ id: this.liveAssistantId, role: "assistant", text: this.liveAssistantText, timestamp: Date.now() }));
+    }
+    return visible;
   }
 
   get agentDirectory(): string {
@@ -326,6 +349,10 @@ export class AgentService {
 
   cancelAuth(): void {
     this.auth.cancel();
+  }
+
+  get hasBackgroundResources(): boolean {
+    return this.sessionTitles.hasPending || this.managedProcesses.current.some((entry) => ["starting", "running", "stopping"].includes(entry.status));
   }
 
   get runtimeBusy(): boolean {
@@ -417,14 +444,15 @@ export class AgentService {
       isStreaming: this.isAgentActive(session),
       workingStartedAt: this.workingStartedAt,
       pendingCount: session.pendingMessageCount,
-      error: failure?.message ?? this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? null,
+      error: failure?.message ?? this.runtime.modelFallbackMessage ?? this.runtime.diagnostics.at(0)?.message ?? this.statisticsError,
       canContinue: failure?.canContinue ?? false,
       taskPlan: this.taskPlan.current,
       processes: this.managedProcesses.current,
       mcpTools: this.sessionMcp.get(session)?.current ?? [],
+      toolStatistics: this.statistics?.current ?? [],
       extensionUi: this.extensionUi.current,
       history,
-      validation: this.validation.getState(),
+      validation: { ...this.validation.getState(), isSelfProject: this.options.allowSelfUpdate !== false && this.validation.getState().isSelfProject },
       review,
       candidate: this.candidate.getState(),
       context: this.contextState(session, usage),
@@ -486,7 +514,9 @@ export class AgentService {
 
   renameSession(title: string): void {
     const normalizedTitle = title.replace(/\s+/gu, " ").trim().slice(0, 80);
-    this.requireRuntime().session.setSessionName(normalizedTitle);
+    const session = this.requireRuntime().session;
+    this.sessionTitles.cancel(session.sessionId);
+    session.setSessionName(normalizedTitle);
   }
 
   async continueAfterError(): Promise<void> {
@@ -744,6 +774,7 @@ export class AgentService {
   }
 
   private async assertValidationCurrent(session: AgentSession, message: string): Promise<void> {
+    if (this.options.allowSelfUpdate === false) throw new Error("独立会话工作目录不能激活自更新候选，请回到原项目会话。");
     const validation = this.validation.getState();
     if (!validation.isSelfProject) throw new Error("Candidate updates are available only for the pi-ecode source project.");
     if (validation.status !== "passed" || !validation.sourceRevision) throw new Error(message);
@@ -807,6 +838,15 @@ export class AgentService {
         resourceLoaderOptions: {
           extensionFactories: [
             ...mcp.extensions(),
+            (pi) => {
+              let installed = false;
+              pi.on("session_start", () => {
+                if (!installed) {
+                  installed = true;
+                  toolAdvisorExtension(this.statistics, (message) => this.emit({ type: "notice", message }))(pi);
+                }
+              });
+            },
             this.history.asExtension(),
             this.nativeCompaction.asExtension(),
             this.confirmation.asExtension(),
@@ -831,6 +871,7 @@ export class AgentService {
           }),
         },
       });
+      await this.installToolStatistics(services.settingsManager);
       const sessionRuntime = await createAgentSessionFromServices({
         services,
         sessionManager,
@@ -846,6 +887,22 @@ export class AgentService {
         diagnostics: services.diagnostics,
       };
     };
+  }
+
+  private async installToolStatistics(settings: Pick<SettingsManager, "getOrCreateDeviceId">): Promise<void> {
+    this.unsubscribeStatistics?.();
+    this.statistics = undefined;
+    this.statisticsError = null;
+    try {
+      const fileName = createHash("sha256").update(JSON.stringify([settings.getOrCreateDeviceId(), hostname(), process.platform, process.arch])).digest("hex");
+      const statistics = toolStatisticsStore(join(getAgentDir(), "state", "pi-ecode-tool-statistics", `${fileName}.json`));
+      await statistics.initialize();
+      this.statistics = statistics;
+      this.unsubscribeStatistics = statistics.subscribe(() => this.emit({ type: "tool-statistics", statistics: statistics.current }));
+    } catch (error) {
+      this.statisticsError = `本机工具统计不可用，已停用记录并保留原文件：${error instanceof Error ? error.message : String(error)}`;
+      this.reportError(this.statisticsError);
+    }
   }
 
   private requireRuntime(): AgentSessionRuntime {
@@ -865,6 +922,7 @@ export class AgentService {
   }
 
   private async bindSession(session: AgentSession): Promise<void> {
+    this.sessionTitles.dispose();
     this.unsubscribe?.();
     this.applyContextBudget(session);
     this.visibleTimelineTurns = HISTORY_PAGE_TURNS;
@@ -876,6 +934,7 @@ export class AgentService {
     this.liveTools.clear();
     this.liveAssistantId = undefined;
     this.liveAssistantText = "";
+    this.assistantStreaming = false;
     const fallbackUi = session.extensionRunner.getUIContext();
     await session.bindExtensions({ mode: "rpc", uiContext: this.extensionUi.createContext(fallbackUi) });
     this.unsubscribe = session.subscribe((event) => this.handleSessionEvent(session, event));
@@ -925,6 +984,7 @@ export class AgentService {
         break;
       case "message_start":
         if (event.message.role === "assistant") {
+          this.assistantStreaming = true;
           this.liveAssistantId = undefined;
           this.liveAssistantText = "";
         }
@@ -951,8 +1011,10 @@ export class AgentService {
         break;
       }
       case "message_end": {
+        if (event.message.role === "assistant") this.assistantStreaming = false;
         this.flushStreamItems();
         if (event.message.role === "user") {
+          const userMessage = event.message;
           // SDK 先通知 message_end 再同步追加会话条目。等落盘后发布，图片引用才能对上完整历史索引。
           queueMicrotask(() => {
             if (this.runtime?.session !== session) return;
@@ -960,7 +1022,10 @@ export class AgentService {
             const messageIndex = messages.indexOf(event.message);
             if (messageIndex < 0) return;
             const item = mapTimeline([event.message], messageIndex).at(0);
-            if (item?.kind === "message") this.emit({ type: "timeline-upsert", item });
+            if (item?.kind === "message") {
+              this.emit({ type: "timeline-upsert", item });
+              this.sessionTitles.start(session, textFromContent(userMessage.content), this.sessionGuard(session));
+            }
           });
         }
         this.emitContext(session);
@@ -1129,6 +1194,10 @@ export class AgentService {
   }
 
   private async disposeRuntime(): Promise<void> {
+    this.sessionTitles.dispose();
+    this.unsubscribeStatistics?.();
+    this.unsubscribeStatistics = undefined;
+    await this.statistics?.flush().catch((error: unknown) => this.emit({ type: "notice", message: `工具统计保存失败：${errorText(error)}` }));
     this.sessionSummaries = undefined;
     this.sessionSummaryRevision += 1;
     if (this.streamTimer !== undefined) clearTimeout(this.streamTimer);

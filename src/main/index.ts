@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, screen, shell } from "electron";
+import { ProjectSessionService } from "./agent/project-session-service.js";
 import { AgentService } from "./agent/agent-service.js";
 import { AppConfigService } from "./app-config/app-config-service.js";
 import { registerIpc } from "./ipc/register-ipc.js";
@@ -15,14 +16,18 @@ const service = new AgentService(
   (url) => shell.openExternal(url),
   (path) => shell.trashItem(path),
 );
+const projectSessions = new ProjectSessionService({
+  root: service,
+  createService: () => new AgentService((url) => shell.openExternal(url), (path) => shell.trashItem(path), { allowSelfUpdate: false }),
+});
 const settings = new SettingsService({
   agentDir: service.agentDirectory,
   getProjectPath: () => service.activeProjectPath,
-  getProviderStatuses: () => service.getProviderStatuses(),
-  isFffLoaded: () => service.fffExtensionLoaded,
+  getProviderStatuses: () => projectSessions.activeService.getProviderStatuses(),
+  isFffLoaded: () => projectSessions.activeService.fffExtensionLoaded,
   isProjectTrusted: () => service.projectSettingsTrusted,
-  isRuntimeBusy: () => service.runtimeBusy,
-  applyRuntimeChanges: () => service.reloadRuntimeConfiguration(),
+  isRuntimeBusy: () => projectSessions.runtimeBusy,
+  applyRuntimeChanges: () => projectSessions.reloadRuntimeConfiguration(),
   onChanged: (snapshot, source) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, { type: "settings-changed", snapshot, source });
@@ -130,17 +135,20 @@ if (!hasSingleInstanceLock) {
       dialog.showErrorBox("子代理历史清理未完成", cleanup.failures.map((failure) => `${failure.path}\n${failure.message}`).join("\n\n"));
     }
     await service.initialize();
+    await projectSessions.initialize();
     await settings.start();
     await appConfig.load();
-    unsubscribeAgent = service.subscribe((event) => {
-      if (event.type === "state" && event.patch.isStreaming === false) void settings.applyPendingIfIdle();
+    unsubscribeAgent = projectSessions.subscribe((event) => {
+      if (!shutdown && ((event.type === "state" && event.patch.isStreaming === false)
+        || (event.type === "parallel" && event.parallel.runningCount === 0)
+        || (event.type === "snapshot" && event.snapshot.parallel?.runningCount === 0))) void settings.applyPendingIfIdle();
     });
-    unregisterAuth = service.subscribeAuth((event) => {
+    unregisterAuth = projectSessions.subscribeAuth((event) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.settingsEvent, event);
       }
     });
-    unregisterIpc = registerIpc(service, settings, appConfig);
+    unregisterIpc = registerIpc(projectSessions, settings, appConfig);
     createWindow();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -160,7 +168,7 @@ if (!hasSingleInstanceLock) {
     shutdown = (async () => {
       const results = await Promise.allSettled([
         Promise.resolve().then(() => settings.dispose()),
-        Promise.resolve().then(() => service.dispose()),
+        Promise.resolve().then(() => projectSessions.dispose()),
       ]);
       const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
       if (failures.length) throw new AggregateError(failures.map((failure) => failure.reason), "退出清理失败");

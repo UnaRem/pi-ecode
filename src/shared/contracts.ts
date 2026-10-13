@@ -1,6 +1,7 @@
 import type { AuthFlowEvent, AuthPromptResponse, AuthType, SaveConfigRequest, SaveInstructionFileRequest, SettingsChangedEvent, SettingsSnapshot } from "./settings-contracts.js";
 import type { ManagedProcess } from "./process-contracts.js";
 import type { McpToolSummary } from "./mcp-contracts.js";
+import type { ToolStatistic } from "./tool-statistics.js";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "./work-animator.js";
 
 export const IPC_CHANNELS = {
@@ -17,6 +18,7 @@ export const IPC_CHANNELS = {
   continueAfterError: "agent:continue-after-error",
   prompt: "agent:prompt",
   stop: "agent:stop",
+  stopSession: "agent:stop-session",
   setModel: "agent:set-model",
   setThinkingLevel: "agent:set-thinking-level",
   undo: "history:undo",
@@ -77,6 +79,9 @@ export interface SessionSummary {
   title: string;
   modifiedAt: number;
   messageCount: number;
+  byteSize?: number | null;
+  workspacePath?: string;
+  runStatus?: "idle" | "running" | "waiting" | "failed" | "completed";
 }
 
 export interface PastedTextAttachment {
@@ -293,6 +298,8 @@ export interface AgentTimelinePage {
 export interface AgentSnapshot {
   projectPath: string | null;
   projectName: string | null;
+  workspacePath?: string | null;
+  parallel?: { maxRunning: number; runningCount: number; canCreate: boolean; reason: string | null };
   sessionId: string | null;
   sessionFile: string | null;
   sessionTitle: string | null;
@@ -311,6 +318,7 @@ export interface AgentSnapshot {
   taskPlan: TaskPlan | null;
   processes: ManagedProcess[];
   mcpTools: McpToolSummary[];
+  toolStatistics?: ToolStatistic[];
   extensionUi: ExtensionUiRequest | null;
   history: WorkspaceHistoryState;
   validation: ValidationState;
@@ -320,22 +328,25 @@ export interface AgentSnapshot {
   policy: RuntimePolicy;
 }
 
-export type AgentEvent =
+export type AgentEvent = (
   | { type: "snapshot"; snapshot: AgentSnapshot }
   | { type: "processes"; processes: ManagedProcess[] }
   | { type: "mcp-tools"; tools: McpToolSummary[] }
+  | { type: "tool-statistics"; statistics: ToolStatistic[] }
   | { type: "timeline-upsert"; item: ConversationItem }
   | { type: "context"; context: ContextState }
   | { type: "task-plan"; taskPlan: TaskPlan | null }
   | { type: "extension-ui"; request: ExtensionUiRequest | null }
   | { type: "state"; patch: Partial<Pick<AgentSnapshot, "sessionTitle" | "isStreaming" | "workingStartedAt" | "pendingCount" | "selectedModel" | "thinkingLevel" | "thinkingLevels" | "error" | "canContinue">> }
   | { type: "sessions"; sessions: SessionSummary[] }
+  | { type: "parallel"; parallel: NonNullable<AgentSnapshot["parallel"]> }
   | { type: "history"; history: WorkspaceHistoryState; editorText?: string; editorImages?: ImageAttachment[]; notice?: string }
   | { type: "validation"; validation: ValidationState }
   | { type: "review"; review: ChangeReview }
   | { type: "candidate"; candidate: CandidateState }
   | { type: "notice"; message: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+) & { sessionId?: string };
 
 export type ProjectGitAvailability = "ready" | "not-repository" | "detached" | "no-upstream" | "error";
 
@@ -364,6 +375,7 @@ export interface DesktopApi {
   continueAfterError(): Promise<void>;
   prompt(message: string, images?: ImageAttachment[]): Promise<void>;
   stop(): Promise<void>;
+  stopSession(path: string): Promise<void>;
   setModel(provider: string, modelId: string): Promise<void>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
   undo(): Promise<HistoryOperationResult>;
