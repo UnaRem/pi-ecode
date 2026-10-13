@@ -49,6 +49,38 @@ describe("ValidationService", () => {
     await service.dispose();
   });
 
+  it("uses Bun's package script runner and resets to npm for the next project", async () => {
+    const cwd = await project({ packageManager: "bun@1.3.14", scripts: {
+      typecheck: "node -e \"console.log('bun types ok')\"",
+      test: "node -e \"console.log('existing test script')\"",
+      build: "node -e \"console.log('bun build ok')\"",
+    } });
+    const service = new ValidationService(() => undefined);
+    try {
+      await service.configure(cwd);
+      const result = await service.run();
+      expect(result.status).toBe("passed");
+      expect(result.steps.map((step) => step.command)).toEqual(["bun run typecheck", "bun run test", "bun run build"]);
+      expect(result.steps[1]?.output).toContain("existing test script");
+      const npmProject = await project({ packageManager: "npm@11", scripts: { test: "node -e \"console.log('npm ok')\"" } });
+      await service.configure(npmProject);
+      const npmResult = await service.run();
+      expect(npmResult.status).toBe("passed");
+      expect(npmResult.steps[1]?.command).toBe("npm run test");
+      expect(npmResult.steps[1]?.output).toContain("npm ok");
+    } finally { await service.dispose(); }
+  });
+
+  it("does not execute an arbitrary packageManager value", async () => {
+    const cwd = await project({ packageManager: "arbitrary-command", scripts: { test: "node -e \"process.exit(0)\"" } });
+    const service = new ValidationService(() => undefined);
+    try {
+      await service.configure(cwd);
+      expect((await service.run()).status).toBe("passed");
+      expect(service.getState().steps[1]?.command).toBe("npm run test");
+    } finally { await service.dispose(); }
+  });
+
   it("binds a passed result to the verified source revision", async () => {
     const cwd = await project({ scripts: { typecheck: "node -e \"process.exit(0)\"" } });
     const service = new ValidationService(() => undefined);

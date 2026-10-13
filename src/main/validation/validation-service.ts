@@ -33,6 +33,7 @@ const STEP_DEFINITIONS: ReadonlyArray<{ id: ValidationStepId; label: string }> =
 
 interface PackageManifest {
   name?: string;
+  packageManager?: string;
   scripts?: Record<string, string>;
 }
 
@@ -42,11 +43,11 @@ export interface ValidationRunOptions {
   originToolCallId?: string;
 }
 
-function emptySteps(): ValidationStep[] {
+function emptySteps(packageManager: "npm" | "bun" = "npm"): ValidationStep[] {
   return STEP_DEFINITIONS.map(({ id, label }) => ({
     id,
     label,
-    command: `npm run ${id}`,
+    command: `${packageManager} run ${id}`,
     status: "pending",
     output: "",
     exitCode: null,
@@ -77,6 +78,7 @@ function stripTerminalCodes(value: string): string {
 export class ValidationService {
   private cwd: string | undefined;
   private scripts = new Set<string>();
+  private packageManager: "npm" | "bun" = "npm";
   private state = emptyState();
   private activeProcess: ChildProcessWithoutNullStreams | undefined;
   private cancellationRequested = false;
@@ -97,8 +99,10 @@ export class ValidationService {
     } catch {
       // A non-Node project simply has no supported MVP validation scripts.
     }
+    // Only allow known executors; package metadata must never become an arbitrary command.
+    this.packageManager = typeof manifest.packageManager === "string" && manifest.packageManager.startsWith("bun@") ? "bun" : "npm";
     this.scripts = new Set(Object.keys(manifest.scripts ?? {}));
-    const steps = emptySteps().map((step) => (
+    const steps = emptySteps(this.packageManager).map((step) => (
       this.scripts.has(step.id) ? step : { ...step, status: "skipped" as const }
     ));
     this.state = {
@@ -145,7 +149,7 @@ export class ValidationService {
       startedAt: Date.now(),
       verifiedAt: null,
       message: null,
-      steps: emptySteps().map((step) => (
+      steps: emptySteps(this.packageManager).map((step) => (
         this.scripts.has(step.id) ? step : { ...step, status: "skipped" as const }
       )),
     };
@@ -266,9 +270,9 @@ export class ValidationService {
     this.updateStep(id, { status: "running", output: "", exitCode: null, durationMs: null });
     this.state = { ...this.state, activeStep: id };
 
-    const executable = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "npm";
+    const executable = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : this.packageManager;
     const args = process.platform === "win32"
-      ? ["/d", "/s", "/c", `npm run ${id}`]
+      ? ["/d", "/s", "/c", `${this.packageManager} run ${id}`]
       : ["run", id];
     const child = spawn(executable, args, {
       cwd,

@@ -26,30 +26,26 @@
 
 ## 本地运行
 
-要求：Node.js 24+，并已完成 pi 配置。
+要求：Node.js 24+、Bun 1.3.14，并已完成 pi 配置。Bun 负责依赖安装和脚本执行，应用仍使用 Node/Electron 运行时。
 
 ```bash
-npm install
-npm run dev
+bun install --frozen-lockfile
+bun run dev
 ```
 
-`npm run preview` 会自动识别当前源码目录，并在窗口出现前将其作为活动的自托管项目打开。候选运行时和回退运行时会根据暂存元数据恢复相同的源码根目录。
+`bun run preview` 会自动识别当前源码目录，并在窗口出现前将其作为活动的自托管项目打开。候选运行时和回退运行时会根据暂存元数据恢复相同的源码根目录。
 
-如果使用的 npm 版本会延迟下载 Electron 二进制文件，请在安装依赖后执行一次：
-
-```bash
-npm exec electron -- --version
-```
+依赖版本由 `bun.lock` 管理。Electron 和 esbuild 使用 Bun 默认信任列表中的安装脚本；安装后可执行 `bun run prepare:runtime` 检查并准备 Electron 运行时，不会启动应用。
 
 ## 验证与构建
 
 ```bash
-npm run typecheck
-npm test
-npm run build
+bun run typecheck
+bun run test
+bun run build
 ```
 
-未打包的生产构建输出到 `out/`。在 Windows x64 上运行 `npm run package:win` 会在 `release/` 中生成免安装的 `PiECode-<version>-win-x64.exe`。应用内验证面板只运行已配置的 `typecheck`、`test` 和 `build` package scripts，不接受渲染端传入的任意命令。
+未打包的生产构建输出到 `out/`。在 Windows x64 上运行 `bun run package:win` 会在 `release/` 中生成免安装的 `PiECode-<version>-win-x64.exe`。应用内验证面板只运行已配置的 `typecheck`、`test` 和 `build` package scripts，不接受渲染端传入的任意命令。验证执行器根据项目 `packageManager` 声明选择 Bun（`bun@...`），其余项目保留 npm。请使用 `bun run test` 执行现有 Vitest 测试，而非 Bun 自带的 `bun test`。
 
 ## 发布
 
@@ -65,7 +61,10 @@ CI 只在构建工作区临时更新包版本，应用内部版本与文件名�
 如需手动发布指定版本，将 `package.json` 的版本提交到 `main`，然后推送同版本的 `v*` 标签：
 
 ```bash
-npm version 0.2.0
+# 将 package.json 的 version 修改为 0.2.0 后：
+git add package.json
+git commit -m "chore(发布): 更新版本为0.2.0"
+git tag v0.2.0
 git push origin main
 git push origin v0.2.0
 ```

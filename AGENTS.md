@@ -140,16 +140,16 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 Before considering a change complete, run:
 
 ```bash
-npm run typecheck
-npm test
-npm run build
+bun run typecheck
+bun run test
+bun run build
 ```
 
 For UI changes, manually verify project selection, session switching, send/stream/stop, keyboard input, long tool output, error states and reduced motion. The owner launches the development runtime; do not automatically start dev or preview servers. Do not invoke a browser MCP merely to discover whether an app is running: the call can launch an automation browser. Tests should cover pure event reducers and SDK-to-view-model mapping before pixel-level component snapshots.
 
 ## Delivery workflow
 
-- For implementation tasks, inspect the final workspace diff, run `npm run typecheck`, `npm test`, and `npm run build`, then review `git status` before delivery.
+- For implementation tasks, inspect the final workspace diff, run `bun run typecheck`, `bun run test`, and `bun run build`, then review `git status` before delivery.
 - Commit completed, verified implementation work using `<type>(<scope>): <Chinese description>`. Workspace-history snapshots do not count as repository commits.
 - If Git cannot commit because identity, permissions, or hooks block it, report the exact blocker and leave the verified changes intact; never claim the task was committed.
 
@@ -158,7 +158,8 @@ For UI changes, manually verify project selection, session switching, send/strea
 - `docs/` and `examples/` are vendored pi reference material. Read them when changing integration behavior; do not casually edit them.
 - Never commit credentials, `.env` files, session JSONL files, build output, Electron user data, or shadow Git history.
 - Workspace history is a core project module. Keep its storage outside the selected workspace and do not make correctness depend on a globally installed checkpoint extension.
-- Validation commands are selected from an internal allowlist. Never accept an arbitrary executable or shell command from the renderer for the self-hosting pipeline.
+- Validation commands are selected from an internal allowlist. The main process selects Bun only for a `bun@...` packageManager declaration and otherwise keeps npm; package metadata never supplies an arbitrary executable. Never accept an arbitrary executable or shell command from the renderer for the self-hosting pipeline.
+- This repository uses Bun 1.3.14, `bun.lock`, and `bun install --frozen-lockfile`; CI pins the same version. Keep Node.js 24+ and Electron as the runtime, and use `bun run test` for Vitest, not `bun test`. Electron and esbuild lifecycle scripts use Bun's default trusted list.
 - A successful validation becomes stale after a new agent run, workspace restore, or observed source change. Do not present stale checks as proof that the current source is safe to adopt.
 - Candidate preparation requires a current successful validation and the recognized pi-ecode source project. Only the root project service may prepare or activate self-update candidates; retained child services remain ineligible even when they share the project cwd. Stage candidates outside the workspace.
 - Never overwrite the frozen previous runtime after validation has rebuilt `out/`. The supervisor must retain an immutable fallback until candidate health is confirmed.

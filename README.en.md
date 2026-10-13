@@ -26,30 +26,26 @@ The app uses your existing pi configuration and credentials from `~/.pi/agent`. 
 
 ## Run locally
 
-Requirements: Node.js 24+ and a configured pi installation.
+Requirements: Node.js 24+, Bun 1.3.14, and a configured pi installation. Bun manages dependencies and package scripts; the app still uses the Node/Electron runtime.
 
 ```bash
-npm install
-npm run dev
+bun install --frozen-lockfile
+bun run dev
 ```
 
-`npm run preview` automatically recognizes this checkout and opens it as the active self-hosting project before the window appears. Candidate and fallback runtimes restore the same source root from staged metadata.
+`bun run preview` automatically recognizes this checkout and opens it as the active self-hosting project before the window appears. Candidate and fallback runtimes restore the same source root from staged metadata.
 
-On npm versions that defer Electron's binary download, run this once after installation:
-
-```bash
-npm exec electron -- --version
-```
+Dependency versions are recorded in `bun.lock`. Electron and esbuild installation scripts use Bun's default trusted list. After installation, `bun run prepare:runtime` checks and prepares the Electron runtime without launching the app.
 
 ## Verify and build
 
 ```bash
-npm run typecheck
-npm test
-npm run build
+bun run typecheck
+bun run test
+bun run build
 ```
 
-The unpackaged production output is written to `out/`. The in-app verification panel runs only configured `typecheck`, `test`, and `build` package scripts; it does not accept arbitrary renderer commands.
+The unpackaged production output is written to `out/`. On Windows x64, `bun run package:win` creates the portable executable in `release/`. The in-app verification panel runs only configured `typecheck`, `test`, and `build` package scripts; it does not accept arbitrary renderer commands. It selects Bun for projects declaring `packageManager: "bun@..."` and keeps npm for other projects. Use `bun run test` for the existing Vitest suite; `bun test` selects Bun's built-in test runner.
 
 Rejecting a reviewed file restores only that path to its pre-task state, checkpoints the result, and invalidates prior verification/candidates. Keeping a file is the default acceptance; preparing a candidate adopts the remaining reviewed changes.
 
