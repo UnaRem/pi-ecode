@@ -28,6 +28,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
+  const [suggestedPrompt, setSuggestedPrompt] = useState<{ viewKey: string; id: string; text: string } | null>(null);
+  const acknowledgeSuggestion = useCallback((id: string) => setSuggestedPrompt((current) => current?.id === id ? null : current), []);
   const selectedModel = state.models.find((model) => `${model.provider}/${model.id}` === state.selectedModel);
   const activeSession = state.sessions.find((session) => session.path === state.sessionFile);
   const sessionTitle = state.sessionTitle ?? (activeSession?.messageCount ? activeSession.title : null);
@@ -36,8 +38,10 @@ export default function App() {
   const saveComposerDraft = useCallback((draft: ComposerDraft) => { composerDrafts.current.set(activeViewKey, draft); }, [activeViewKey]);
   const workspaceTools = useWorkspaceTools(state.timeline, activeViewKey);
 
-  const leaveSettings = useCallback((): boolean => {
-    if (settingsDirty && !window.confirm(t("settings.confirmDiscard"))) return false;
+  const leaveSettings = useCallback(async (): Promise<boolean> => {
+    if (settingsDirty && !await window.piDesktop.showConfirmation({
+      message: t("settings.confirmDiscard"), confirmLabel: t("dialog.confirm"), cancelLabel: t("dialog.cancel"),
+    })) return false;
     setSettingsOpen(false);
     setSettingsDirty(false);
     return true;
@@ -92,9 +96,9 @@ export default function App() {
         workAnimator={appConfig?.workAnimator}
         settingsActive={settingsOpen}
         open={sidebarOpen}
-        onChooseProject={() => { if (leaveSettings()) void actions.chooseProject(); }}
-        onNewSession={() => { if (leaveSettings()) void actions.newSession(); }}
-        onSwitchSession={(path) => { if (leaveSettings()) void actions.switchSession(path); }}
+        onChooseProject={async () => { if (await leaveSettings()) await actions.chooseProject(); }}
+        onNewSession={async () => { if (await leaveSettings()) await actions.newSession(); }}
+        onSwitchSession={async (path) => { if (await leaveSettings()) await actions.switchSession(path); }}
         onDeleteSession={(path) => void actions.deleteSession(path)}
         onOpenSettings={() => setSettingsOpen(true)}
         onCollapse={() => setSidebarOpen(false)}
@@ -124,6 +128,8 @@ export default function App() {
           isStreaming={state.isStreaming}
           workingStartedAt={state.workingStartedAt}
           projectName={state.projectName}
+          projectProfile={state.projectProfile}
+          onSelectSuggestion={(text) => setSuggestedPrompt({ viewKey: activeViewKey, id: crypto.randomUUID(), text })}
           error={state.error}
           canContinue={state.canContinue}
           notice={state.notice}
@@ -141,6 +147,8 @@ export default function App() {
           <Composer
           key={activeViewKey}
           initialDraft={composerDrafts.current.get(activeViewKey)}
+          suggestedPrompt={suggestedPrompt?.viewKey === activeViewKey ? suggestedPrompt : undefined}
+          onSuggestionApplied={acknowledgeSuggestion}
           onDraftChange={saveComposerDraft}
           isStreaming={state.isStreaming}
           pendingCount={state.pendingCount}

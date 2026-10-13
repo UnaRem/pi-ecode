@@ -91,8 +91,11 @@ export function Sidebar(props: SidebarProps) {
                 ) : !active && (
                   <button
                     className="session-delete-button"
-                    onClick={() => {
-                      if (window.confirm(t("sidebar.confirmDelete", { title: session.title }))) props.onDeleteSession(session.path);
+                    onClick={async () => {
+                      if (await window.piDesktop.showConfirmation({
+                        message: t("sidebar.confirmDelete", { title: session.title.slice(0, 160) }),
+                        confirmLabel: t("dialog.confirm"), cancelLabel: t("dialog.cancel"),
+                      })) props.onDeleteSession(session.path);
                     }}
                     disabled={!props.parallel && props.disabled}
                     aria-label={t("sidebar.deleteSession")}

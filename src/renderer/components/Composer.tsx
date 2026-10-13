@@ -16,6 +16,8 @@ export interface ComposerDraft {
 
 export interface ComposerProps {
   initialDraft?: ComposerDraft | undefined;
+  suggestedPrompt?: { id: string; text: string } | undefined;
+  onSuggestionApplied?: ((id: string) => void) | undefined;
   onDraftChange?: ((draft: ComposerDraft) => void) | undefined;
   isStreaming: boolean;
   pendingCount: number;
@@ -88,6 +90,26 @@ export function Composer(props: ComposerProps) {
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previouslyBlocked = useRef(Boolean(props.extensionUi));
+  const suggestionFocusPending = useRef(false);
+
+  useEffect(() => {
+    const unblocked = previouslyBlocked.current && !props.extensionUi;
+    previouslyBlocked.current = Boolean(props.extensionUi);
+    if (!props.modelReady || props.extensionUi || !document.hasFocus()) return;
+    const focused = document.activeElement;
+    if (focused !== document.body && !(unblocked && focused?.closest(".extension-question"))) return;
+    const frame = requestAnimationFrame(() => textareaRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [props.modelReady, props.extensionUi]);
+
+  useEffect(() => {
+    const suggestion = props.suggestedPrompt;
+    if (!suggestion) return;
+    suggestionFocusPending.current = true;
+    setText((current) => [current, suggestion.text].filter((part) => part.trim()).join("\n\n"));
+    props.onSuggestionApplied?.(suggestion.id);
+  }, [props.suggestedPrompt, props.onSuggestionApplied]);
 
   useEffect(() => {
     props.onDraftChange?.({ text, images, pastedTexts, pdfFile });
@@ -112,6 +134,13 @@ export function Composer(props: ComposerProps) {
     if (!textarea) return;
     textarea.style.height = text ? "0px" : "35px";
     if (text) textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+    if (suggestionFocusPending.current) {
+      suggestionFocusPending.current = false;
+      if (!textarea.disabled && document.hasFocus()) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }
+    }
   }, [text]);
 
   const submit = (): void => {
