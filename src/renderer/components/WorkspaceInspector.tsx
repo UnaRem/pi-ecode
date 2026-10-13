@@ -1,10 +1,10 @@
-import { FileCode2, Play, Square, TerminalSquare } from "lucide-react";
+import { FileCode2, Play, Square } from "lucide-react";
 import { useState, type AnimationEvent, type KeyboardEvent } from "react";
 import type { CandidateState, ChangeReview, ToolActivity, ValidationState } from "@shared/contracts";
-import { toolCategory } from "../lib/tool-category";
 import { useI18n } from "../i18n/i18n";
 import { GitPushButton } from "./GitPushButton";
-import { ValidationStepList, ValidationStepStatusIcon } from "./ValidationSteps";
+import { ValidationStepList } from "./ValidationSteps";
+import { OutputPanel, ToolQueue } from "./WorkspaceToolPanels";
 import type { ManagedProcess } from "@shared/process-contracts";
 import { ManagedProcessPanel } from "./ManagedProcessPanel";
 import { McpToolDirectory } from "./McpToolDirectory";
@@ -30,49 +30,6 @@ interface WorkspaceInspectorProps {
   onRejectFile: (path: string) => void;
   onPrepareCandidate: () => void;
   onActivateCandidate: () => void;
-}
-
-function formatToolDuration(tool: ToolActivity): string {
-  if (!tool.startedAt) return "";
-  const elapsed = Math.max(0, (tool.endedAt ?? Date.now()) - tool.startedAt);
-  return elapsed < 1000 ? `${elapsed}ms` : `${(elapsed / 1000).toFixed(1)}s`;
-}
-
-function ToolQueue({ tools, selectedTool, onSelect }: Pick<WorkspaceInspectorProps, "tools" | "selectedTool" | "onSelectTool"> & { onSelect: (id: string) => void }) {
-  const { t } = useI18n();
-  return (
-    <section className="inspector-section inspector-tools">
-      <header><strong>{t("tool.panelTitle")}</strong><span>{tools.length}</span></header>
-      <div className="inspector-tool-list">
-        {tools.length === 0 ? <p>{t("tool.waitingOutput")}</p> : tools.map((tool) => (
-          <button key={tool.id} className={tool.id === selectedTool?.id ? "selected" : ""} onClick={() => onSelect(tool.id)} aria-pressed={tool.id === selectedTool?.id}>
-            <span className={`inspector-tool-status ${tool.status}`}><ValidationStepStatusIcon step={{ id: "build", label: tool.title, command: tool.name, status: tool.status === "success" ? "passed" : tool.status === "error" ? "failed" : "running", output: tool.output, exitCode: null, durationMs: null }} /></span>
-            <strong>{tool.title}</strong>
-            <time>{formatToolDuration(tool)}</time>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function terminalOutput(props: Pick<WorkspaceInspectorProps, "tools" | "selectedTool" | "validation">): string {
-  const validationOutput = props.validation.steps.find((step) => step.status === "running")?.output;
-  if (props.validation.status === "running" && validationOutput) return validationOutput;
-  if (props.selectedTool) return props.selectedTool.output;
-  const latestExecution = [...props.tools].reverse().find((tool) => toolCategory(tool.name, tool.input) === "execute");
-  return latestExecution?.output || "";
-}
-
-function OutputPanel(props: Pick<WorkspaceInspectorProps, "tools" | "selectedTool" | "validation">) {
-  const { t } = useI18n();
-  const output = terminalOutput(props);
-  return (
-    <section className="inspector-section inspector-output">
-      <header><strong><TerminalSquare size={14} aria-hidden="true" />{t("tool.output")}</strong></header>
-      <pre>{output || t("tool.noOutput")}</pre>
-    </section>
-  );
 }
 
 export function ValidationLogs({ validation }: { validation: ValidationState }) {
@@ -151,8 +108,11 @@ function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFi
             <code title={file.path}>{file.path}</code>
             <span>{file.status.slice(0, 1).toUpperCase()}</span>
             <button
-              onClick={() => {
-                if (window.confirm(t("validation.restoreFile", { path: file.path }))) props.onRejectFile(file.path);
+              onClick={async () => {
+                if (await window.piDesktop.showConfirmation({
+                  message: t("validation.restoreFile", { path: file.path }),
+                  confirmLabel: t("dialog.confirm"), cancelLabel: t("dialog.cancel"),
+                })) props.onRejectFile(file.path);
               }}
               title={t("validation.rejectTitle")}
             >{t("validation.reject")}</button>
@@ -164,13 +124,13 @@ function ChangeFiles(props: Pick<WorkspaceInspectorProps, "review" | "onRejectFi
   );
 }
 
-type InspectorTab = "tools" | "validation";
+type InspectorTab = "tools" | "mcp" | "validation";
 
 export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   const { t } = useI18n();
   const [tab, setTab] = useState<InspectorTab>("tools");
   const [leavingTab, setLeavingTab] = useState<InspectorTab | null>(null);
-  const availableTabs: InspectorTab[] = props.validation.supported ? ["tools", "validation"] : ["tools"];
+  const availableTabs: InspectorTab[] = props.validation.supported ? ["tools", "mcp", "validation"] : ["tools", "mcp"];
   const activeTab = availableTabs.includes(tab) ? tab : "tools";
   const selectTab = (nextTab: InspectorTab): void => {
     if (nextTab === activeTab) return;
@@ -179,11 +139,12 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
   };
   const renderTab = (target: InspectorTab) => target === "tools" ? <>
     <ManagedProcessPanel key={props.projectPath} processes={props.processes ?? []} onStop={props.onStopManagedProcess ?? (async () => { throw new Error(t("process.stopUnavailable")); })} />
-    <McpToolDirectory tools={props.mcpTools ?? []} />
-    <ToolStatisticsPanel statistics={props.toolStatistics ?? []} />
-    <ToolQueue {...props} onSelect={props.onSelectTool} />
+    <ToolQueue tools={props.tools} selectedTool={props.selectedTool} onSelect={props.onSelectTool} />
     <OutputPanel {...props} />
     <ChangeFiles {...props} />
+  </> : target === "mcp" ? <>
+    <McpToolDirectory tools={props.mcpTools ?? []} />
+    <ToolStatisticsPanel statistics={props.toolStatistics ?? []} />
   </> : <ValidationControls {...props} />;
   const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, target: InspectorTab): void => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -202,6 +163,7 @@ export function WorkspaceInspector(props: WorkspaceInspectorProps) {
     <aside className="workspace-inspector" data-region="inspector" aria-label={t("tool.panelTitle")}>
       <div className="inspector-tabs" role="tablist" aria-label={t("tool.panelTitle")}>
         <button id="inspector-tab-tools" type="button" role="tab" aria-selected={activeTab === "tools"} aria-controls="inspector-panel-tools" tabIndex={activeTab === "tools" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "tools")} onClick={() => selectTab("tools")}>{t("tool.panelTitle")}</button>
+        <button id="inspector-tab-mcp" type="button" role="tab" aria-selected={activeTab === "mcp"} aria-controls="inspector-panel-mcp" tabIndex={activeTab === "mcp" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "mcp")} onClick={() => selectTab("mcp")}>MCP</button>
         {props.validation.supported && <button id="inspector-tab-validation" type="button" role="tab" aria-selected={activeTab === "validation"} aria-controls="inspector-panel-validation" tabIndex={activeTab === "validation" ? 0 : -1} onKeyDown={(event) => onTabKeyDown(event, "validation")} onClick={() => selectTab("validation")}>{t("validation.tab")}</button>}
       </div>
       <div className="inspector-scroll">

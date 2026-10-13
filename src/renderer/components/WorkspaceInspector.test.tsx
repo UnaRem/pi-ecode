@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CandidateState, ChangeReview, ValidationState } from "@shared/contracts";
 import { I18nProvider } from "../i18n/i18n";
 import { ValidationLogs, WorkspaceInspector } from "./WorkspaceInspector";
+import { McpToolDirectory } from "./McpToolDirectory";
 
 const validation: ValidationState = { supported: true, isSelfProject: false, status: "idle", runId: null, activeStep: null, steps: [], sourceRevision: null, originToolCallId: null, startedAt: null, verifiedAt: null, message: null };
 const review: ChangeReview = {
@@ -49,10 +50,10 @@ describe("WorkspaceInspector", () => {
         />
       </I18nProvider>,
     );
-    expect(markup).toContain("Main session MCP tools");
-    expect(markup).toContain("mcp__docs__lookup");
-    expect(markup).toContain("Find current SDK documentation");
-    expect(markup).toContain("Search to load");
+    expect(markup).toContain('id="inspector-tab-mcp"');
+    expect(markup).toContain('aria-selected="false" aria-controls="inspector-panel-mcp"');
+    expect(markup).not.toContain("mcp__docs__lookup");
+    expect(markup).not.toContain("Find current SDK documentation");
     expect(markup).toContain("Development processes");
     expect(markup).toContain("development server ready");
     expect(markup.indexOf('class="inspector-section managed-process-panel"')).toBeLessThan(markup.indexOf('class="inspector-section inspector-tools"'));
@@ -65,6 +66,17 @@ describe("WorkspaceInspector", () => {
     expect(markup).toContain('aria-selected="false" aria-controls="inspector-panel-validation"');
     expect(markup).not.toContain("PiECode project verification");
     expect(markup).not.toContain('id="inspector-tab-agents"');
+  });
+
+  it("keeps the entire MCP directory closed initially", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(<I18nProvider><McpToolDirectory tools={[
+      { name: "mcp__docs__lookup", server: "docs", description: "Find current SDK documentation", exposure: "deferred" },
+    ]} /></I18nProvider>);
+    expect(markup).toContain("Main session MCP tools");
+    expect(markup).toContain("mcp__docs__lookup");
+    expect(markup).toContain("Search to load");
+    expect(markup).not.toContain("open=\"\"");
   });
 
   it("shows output from the selected non-command tool", () => {

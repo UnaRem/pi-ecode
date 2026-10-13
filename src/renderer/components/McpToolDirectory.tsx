@@ -12,7 +12,8 @@ export function McpToolDirectory({ tools }: { tools: McpToolSummary[] }) {
   }
   const servers = [...groups.keys()].sort();
   return <section className="inspector-section inspector-mcp">
-    <header><strong>{t("mcp.directoryTitle")}</strong><span>{tools.length}</span></header>
+    <details className="inspector-mcp-directory inspector-mcp-server">
+    <summary><ChevronRight size={14} aria-hidden="true" /><strong>{t("mcp.directoryTitle")}</strong><span>{tools.length}</span></summary>
     {tools.length === 0 ? <p>{t("mcp.emptyDirectory")}</p> : servers.map((server) => {
       const offered = groups.get(server)!;
       return <details key={server} className="inspector-mcp-server">
@@ -24,5 +25,6 @@ export function McpToolDirectory({ tools }: { tools: McpToolSummary[] }) {
         </li>)}</ul>
       </details>;
     })}
+    </details>
   </section>;
 }
