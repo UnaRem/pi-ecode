@@ -154,13 +154,30 @@ describe("parallel project sessions", () => {
     expect(test.root.mock.dispose).toHaveBeenCalledOnce();
   });
 
-  it("reopens an idle session in its registered worktree rather than the original project", async () => {
+  it("reuses recently viewed idle sessions without rebuilding or duplicating snapshots", async () => {
     const test = await fixture();
     const first = await test.owner.newSession();
     await test.owner.newSession();
+    test.children[0]!.mock.getSnapshot.mockClear();
+    await test.owner.switchSession(first.sessionFile!);
+    expect(test.children).toHaveLength(2);
+    expect(test.children[0]!.mock.openProject).toHaveBeenCalledOnce();
+    expect(test.children[0]!.mock.getSnapshot).toHaveBeenCalledOnce();
+    expect(test.children[0]!.mock.dispose).not.toHaveBeenCalled();
+    await test.owner.newSession();
+    expect(test.children[1]!.mock.dispose).toHaveBeenCalledOnce();
+    expect(test.children[0]!.mock.dispose).not.toHaveBeenCalled();
+    await test.owner.dispose();
+  });
+
+  it("reopens an evicted idle session in its registered worktree rather than the original project", async () => {
+    const test = await fixture();
+    const first = await test.owner.newSession();
+    await test.owner.newSession();
+    await test.owner.newSession();
     expect(test.children[0]!.mock.dispose).toHaveBeenCalledOnce();
     const restored = await test.owner.switchSession(first.sessionFile!);
-    expect(test.children[2]!.mock.openProject).toHaveBeenCalledWith("/worktree/1", first.sessionFile);
+    expect(test.children[3]!.mock.openProject).toHaveBeenCalledWith("/worktree/1", first.sessionFile);
     expect(restored.workspacePath).toBe("/worktree/1");
     await test.owner.dispose();
   });

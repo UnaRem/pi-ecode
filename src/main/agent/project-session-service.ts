@@ -213,6 +213,8 @@ export class ProjectSessionService {
       const cached = [...this.slots].find((slot) => slot.snapshot.sessionFile === path);
       if (cached) {
         this.active = cached;
+        this.slots.delete(cached);
+        this.slots.add(cached);
         cached.snapshot = await cached.service.getSnapshot();
       } else {
         const cwd = known.workspacePath ?? this.projectPath;
@@ -232,8 +234,8 @@ export class ProjectSessionService {
     if (this.workspaceOperation) throw new Error("请等待文件恢复完成后切换会话。");
     this.transitioning = true;
     try {
-      await operation();
-      await this.getSnapshot();
+      const snapshot = await operation();
+      this.active.snapshot = snapshot;
     } finally {
       this.transitioning = false;
       const snapshot = this.projectSnapshot(this.active.snapshot);
@@ -344,8 +346,11 @@ export class ProjectSessionService {
   }
 
   private async releaseIdleChildren(): Promise<void> {
-    for (const slot of [...this.slots]) {
-      if (slot !== this.active && slot.service !== this.root && !slot.service.runtimeBusy && !slot.service.hasBackgroundResources && !this.reservations.has(slot.service)) await this.removeSlot(slot);
+    // Keep two recently viewed idle children; running services and owned resources cannot be evicted.
+    const idleChildren = [...this.slots].filter((slot) => slot.service !== this.root
+      && !slot.service.runtimeBusy && !slot.service.hasBackgroundResources && !this.reservations.has(slot.service));
+    for (const slot of idleChildren.slice(0, Math.max(0, idleChildren.length - 2))) {
+      if (slot !== this.active) await this.removeSlot(slot);
     }
   }
 
