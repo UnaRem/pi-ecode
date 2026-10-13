@@ -9,27 +9,25 @@ export function ProjectWelcome({ projectName, profile, disabled, onChoose }: {
   onChoose?: ((prompt: string) => void) | undefined;
 }) {
   const { t } = useI18n();
-  const suggestions = [
-    { category: "optimize", direction: profile?.features.includes("sessions") ? "sessions" : profile?.hasTests ? "tests" : "structure" },
-    { category: "add", direction: profile?.features.includes("mcp") ? "mcp" : profile?.technologies.includes("electron") ? "desktop" : "workflow" },
-    { category: "explore", direction: profile?.features.includes("history") ? "history" : "opportunities" },
-  ] as const;
+  const recommendations = profile?.recommendations;
+  const status = recommendations?.status ?? "empty";
   const technologies = profile?.technologies.join(" · ") ?? "";
   return <section className="welcome project-welcome">
     <div className="welcome-icon"><Sparkles size={21} aria-hidden="true" /></div>
     <h1>{t("conversation.welcomeTitle")}</h1>
     <p>{t("conversation.welcomeBody", { project: projectName })}</p>
     {technologies && <p className="project-welcome-stack">{technologies}</p>}
-    <div className="project-suggestions">
-      {suggestions.map(({ category, direction }) => <button type="button" key={category} disabled={disabled || !onChoose}
-        onClick={() => onChoose?.(t("suggestion.prompt", {
-          project: projectName, task: t(`suggestion.${direction}.body`),
-          context: [profile?.description, technologies].filter(Boolean).join(" · "),
-        }))}>
-        <small>{t(`suggestion.${category}`)}</small>
-        <strong>{t(`suggestion.${direction}.title`)}</strong>
-        <span>{t(`suggestion.${direction}.body`)}</span>
-      </button>)}
+    <div className="project-recommendations" aria-live="polite" aria-busy={status === "loading"}>
+      <p className="project-recommendations-label">{t("suggestion.recentWork")}</p>
+      {status === "ready" ? <p>{recommendations?.summary}</p> :
+        <p>{t(`suggestion.${status}`)}{status === "error" && recommendations?.error ? ` ${recommendations.error}` : ""}</p>}
     </div>
+    {status === "ready" && recommendations && recommendations.suggestions.length > 0 && <div className="project-suggestions">
+      {recommendations.suggestions.map((suggestion, index) => <button type="button" key={`${index}:${suggestion.title}`}
+        disabled={disabled || !onChoose} onClick={() => onChoose?.(suggestion.prompt)}>
+        <strong>{suggestion.title}</strong>
+        <span>{suggestion.description}</span>
+      </button>)}
+    </div>}
   </section>;
 }

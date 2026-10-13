@@ -326,6 +326,11 @@ export class AgentService {
     return this.runtime?.session.modelRuntime;
   }
 
+  get recommendationContext() {
+    const session = this.runtime?.session;
+    return session?.model ? { model: session.model, runtime: session.modelRuntime } : undefined;
+  }
+
   get projectSettingsTrusted(): boolean {
     return this.runtime?.services.settingsManager.isProjectTrusted() ?? false;
   }

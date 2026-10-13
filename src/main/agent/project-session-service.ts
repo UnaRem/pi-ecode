@@ -6,6 +6,7 @@ import { AgentService } from "./agent-service.js";
 import { EMPTY_AGENT_SNAPSHOT } from "./empty-agent-snapshot.js";
 import { listSessionSummaries } from "./session-summaries.js";
 import { SessionWorkspaceRegistry } from "./session-workspaces.js";
+import { ProjectRecommendationService } from "./project-recommendations.js";
 
 interface SessionSlot {
   service: AgentService;
@@ -26,6 +27,7 @@ export class ProjectSessionService {
   private readonly listeners = new Set<(event: AgentEvent) => void>();
   private readonly authListeners = new Set<(event: AuthFlowEvent) => void>();
   private readonly reservations = new Set<AgentService>();
+  private readonly recommendations = new ProjectRecommendationService(() => this.publishRecommendations());
   private active: SessionSlot;
   private projectPath: string | undefined;
   private persistedSessions: SessionSummary[] = [];
@@ -48,6 +50,7 @@ export class ProjectSessionService {
     this.active.snapshot = snapshot;
     this.projectPath = snapshot.projectPath ?? undefined;
     if (this.projectPath) await this.loadWorkspaces(this.projectPath);
+    this.refreshRecommendations();
   }
 
   subscribe(listener: (event: AgentEvent) => void): () => void {
@@ -116,7 +119,12 @@ export class ProjectSessionService {
       // Acknowledge accepted background sends; the renderer filters these from the foreground timeline.
       this.emit({ ...event, sessionId: slot.snapshot.sessionId });
     }
-    if (["sessions", "state", "error", "extension-ui", "snapshot"].includes(event.type)) this.publishSessionList();
+    if (event.type === "state" && event.patch.selectedModel !== undefined && slot === this.active) {
+      this.refreshRecommendations();
+      this.publishRecommendations();
+    }
+    const acceptedUser = event.type === "timeline-upsert" && event.item.kind === "message" && event.item.message.role === "user";
+    if (acceptedUser || ["sessions", "state", "error", "extension-ui", "snapshot"].includes(event.type)) this.publishSessionList();
   }
 
   private publishSessionList(): void {
@@ -130,17 +138,23 @@ export class ProjectSessionService {
     for (const slot of this.slots) {
       for (const summary of slot.snapshot.sessions) sessions.set(summary.path, { ...summary, workspacePath: slot.snapshot.projectPath ?? this.projectPath! });
     }
+    const firstUserBySession = new Map([...this.slots].map((slot) => [slot.snapshot.sessionFile,
+      slot.snapshot.timeline.find((item) => item.kind === "message" && item.message.role === "user")]));
+    for (const [path, summary] of sessions) {
+      if (summary.messageCount === 0 && !firstUserBySession.get(path)) sessions.delete(path);
+    }
     // Shared-directory inventories overlap; apply live statuses after all inventory rows to keep background stop controls.
     for (const slot of this.slots) {
       const snapshot = slot.snapshot;
       if (!snapshot.sessionFile || !snapshot.sessionId) continue;
       const existing = sessions.get(snapshot.sessionFile);
-      const firstUser = snapshot.timeline.find((item) => item.kind === "message" && item.message.role === "user");
+      const firstUser = firstUserBySession.get(snapshot.sessionFile);
+      if (!existing && !firstUser) continue;
       const liveMessageCount = snapshot.timeline.filter((item) => item.kind === "message").length;
       const status = this.sessionStatus(slot);
       sessions.set(snapshot.sessionFile, { path: snapshot.sessionFile, id: snapshot.sessionId,
         title: snapshot.sessionTitle ?? existing?.title ?? (firstUser?.kind === "message" ? firstUser.message.text : "New conversation"),
-        messageCount: existing?.messageCount ?? liveMessageCount,
+        messageCount: Math.max(existing?.messageCount ?? 0, liveMessageCount),
         modifiedAt: existing?.modifiedAt ?? slot.createdAt, byteSize: existing?.byteSize ?? null,
         workspacePath: snapshot.projectPath ?? this.projectPath!, runStatus: status });
     }
@@ -159,6 +173,7 @@ export class ProjectSessionService {
     return { ...snapshot, projectPath: this.projectPath ?? snapshot.projectPath,
       projectName: this.projectPath ? basename(this.projectPath) : snapshot.projectName,
       workspacePath: snapshot.projectPath, sessions: this.sessionSummaries(),
+      ...(snapshot.projectProfile ? { projectProfile: { ...snapshot.projectProfile, recommendations: this.recommendations.state } } : {}),
       parallel: { maxRunning: 2, runningCount, canCreate: !this.transitioning && !this.workspaceOperation,
         reason: null } };
   }
@@ -168,7 +183,31 @@ export class ProjectSessionService {
     const snapshot = await active.service.getSnapshot();
     active.snapshot = snapshot;
     if (active !== this.active) return this.getSnapshot();
+    this.refreshRecommendations();
     return this.projectSnapshot(snapshot);
+  }
+
+  private refreshRecommendations(): void {
+    if (!this.projectPath || this.active.snapshot.timeline.length) return;
+    this.recommendations.start({ projectPath: this.projectPath, sessions: this.sessionSummaries(),
+      context: this.active.service.recommendationContext });
+  }
+
+  private publishRecommendations(): void {
+    if (this.transitioning || !this.projectPath || this.active.snapshot.timeline.length) return;
+    const active = this.active;
+    const projectPath = this.projectPath;
+    // Read the authoritative service snapshot; a cached slot may not include newer history/validation events.
+    void active.service.getSnapshot().then((snapshot) => {
+      if (this.transitioning || active !== this.active || projectPath !== this.projectPath
+        || this.active.snapshot.timeline.length || snapshot.timeline.length) return;
+      active.snapshot = snapshot;
+      this.emit({ type: "snapshot", snapshot: this.projectSnapshot(snapshot) });
+    }).catch((error: unknown) => {
+      if (active === this.active && projectPath === this.projectPath) {
+        this.emit({ type: "notice", message: `近期推荐更新失败：${error instanceof Error ? error.message : String(error)}` });
+      }
+    });
   }
 
   private async loadWorkspaces(projectPath: string): Promise<void> {
@@ -180,6 +219,7 @@ export class ProjectSessionService {
 
   async openProject(path: string): Promise<AgentSnapshot> {
     return this.transition(async () => {
+      this.recommendations.cancel();
       await this.disposeChildren();
       this.active = [...this.slots].find((slot) => slot.service === this.root)!;
       const snapshot = await this.root.openProject(path);
@@ -239,6 +279,7 @@ export class ProjectSessionService {
       const snapshot = await operation();
       this.active.snapshot = snapshot;
     } finally {
+      this.refreshRecommendations();
       this.transitioning = false;
       const snapshot = this.projectSnapshot(this.active.snapshot);
       this.emit({ type: "snapshot", snapshot });
@@ -372,6 +413,7 @@ export class ProjectSessionService {
   }
 
   async dispose(): Promise<void> {
+    this.recommendations.cancel();
     this.transitioning = true;
     try {
       await this.workspaceOperation?.catch(() => undefined);

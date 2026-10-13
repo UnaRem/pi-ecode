@@ -296,7 +296,15 @@ export interface AgentTimelinePage {
   hasMore: boolean;
 }
 
+export interface ProjectRecommendations {
+  status: "loading" | "ready" | "empty" | "error";
+  summary: string;
+  suggestions: Array<{ title: string; description: string; prompt: string }>;
+  error: string | null;
+}
+
 export interface ProjectProfile {
+  recommendations?: ProjectRecommendations;
   description: string | null;
   technologies: string[];
   features: Array<"sessions" | "mcp" | "history">;
