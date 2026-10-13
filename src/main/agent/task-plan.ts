@@ -40,7 +40,9 @@ const TaskProgressParameters = Type.Object({
   id: Type.String({ minLength: 1, maxLength: 40, description: "Task ID in the current plan" }),
   outcome: StringEnum(["in_progress", "completed", "blocked"] as const),
   evidence: Type.String({ minLength: 1, maxLength: 1000, description: "Observed results against the completion criteria, or remaining work/blocker" }),
-  nextId: Type.Optional(Type.String({ minLength: 1, maxLength: 40, description: "Task to start after completing this task" })),
+  nextId: Type.Optional(Type.Union([
+    Type.String({ minLength: 1, maxLength: 40 }), Type.Null(),
+  ], { description: "Only for completed: task to start next. Use null or omit when continuing, blocked, or no next task. Ignored for in_progress/blocked." })),
 });
 type TaskProgressReport = Static<typeof TaskProgressParameters>;
 
@@ -168,7 +170,7 @@ export class TaskPlanService {
     }
     this.repairRequested = true;
     return { continue: true, entries: [{ type: "custom_message", customType: "pi-ecode.task-checkpoint", display: false,
-      content: "主程序待办检查点：本批工作已结束。下一条回复必须单独调用 task_progress，按当前计划 ID 和完成标准报告 completed、in_progress 或 blocked，并提供依据。未满足标准就报告剩余工作，不能把工具成功等同于任务完成。补报成功后才可继续执行或交付。",
+      content: "主程序待办检查点：本批工作已结束。下一条回复必须单独调用 task_progress，按当前计划 ID 和完成标准报告 completed、in_progress 或 blocked，并提供依据。仅 completed 且需要启动下一项时填写 nextId；in_progress、blocked 或没有下一项时使用 nextId: null 或省略。未满足标准就报告剩余工作，不能把工具成功等同于任务完成。补报成功后才可继续执行或交付。",
     }] };
   }
 
@@ -225,7 +227,7 @@ export class TaskPlanService {
   }
 
   private validateNextTask(report: TaskProgressReport): void {
-    if (report.nextId === undefined) return;
+    if (report.nextId == null) return;
     if (report.outcome !== "completed" || report.nextId === report.id
       || !this.plan?.items.some((item) => item.id === report.nextId && item.status !== "completed")) {
       throw new Error("仅在完成当前任务后才能开始另一个未完成的有效待办。");
@@ -253,12 +255,15 @@ export class TaskPlanService {
       promptGuidelines: [
         "When a host task checkpoint is pending, call task_progress alone before other tools or final delivery.",
         "Use the current planUpdatedAt revision and task ID from request context. Report observed evidence against completionCriteria; use in_progress or blocked when unfinished.",
+        "Set nextId only when outcome is completed and another task should start. For in_progress, blocked, or no next task, use null or omit nextId; a supplied nextId is ignored for unfinished outcomes.",
         "A blocked report keeps the task incomplete. A launched background validation is still running; only its final result can establish success.",
       ],
       parameters: TaskProgressParameters,
       execute: async (_toolCallId, report, signal) => {
         signal?.throwIfAborted();
-        const plan = this.applyProgress(report);
+        // Continuing/blocked reports cannot start sibling tasks, even when the model supplies nextId.
+        const normalizedReport = { ...report, nextId: report.outcome === "completed" ? report.nextId ?? null : null };
+        const plan = this.applyProgress(normalizedReport);
         // Persist before publishing; a failed write must not advance the sidebar or release the gate.
         pi.appendEntry<PlanStateEntry>(PLAN_ENTRY, { version: 1, plan });
         this.setPlan(plan);
@@ -267,7 +272,7 @@ export class TaskPlanService {
         this.checkpointPending = false;
         this.repairRequested = false;
         return { content: [{ type: "text", text: `任务 ${report.id}：${report.outcome}。${report.evidence.trim()}\n计划版本：${plan.updatedAt}` }],
-          details: { kind: PLAN_DETAILS_KIND, version: 1, plan: structuredClone(plan), report } };
+          details: { kind: PLAN_DETAILS_KIND, version: 1, plan: structuredClone(plan), report: normalizedReport } };
       },
     });
   }

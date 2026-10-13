@@ -112,6 +112,49 @@ describe("task progress SDK checkpoints", () => {
     expect(test.notify).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { outcome: "in_progress", nextId: "verify" },
+    { outcome: "blocked", nextId: "verify" },
+    { outcome: "in_progress", nextId: null },
+    { outcome: "blocked", nextId: null },
+  ] as const)("continues after $outcome with nextId=$nextId without advancing the next task", async ({ outcome, nextId }) => {
+    const test = await sdkFixture();
+    const requests = await test.run([
+      planCall,
+      () => call("research_probe", {}),
+      () => call("task_progress", { planUpdatedAt: test.service.current!.updatedAt, id: "research",
+        outcome, evidence: "One path is identified; another remains", nextId }),
+      () => call("research_probe", {}),
+      () => call("task_progress", { planUpdatedAt: test.service.current!.updatedAt, id: "research",
+        outcome: "in_progress", evidence: "Research continued successfully", nextId: null }),
+      () => assistant([{ type: "text", text: "Research still needs more evidence." }]),
+    ]);
+    expect(requests).toBe(6);
+    expect(test.probe).toHaveBeenCalledTimes(2);
+    expect(test.service.current?.items.map((item) => item.status)).toEqual(["in_progress", "pending"]);
+    expect(test.session.messages.some((message) => message.role === "toolResult" && message.isError)).toBe(false);
+    expect(test.notify).not.toHaveBeenCalled();
+    expect(test.session.isIdle).toBe(true);
+  });
+
+  it("accepts null nextId through SDK validation when completing the last task", async () => {
+    const test = await sdkFixture();
+    const requests = await test.run([
+      planCall,
+      () => call("research_probe", {}),
+      () => call("task_progress", { planUpdatedAt: test.service.current!.updatedAt, id: "research",
+        outcome: "completed", evidence: "Cause identified", nextId: "verify" }),
+      () => call("research_probe", {}),
+      () => call("task_progress", { planUpdatedAt: test.service.current!.updatedAt, id: "verify",
+        outcome: "completed", evidence: "Regression verified", nextId: null }),
+      () => assistant([{ type: "text", text: "Research and verification complete." }]),
+    ]);
+    expect(requests).toBe(6);
+    expect(test.service.current?.items.map((item) => item.status)).toEqual(["completed", "completed"]);
+    expect(test.notify).not.toHaveBeenCalled();
+    expect(test.session.messages.some((message) => message.role === "toolResult" && message.isError)).toBe(false);
+  });
+
   it("blocks another business tool and aborts after a missed checkpoint instead of looping", async () => {
     const test = await sdkFixture();
     const requests = await test.run([

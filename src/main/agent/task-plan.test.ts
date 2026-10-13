@@ -14,7 +14,7 @@ type PlanTool = {
 
 type ProgressTool = {
   execute: (id: string, report: {
-    planUpdatedAt: number; id: string; outcome: "in_progress" | "completed" | "blocked"; evidence: string; nextId?: string;
+    planUpdatedAt: number; id: string; outcome: "in_progress" | "completed" | "blocked"; evidence: string; nextId?: string | null;
   }, signal: AbortSignal) => Promise<{ details: unknown }>;
 };
 
@@ -138,7 +138,9 @@ describe("TaskPlanService", () => {
     const before = service.current;
     const report = { ...base, planUpdatedAt: before!.updatedAt };
     changes.mockClear();
-    for (const invalid of [{ ...report, id: "unknown" }, { ...report, evidence: " " }, { ...report, nextId: "review" }]) {
+    for (const invalid of [{ ...report, id: "unknown" }, { ...report, evidence: " " },
+      { ...report, outcome: "completed" as const, nextId: "review" },
+      { ...report, outcome: "completed" as const, nextId: "unknown" }]) {
       await expect(test.getProgressTool().execute("invalid", invalid, new AbortController().signal)).rejects.toThrow();
     }
     const cancelled = new AbortController();
@@ -146,6 +148,38 @@ describe("TaskPlanService", () => {
     await expect(test.getProgressTool().execute("cancelled", report, cancelled.signal)).rejects.toThrow();
     expect(service.current).toEqual(before);
     expect(changes).not.toHaveBeenCalled();
+  });
+
+  it.each(["in_progress", "blocked"] as const)("ignores nextId for %s and releases the checkpoint without starting a sibling", async (outcome) => {
+    const service = new TaskPlanService(vi.fn());
+    const test = harness(service);
+    await test.getTool().execute("plan", { title: "Review", items: [
+      { id: "review", text: "Review behavior", status: "in_progress" },
+      { id: "verify", text: "Verify behavior", status: "pending" },
+    ] }, new AbortController().signal);
+    for (const nextId of ["verify", "unknown", "review", null, undefined]) {
+      test.handlers.get("turn_end")?.({ outcome: "completed", toolResults: [{ toolName: "read", durationMs: 1 }] }, test.context);
+      expect(test.handlers.get("tool_call")?.({ toolName: "read" }, test.context)).toMatchObject({ block: true });
+      const result = await test.getProgressTool().execute("progress", { planUpdatedAt: service.current!.updatedAt,
+        id: "review", outcome, evidence: "More work is needed", ...(nextId !== undefined ? { nextId } : {}) }, new AbortController().signal);
+      expect(result.details).toMatchObject({ report: { outcome, nextId: null } });
+      expect(service.current?.items.map((item) => item.status)).toEqual(["in_progress", "pending"]);
+      expect(test.handlers.get("tool_call")?.({ toolName: "read" }, test.context)).toBeUndefined();
+    }
+    expect(test.abort).not.toHaveBeenCalled();
+  });
+
+  it("accepts null nextId when completing the final task", async () => {
+    const service = new TaskPlanService(vi.fn());
+    const test = harness(service);
+    await test.getTool().execute("plan", { title: "Review", items: [
+      { id: "review", text: "Review behavior", status: "in_progress" },
+    ] }, new AbortController().signal);
+    const result = await test.getProgressTool().execute("progress", { planUpdatedAt: service.current!.updatedAt,
+      id: "review", outcome: "completed", evidence: "Review finished", nextId: null }, new AbortController().signal);
+    expect(result.details).toMatchObject({ report: { nextId: null } });
+    expect(service.current?.items[0]?.status).toBe("completed");
+    expect(test.appended.at(-1)).toMatchObject({ data: { plan: service.current } });
   });
 
   it("triggers a checkpoint for reasoning, blocks more work and stops after one failed repair", async () => {
