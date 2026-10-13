@@ -10,6 +10,7 @@ import { SessionWorkspaceRegistry } from "./session-workspaces.js";
 interface SessionSlot {
   service: AgentService;
   snapshot: AgentSnapshot;
+  createdAt: number;
   unsubscribe: () => void;
 }
 interface ProjectSessionOptions {
@@ -78,7 +79,7 @@ export class ProjectSessionService {
   }
 
   private addSlot(service: AgentService): SessionSlot {
-    const slot: SessionSlot = { service, snapshot: { ...EMPTY_AGENT_SNAPSHOT }, unsubscribe: () => undefined };
+    const slot: SessionSlot = { service, snapshot: { ...EMPTY_AGENT_SNAPSHOT }, createdAt: Date.now(), unsubscribe: () => undefined };
     const unsubscribe = service.subscribe((event) => this.handleEvent(slot, event));
     const unsubscribeAuth = service.subscribeAuth((event) => {
       if (slot === this.active) for (const listener of this.authListeners) listener(event);
@@ -89,7 +90,11 @@ export class ProjectSessionService {
   }
 
   private handleEvent(slot: SessionSlot, event: AgentEvent): void {
-    if (event.type === "snapshot") slot.snapshot = event.snapshot;
+    if (event.type === "snapshot") {
+      // Blank sessions have no file timestamp yet; retain their creation time until persisted metadata is available.
+      if (event.snapshot.sessionId !== slot.snapshot.sessionId) slot.createdAt = Date.now();
+      slot.snapshot = event.snapshot;
+    }
     if (event.type === "sessions") slot.snapshot = { ...slot.snapshot, sessions: event.sessions };
     if (event.type === "state") slot.snapshot = { ...slot.snapshot, ...event.patch };
     if (event.type === "error") slot.snapshot = { ...slot.snapshot, error: event.message };
@@ -131,10 +136,12 @@ export class ProjectSessionService {
       if (!snapshot.sessionFile || !snapshot.sessionId) continue;
       const existing = sessions.get(snapshot.sessionFile);
       const firstUser = snapshot.timeline.find((item) => item.kind === "message" && item.message.role === "user");
+      const liveMessageCount = snapshot.timeline.filter((item) => item.kind === "message").length;
       const status = this.sessionStatus(slot);
       sessions.set(snapshot.sessionFile, { path: snapshot.sessionFile, id: snapshot.sessionId,
         title: snapshot.sessionTitle ?? existing?.title ?? (firstUser?.kind === "message" ? firstUser.message.text : "New conversation"),
-        messageCount: existing?.messageCount ?? 0, modifiedAt: existing?.modifiedAt ?? 0, byteSize: existing?.byteSize ?? null,
+        messageCount: existing?.messageCount ?? liveMessageCount,
+        modifiedAt: existing?.modifiedAt ?? slot.createdAt, byteSize: existing?.byteSize ?? null,
         workspacePath: snapshot.projectPath ?? this.projectPath!, runStatus: status });
     }
     return [...sessions.values()].sort((left, right) => right.modifiedAt - left.modifiedAt);

@@ -7,6 +7,43 @@ import { Sidebar } from "./Sidebar";
 describe("Sidebar", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it.each([
+    { language: "zh-CN", title: "新对话", justNow: "刚刚", hint: "发送消息开始对话" },
+    { language: "en", title: "New conversation", justNow: "Just now", hint: "Send a message to start" },
+  ])("renders a clean unsaved conversation in $language", ({ language, title, justNow, hint }) => {
+    vi.stubGlobal("localStorage", { getItem: () => language, setItem: vi.fn() });
+    const markup = renderToStaticMarkup(<I18nProvider><Sidebar
+      projectName="demo" projectPath="C:/demo" iconSrc="./ecode-icon.png" activeSessionFile="new.jsonl"
+      sessions={[{ path: "new.jsonl", id: "new", title: "New conversation", modifiedAt: Date.now(), messageCount: 0, byteSize: null, runStatus: "idle" }]}
+      disabled={false} taskPlan={null} settingsActive={false} open onChooseProject={vi.fn()} onNewSession={vi.fn()}
+      onSwitchSession={vi.fn()} onDeleteSession={vi.fn()} onOpenSettings={vi.fn()} onCollapse={vi.fn()}
+    /></I18nProvider>);
+    expect(markup).toContain(`<span class="session-title">${title}</span>`);
+    expect(markup).toContain(`<time>${justNow}</time>`);
+    expect(markup).toContain(hint);
+    expect(markup).toContain('aria-current="page"');
+    expect(markup).not.toContain("大小未知");
+    expect(markup).not.toContain("Size unknown");
+    expect(markup).not.toContain('class="session-run-status idle"');
+  });
+
+  it("preserves renamed empty conversations and titles from saved history", () => {
+    vi.stubGlobal("localStorage", { getItem: () => "zh-CN", setItem: vi.fn() });
+    const markup = renderToStaticMarkup(<I18nProvider><Sidebar
+      projectName="demo" projectPath="C:/demo" iconSrc="./ecode-icon.png" activeSessionFile="named.jsonl"
+      sessions={[
+        { path: "named.jsonl", id: "named", title: "我的空白任务", modifiedAt: Date.now(), messageCount: 0, byteSize: null, runStatus: "idle" },
+        { path: "saved.jsonl", id: "saved", title: "New conversation", modifiedAt: Date.now(), messageCount: 1, byteSize: 12, runStatus: "completed" },
+      ]}
+      disabled={false} taskPlan={null} settingsActive={false} open onChooseProject={vi.fn()} onNewSession={vi.fn()}
+      onSwitchSession={vi.fn()} onDeleteSession={vi.fn()} onOpenSettings={vi.fn()} onCollapse={vi.fn()}
+    /></I18nProvider>);
+    expect(markup).toContain('<span class="session-title">我的空白任务</span>');
+    expect(markup).toContain('<span class="session-title">New conversation</span>');
+    expect(markup.match(/发送消息开始对话/g)).toHaveLength(1);
+    expect(markup).toContain('class="session-run-status completed"');
+  });
+
   it("offers deletion only for inactive sessions", () => {
     vi.stubGlobal("localStorage", { getItem: () => "en", setItem: vi.fn() });
     const markup = renderToStaticMarkup(

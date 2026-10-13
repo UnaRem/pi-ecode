@@ -59,6 +59,40 @@ async function fixture(configureChild?: (child: ReturnType<typeof serviceFixture
 }
 
 describe("parallel project sessions", () => {
+  it("keeps unsaved session timestamps stable and prefers persisted file metadata", async () => {
+    const createdAt = 1_800_000_000_000;
+    const clock = vi.spyOn(Date, "now").mockReturnValue(createdAt);
+    try {
+      const test = await fixture();
+      const blank = { ...await test.root.service.getSnapshot(), sessions: [] };
+      test.root.mock.getSnapshot.mockResolvedValue(blank);
+      test.root.publish({ type: "snapshot", snapshot: blank });
+      const first = (await test.owner.getSnapshot()).sessions[0]!;
+      expect(first).toMatchObject({ id: "root", title: "New conversation", modifiedAt: createdAt, byteSize: null, messageCount: 0 });
+      clock.mockReturnValue(createdAt + 60_000);
+      expect((await test.owner.getSnapshot()).sessions[0]).toEqual(first);
+
+      const next = { ...blank, sessionId: "next", sessionFile: "/project/next.jsonl" };
+      test.root.mock.getSnapshot.mockResolvedValue(next);
+      test.root.publish({ type: "snapshot", snapshot: next });
+      expect((await test.owner.getSnapshot()).sessions[0]).toMatchObject({ id: "next", modifiedAt: createdAt + 60_000 });
+      const saved = { path: next.sessionFile, id: "next", title: "Saved", messageCount: 1, modifiedAt: createdAt + 90_000, byteSize: 128 };
+      test.root.mock.getSnapshot.mockResolvedValue({ ...next, sessions: [saved] });
+      expect((await test.owner.getSnapshot()).sessions[0]).toMatchObject(saved);
+      await test.owner.dispose();
+    } finally { clock.mockRestore(); }
+  });
+
+  it("counts live messages before a conversation file appears in the inventory", async () => {
+    const test = await fixture();
+    const snapshot = { ...await test.root.service.getSnapshot(), sessions: [], timeline: [
+      { kind: "message" as const, id: "first-user", message: { id: "first-user", role: "user" as const, text: "First task", timestamp: Date.now() } },
+    ] };
+    test.root.mock.getSnapshot.mockResolvedValue(snapshot);
+    expect((await test.owner.getSnapshot()).sessions[0]).toMatchObject({ title: "First task", messageCount: 1, byteSize: null, runStatus: "completed" });
+    await test.owner.dispose();
+  });
+
   it("keeps background runs alive, filters their events and stops only the registered target", async () => {
     const test = await fixture();
     const events: AgentEvent[] = [];

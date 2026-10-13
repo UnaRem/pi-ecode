@@ -26,10 +26,10 @@ interface SidebarProps {
   onCollapse: () => void;
 }
 
-function relativeTime(timestamp: number, locale: string): string {
+function relativeTime(timestamp: number, locale: string, justNow: string): string {
   const elapsed = Date.now() - timestamp;
+  if (elapsed < 60_000) return justNow;
   const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "narrow" });
-  if (elapsed < 60_000) return formatter.format(0, "minute");
   if (elapsed < 3_600_000) return formatter.format(-Math.floor(elapsed / 60_000), "minute");
   if (elapsed < 86_400_000) return formatter.format(-Math.floor(elapsed / 3_600_000), "hour");
   return formatter.format(-Math.floor(elapsed / 86_400_000), "day");
@@ -68,6 +68,9 @@ export function Sidebar(props: SidebarProps) {
           props.sessions.map((session) => {
             const active = session.path === props.activeSessionFile;
             const large = (session.byteSize ?? 0) >= LARGE_SESSION_BYTES;
+            const untitled = session.messageCount === 0 && session.title === "New conversation";
+            const unsaved = session.messageCount === 0 && session.byteSize == null;
+            const sessionTitle = untitled ? t("sidebar.untitled") : session.title;
             const size = session.byteSize == null ? t("sidebar.sizeUnknown") : formatSessionSize(session.byteSize);
             return (
               <div key={session.path} className={`session-row ${active ? "active" : ""}`}>
@@ -76,16 +79,18 @@ export function Sidebar(props: SidebarProps) {
                   onClick={() => props.onSwitchSession(session.path)}
                   disabled={!props.parallel && props.disabled}
                   title={session.workspacePath}
+                  aria-current={active ? "page" : undefined}
                 >
-                  <span className="session-title">{session.title}</span>
-                  <time>{relativeTime(session.modifiedAt, locale)}</time>
-                  <small className="session-meta" title={t("sidebar.fileSize", { size })}>
-                    <span className={`session-size ${large ? "large" : ""}`}>{size}{large ? ` · ${t("sidebar.largeSession")}` : ""}</span>
-                    {session.runStatus && <span className={`session-run-status ${session.runStatus}`}>{t(`sidebar.run.${session.runStatus}`)}</span>}
+                  <span className="session-title">{sessionTitle}</span>
+                  <time>{relativeTime(session.modifiedAt, locale, t("sidebar.justNow"))}</time>
+                  <small className="session-meta" title={unsaved ? undefined : t("sidebar.fileSize", { size })}>
+                    {unsaved ? <span className="session-size">{t("sidebar.startConversation")}</span> :
+                      <span className={`session-size ${large ? "large" : ""}`}>{size}{large ? ` · ${t("sidebar.largeSession")}` : ""}</span>}
+                    {session.runStatus && !(unsaved && session.runStatus === "idle") && <span className={`session-run-status ${session.runStatus}`}>{t(`sidebar.run.${session.runStatus}`)}</span>}
                   </small>
                 </button>
                 {session.runStatus === "running" && props.onStopSession ? (
-                  <button className="session-stop-button" onClick={() => props.onStopSession?.(session.path)} aria-label={t("sidebar.stopSession", { title: session.title })} title={t("composer.stop")}>
+                  <button className="session-stop-button" onClick={() => props.onStopSession?.(session.path)} aria-label={t("sidebar.stopSession", { title: sessionTitle })} title={t("composer.stop")}>
                     <Square size={12} fill="currentColor" aria-hidden="true" />
                   </button>
                 ) : !active && (
@@ -93,7 +98,7 @@ export function Sidebar(props: SidebarProps) {
                     className="session-delete-button"
                     onClick={async () => {
                       if (await window.piDesktop.showConfirmation({
-                        message: t("sidebar.confirmDelete", { title: session.title.slice(0, 160) }),
+                        message: t("sidebar.confirmDelete", { title: sessionTitle.slice(0, 160) }),
                         confirmLabel: t("dialog.confirm"), cancelLabel: t("dialog.cancel"),
                       })) props.onDeleteSession(session.path);
                     }}

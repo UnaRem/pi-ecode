@@ -92,7 +92,7 @@ describe("AgentService 托管进程", () => {
     runtimeFactory.mockRestore();
   });
 
-  it("opens distinct new conversation files in a shared cwd without resuming the most recent session", async () => {
+  it.each([undefined, true])("opens distinct new conversation files without resuming recent history (startNewSession=%s)", async (startNewSession) => {
     const cwd = await mkdtemp(join(tmpdir(), "pi-ecode-shared-session-"));
     const managers: SessionManager[] = [];
     const service = new AgentService();
@@ -104,8 +104,8 @@ describe("AgentService 托管进程", () => {
       throw new Error("fixture startup boundary");
     });
     try {
-      await expect(service.openProject(cwd, undefined, true)).rejects.toThrow("fixture startup boundary");
-      await expect(service.openProject(cwd, undefined, true)).rejects.toThrow("fixture startup boundary");
+      await expect(service.openProject(cwd, undefined, startNewSession)).rejects.toThrow("fixture startup boundary");
+      await expect(service.openProject(cwd, undefined, startNewSession)).rejects.toThrow("fixture startup boundary");
       expect(recent).not.toHaveBeenCalled();
       expect(managers).toHaveLength(2);
       expect(managers[0]!.getSessionFile()).toBeDefined();

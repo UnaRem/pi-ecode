@@ -235,7 +235,7 @@ export class AgentService {
     this.pendingStreamContext = undefined;
   }
 
-  async openProject(inputPath: string, sessionPath?: string, startNewSession = false): Promise<AgentSnapshot> {
+  async openProject(inputPath: string, sessionPath?: string, startNewSession = true): Promise<AgentSnapshot> {
     const cwd = resolve(inputPath);
     const details = await stat(cwd);
     if (!details.isDirectory()) throw new Error("Selected project is not a directory.");
