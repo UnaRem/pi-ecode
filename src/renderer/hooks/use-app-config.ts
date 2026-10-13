@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AppConfigSnapshot, ConversationIdentityRole } from "@shared/app-config-contracts";
 import type { WorkAnimatorDisplay, WorkAnimatorStatus, WorkAnimatorUpdate } from "@shared/work-animator";
+import type { AppFontSettings } from "@shared/font-settings";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -155,8 +156,14 @@ export function useAppConfig() {
     }
   }, []);
 
+  const saveFontSettings = useCallback(async (fonts: AppFontSettings): Promise<void> => {
+    // The font panel owns drafts and errors; propagate failures without replacing its inputs.
+    setSnapshot(await window.piDesktop.saveFontSettings(fonts));
+  }, []);
+
   return {
     snapshot,
+    saveFontSettings,
     saveWorkAnimator,
     saveWorkAnimatorDisplay,
     addWorkAnimatorImages,

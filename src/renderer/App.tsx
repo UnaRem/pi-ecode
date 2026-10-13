@@ -12,11 +12,28 @@ import { useAppConfig } from "./hooks/use-app-config";
 import { useScrollbarVisibility } from "./hooks/use-scrollbar-visibility";
 import { useWorkspaceTools } from "./hooks/use-workspace-tools";
 import { useI18n } from "./i18n/i18n";
+import { fontFamilyCss } from "@shared/font-settings";
 
 export default function App() {
   useScrollbarVisibility();
   const { state, isLoading, isLoadingOlder, actions } = useAgent();
   const { snapshot: appConfig } = useAppConfig();
+  useEffect(() => {
+    if (!appConfig) return;
+    const style = document.documentElement.style;
+    const fonts = appConfig.fonts;
+    const variables: Record<string, string | null> = {
+      "--font-ui": fonts.uiFamily ? fontFamilyCss(fonts.uiFamily) : null,
+      "--font-code": fonts.codeFamily ? fontFamilyCss(fonts.codeFamily, true) : null,
+      "--conversation-font-size": fonts.conversationSize === null ? null : `${fonts.conversationSize}px`,
+      "--code-font-size": fonts.codeSize === null ? null : `${fonts.codeSize}px`,
+    };
+    for (const [name, value] of Object.entries(variables)) {
+      if (value === null) style.removeProperty(name);
+      else style.setProperty(name, value);
+    }
+    return () => { for (const name of Object.keys(variables)) style.removeProperty(name); };
+  }, [appConfig]);
   const brandIconSrc = appConfig?.iconUrl ?? "./ecode-icon.png";
   const customBackdropActive = Boolean(appConfig?.backgroundImageUrl);
   const conversationBackgroundUrl = appConfig?.backgroundImageUrl ?? null;

@@ -9,6 +9,7 @@ import type { AgentService } from "../agent/agent-service.js";
 import type { AppConfigService } from "../app-config/app-config-service.js";
 import type { SettingsService } from "../settings/settings-service.js";
 import { ProjectGitService } from "../project-git-service.js";
+import { isAppFontSettings } from "../../shared/font-settings.js";
 
 function isConversationIdentityRole(value: unknown): value is ConversationIdentityRole {
   return value === "assistant" || value === "user";
@@ -209,6 +210,10 @@ export function registerIpc(service: AgentService | ProjectSessionService, setti
   ipcMain.handle(IPC_CHANNELS.getProjectGitStatus, () => projectGit.getStatus());
   ipcMain.handle(IPC_CHANNELS.pushProject, () => projectGit.push());
   ipcMain.handle(IPC_CHANNELS.getAppConfig, () => appConfig.getSnapshot());
+  ipcMain.handle(IPC_CHANNELS.saveFontSettings, (_event, value: unknown) => {
+    if (!isAppFontSettings(value)) throw new Error("Invalid font settings.");
+    return appConfig.saveFontSettings(value);
+  });
   ipcMain.handle(IPC_CHANNELS.saveWorkAnimatorDisplay, (_event, display: unknown) => {
     if (!isWorkAnimatorDisplay(display)) throw new Error("Invalid animator display configuration.");
     return appConfig.saveWorkAnimatorDisplay(display);

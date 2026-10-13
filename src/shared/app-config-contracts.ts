@@ -1,4 +1,5 @@
 import type { WorkAnimatorSettings } from "./work-animator.js";
+import type { AppFontSettings } from "./font-settings.js";
 
 // pi-ecode 应用级配置契约（与 pi agent 的 settings.json 解耦）。
 // 承载应用图标、会话身份、侧栏人物与背景图；自定义文件路径相对 userData，null 表示使用默认。
@@ -50,6 +51,7 @@ export interface AppConfigSnapshot {
   /** 会话中模型与用户的全局身份设置。 */
   conversationIdentity: ConversationIdentity;
   workAnimator: WorkAnimatorSettings;
+  fonts: AppFontSettings;
 }
 
 export interface AppConfigChangedEvent {

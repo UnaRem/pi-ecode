@@ -47,6 +47,7 @@ const api: DesktopApi = {
   getProjectGitStatus: () => ipcRenderer.invoke(IPC_CHANNELS.getProjectGitStatus),
   pushProject: () => ipcRenderer.invoke(IPC_CHANNELS.pushProject),
   getAppConfig: () => ipcRenderer.invoke(IPC_CHANNELS.getAppConfig),
+  saveFontSettings: (value) => ipcRenderer.invoke(IPC_CHANNELS.saveFontSettings, value),
   saveWorkAnimator: (status, update) => ipcRenderer.invoke(IPC_CHANNELS.saveWorkAnimator, status, update),
   saveWorkAnimatorDisplay: (display) => ipcRenderer.invoke(IPC_CHANNELS.saveWorkAnimatorDisplay, display),
   addWorkAnimatorImages: (status) => ipcRenderer.invoke(IPC_CHANNELS.addWorkAnimatorImages, status),

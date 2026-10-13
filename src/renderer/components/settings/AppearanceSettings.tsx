@@ -2,6 +2,7 @@ import { Image, LoaderCircle, Upload, X } from "lucide-react";
 import { useAppConfig } from "../../hooks/use-app-config";
 import { useI18n } from "../../i18n/i18n";
 import { WorkAnimatorSettings } from "./WorkAnimatorSettings";
+import { FontSettings } from "./FontSettings";
 
 /**
  * 应用外观设置：自定义 UI 内 logo 与会话区背景图。
@@ -11,6 +12,7 @@ export function AppearanceSettings() {
   const { t } = useI18n();
   const {
     snapshot,
+    saveFontSettings,
     loading,
     error,
     chooseIcon,
@@ -33,6 +35,7 @@ export function AppearanceSettings() {
       {error && <div className="settings-error">{error}</div>}
       {loading && <div className="settings-pending"><LoaderCircle className="spin" size={12} />{t("settings.loading")}</div>}
       <div className="appearance-settings">
+        {snapshot && <FontSettings settings={snapshot.fonts} onSave={saveFontSettings} />}
         {snapshot?.workAnimator && <WorkAnimatorSettings settings={snapshot.workAnimator} loading={loading}
           onSave={saveWorkAnimator} onSaveDisplay={saveWorkAnimatorDisplay} onAdd={addWorkAnimatorImages} />}
         <section className="appearance-card">

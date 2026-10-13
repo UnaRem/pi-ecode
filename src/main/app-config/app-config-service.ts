@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { app, BrowserWindow, dialog } from "electron";
 import { dirname, extname, join, resolve } from "node:path";
+import { DEFAULT_FONT_SETTINGS, isAppFontSettings, normalizeFontSettings, type AppFontSettings } from "../../shared/font-settings.js";
 import {
   DEFAULT_CONVERSATION_NICKNAMES,
   type AppConfigChangedEvent,
@@ -52,6 +53,7 @@ interface AppConfigFile {
   backgroundImagePath: string | null;
   conversationIdentity: StoredConversationIdentity;
   workAnimator: StoredWorkAnimator;
+  fonts: AppFontSettings;
 }
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
@@ -77,7 +79,7 @@ function defaultStoredWorkAnimator(): StoredWorkAnimator {
 }
 
 function emptyConfig(): AppConfigFile {
-  return { iconPath: null, theme: null, backgroundImagePath: null, conversationIdentity: defaultConversationIdentity(), workAnimator: defaultStoredWorkAnimator() };
+  return { iconPath: null, theme: null, backgroundImagePath: null, conversationIdentity: defaultConversationIdentity(), workAnimator: defaultStoredWorkAnimator(), fonts: { ...DEFAULT_FONT_SETTINGS } };
 }
 
 function revision(content: string): string {
@@ -222,6 +224,7 @@ export class AppConfigService {
 
   private toSnapshot(value: AppConfigFile): AppConfigSnapshot {
     const snapshot: AppConfigSnapshot = {
+      fonts: { ...value.fonts },
       iconPath: value.iconPath ?? null,
       iconUrl: null,
       theme: value.theme ?? { accent: null, accentSoft: null, danger: null, background: null },
@@ -294,6 +297,7 @@ export class AppConfigService {
         backgroundImagePath: typeof candidate.backgroundImagePath === "string" ? candidate.backgroundImagePath : null,
         conversationIdentity: normalizeConversationIdentity(candidate.conversationIdentity),
         workAnimator: normalizeWorkAnimator(candidate.workAnimator),
+        fonts: normalizeFontSettings(candidate.fonts),
       };
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? (error as NodeJS.ErrnoException).code : undefined;
@@ -409,6 +413,16 @@ export class AppConfigService {
     await this.writeConfig(config);
     await this.removeAsset(oldValue);
 
+    const snapshot = this.toSnapshot(config);
+    this.emit(snapshot);
+    return snapshot;
+  }
+
+  async saveFontSettings(value: AppFontSettings): Promise<AppConfigSnapshot> {
+    if (!isAppFontSettings(value)) throw new Error("字体设置无效，请检查字体名称、字号范围与0.5px步长。");
+    const config = await this.readConfig();
+    config.fonts = normalizeFontSettings(value);
+    await this.writeConfig(config);
     const snapshot = this.toSnapshot(config);
     this.emit(snapshot);
     return snapshot;

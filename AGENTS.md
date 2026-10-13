@@ -107,6 +107,7 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 - The composer is the visual anchor. `Enter` sends, `Shift+Enter` inserts a newline, and the stop action occupies the send button while streaming.
 - Every icon-only control needs an accessible name and visible hover/focus state.
 - Respect `prefers-reduced-motion`; animation must not communicate unique state.
+- 设置 → 外观提供应用级字体与字号：界面字体、正文/输入框12–24px与独立代码字体/字号10–22px（步长0.5px），保存于app-config.json。字体仅使用本机已安装名称，缺失时沿默认字体栈回退；默认null保留每个区域原有字号。选择自动保存，名称/数字在失焦或Enter保存，失败保留草稿；字体变化不添加动效。
 
 ## Code conventions
 

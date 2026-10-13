@@ -26,7 +26,7 @@
 .managed-process-empty, .managed-process-note { margin: 0; color: var(--color-text-muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .managed-process-list { display: grid; gap: var(--space-1); max-height: 180px; overflow-y: auto; margin-bottom: var(--space-3); }
 .managed-process-list > button { min-width: 0; display: grid; gap: 4px; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); background: var(--color-surface); text-align: left; cursor: pointer; }
-.managed-process-list code, .managed-process-command { min-width: 0; font: 10.5px/1.5 "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; white-space: pre-wrap; }
+.managed-process-list code, .managed-process-command { min-width: 0; font: var(--code-font-size, 10.5px)/1.5 var(--font-code, "Cascadia Code", Consolas, monospace); overflow-wrap: anywhere; white-space: pre-wrap; }
 .managed-process-list span, .managed-process-list small { font-size: 10px; overflow-wrap: anywhere; }
 .managed-process-list > button[aria-pressed="true"] { border-color: var(--color-accent-border); background: var(--color-accent-soft); color: var(--color-text); }
 .managed-process-command { display: block; margin-bottom: var(--space-2); }
@@ -40,7 +40,7 @@
 .managed-process-error { margin: var(--space-2) 0; color: var(--color-danger); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 .managed-process-note { margin-bottom: var(--space-2); }
 .managed-process-logs { min-width: 0; max-height: 220px; overflow: auto; overscroll-behavior: contain; border-radius: var(--radius-sm); color: var(--color-code-text); background: var(--color-code-bg); }
-.managed-process-logs pre { margin: 0; padding: var(--space-2); font: 10.5px/1.6 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.managed-process-logs pre { margin: 0; padding: var(--space-2); font: var(--code-font-size, 10.5px)/1.6 var(--font-code, "Cascadia Code", Consolas, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
   .managed-process-list > button, .managed-process-actions button { transition: none; }
 }
@@ -60,7 +60,7 @@
 .inspector-output > header { padding-inline: var(--space-4); }
 .inspector-output-scroll { max-height: 240px; min-height: 120px; overflow: auto; overscroll-behavior: contain; background: var(--color-code-bg); }
 .inspector-output-scroll:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }
-.inspector-output pre { margin: 0; padding: var(--space-4); color: var(--color-code-text); font: 10.5px/1.6 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inspector-output pre { margin: 0; padding: var(--space-4); color: var(--color-code-text); font: var(--code-font-size, 10.5px)/1.6 var(--font-code, "Cascadia Code", Consolas, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
 .inspector-validation > header button, .inspector-candidate-action { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; gap: 5px; padding: 0 var(--space-2); border: 1px solid var(--color-accent-border); border-radius: var(--radius-md); color: var(--color-accent); background: var(--color-accent-soft); font-size: 10px; cursor: pointer; }
 .inspector-validation > .git-push-control { width: 100%; margin-bottom: var(--space-3); }
 .inspector-validation > .git-push-control .git-push-button { width: 100%; justify-content: center; border-color: var(--color-border); background: var(--color-surface); }
@@ -82,13 +82,13 @@
 .inspector-validation-logs details { border-bottom: 1px solid var(--color-border); }
 .inspector-validation-logs summary { padding: 6px 0; color: var(--color-accent); font-size: 10px; cursor: pointer; }
 .inspector-validation-logs summary:focus-visible { border-radius: 3px; outline: 2px solid var(--color-focus); outline-offset: 2px; }
-.inspector-validation-logs pre { max-height: 220px; margin: 0 0 var(--space-2); padding: var(--space-2); overflow: auto; border-radius: var(--radius-sm); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inspector-validation-logs pre { max-height: 220px; margin: 0 0 var(--space-2); padding: var(--space-2); overflow: auto; border-radius: var(--radius-sm); color: var(--color-code-text); background: var(--color-code-bg); font: var(--code-font-size, 9.5px)/1.55 var(--font-code, "Cascadia Code", Consolas, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
 .inspector-version-list { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2); }
-.inspector-version-list code { overflow: hidden; color: var(--color-text-faint); font: 9px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.inspector-version-list code { overflow: hidden; color: var(--color-text-faint); font: 9px var(--font-code, "Cascadia Code", Consolas, monospace); text-overflow: ellipsis; white-space: nowrap; }
 .inspector-file-list { max-height: 128px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; padding-right: 3px; }
 .inspector-file { min-width: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr) 18px auto; align-items: center; gap: var(--space-2); min-height: 30px; color: var(--color-text-muted); }
 .inspector-file > svg { color: var(--color-accent); }
-.inspector-file code { min-width: 0; overflow: hidden; color: var(--color-text-muted); font: 10px "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.inspector-file code { min-width: 0; overflow: hidden; color: var(--color-text-muted); font: 10px var(--font-code, "Cascadia Code", Consolas, monospace); text-overflow: ellipsis; white-space: nowrap; }
 .inspector-file > span { color: var(--color-accent); font-size: 9px; font-weight: 700; }
 .inspector-file > button { padding: 3px 5px; border: 0; border-radius: var(--radius-sm); color: var(--color-text-faint); background: transparent; font-size: 9px; cursor: pointer; }
 .inspector-file > button:hover { color: var(--color-danger); background: var(--color-danger-soft); }
@@ -96,7 +96,7 @@
 .inspector-patch > button { padding: var(--space-2) 0; border: 0; color: var(--color-accent); background: transparent; font-size: 10px; cursor: pointer; }
 .inspector-patch-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--duration-standard) var(--ease-standard), opacity var(--duration-fast) ease-in; }
 .inspector-patch.open .inspector-patch-reveal { grid-template-rows: 1fr; opacity: 1; }
-.inspector-patch-reveal pre { min-height: 0; max-height: 220px; margin: 0; padding: 0 var(--space-3); overflow: hidden; border-radius: var(--radius-md); color: var(--color-code-text); background: var(--color-code-bg); font: 9.5px/1.55 "Cascadia Code", Consolas, monospace; white-space: pre; transition: padding var(--duration-standard) var(--ease-standard); }
+.inspector-patch-reveal pre { min-height: 0; max-height: 220px; margin: 0; padding: 0 var(--space-3); overflow: hidden; border-radius: var(--radius-md); color: var(--color-code-text); background: var(--color-code-bg); font: var(--code-font-size, 9.5px)/1.55 var(--font-code, "Cascadia Code", Consolas, monospace); white-space: pre; transition: padding var(--duration-standard) var(--ease-standard); }
 .inspector-patch.open .inspector-patch-reveal pre { padding-block: var(--space-3); overflow: auto; }
 .tool-statistics-note, .tool-statistics-detail { color: var(--color-text-muted); font-size: 10px; line-height: 1.5; }
 .tool-statistics-detail { max-height: 240px; padding: 0 var(--space-2) var(--space-2); overflow: auto; }

@@ -45,7 +45,7 @@
 .message.assistant .message-role-button { border-color: var(--color-accent-border-soft); background: var(--blue-50); }
 .message-role-button:hover, .message-role-button:focus-visible { border-color: var(--color-accent); background: var(--color-accent-soft); }
 .message-role-input { position: relative; z-index: 2; width: 92px; height: 30px; padding: 0 var(--space-2); border-color: var(--color-focus); border-radius: var(--radius-md); background: var(--color-surface); font-size: 11px; }
-.message-content { min-width: 0; margin-left: var(--conversation-content-inset); color: var(--color-text); font-size: 13.5px; line-height: 1.7; }
+.message-content { min-width: 0; margin-left: var(--conversation-content-inset); color: var(--color-text); font-size: var(--conversation-font-size, 13.5px); line-height: 1.7; }
 .message.user .message-content { padding: var(--space-3) var(--space-4); border-color: var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-muted); }
 .message.assistant .message-content { padding: var(--space-2) 0; }
 .message.assistant.continuation { margin-top: calc(0px - var(--space-2)); }
@@ -139,7 +139,7 @@
 .tool-title { color: var(--color-text); }
 .tool-preview { color: var(--color-text-muted); }
 
-.confirmation-prompt { margin: var(--space-4) 0 var(--space-5) var(--conversation-content-inset); padding: var(--space-4) 0; border-top: 1px solid var(--color-border); color: var(--color-text); font-size: 13.5px; line-height: 1.7; animation: confirmation-prompt-enter 180ms ease-out both; }
+.confirmation-prompt { margin: var(--space-4) 0 var(--space-5) var(--conversation-content-inset); padding: var(--space-4) 0; border-top: 1px solid var(--color-border); color: var(--color-text); font-size: var(--conversation-font-size, 13.5px); line-height: 1.7; animation: confirmation-prompt-enter 180ms ease-out both; }
 .confirmation-prompt-title { display: block; overflow-wrap: anywhere; }
 .confirmation-prompt-message { margin: var(--space-2) 0 var(--space-3); white-space: pre-wrap; overflow-wrap: anywhere; }
 .confirmation-prompt label { display: grid; gap: var(--space-2); color: var(--color-text-muted); font-size: 12px; }

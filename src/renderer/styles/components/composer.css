@@ -4,7 +4,7 @@
 .composer:focus-within { border-color: var(--color-accent-border-focus); box-shadow: 0 0 0 3px var(--color-focus-ring), var(--shadow-md); }
 .composer.working { border-color: var(--color-accent-border-strong); box-shadow: 0 0 0 3px var(--color-focus-ring-soft), var(--shadow-md); }
 .composer::before { display: none; }
-.composer textarea { min-height: 58px; padding: var(--space-1) 2px var(--space-2); color: var(--color-text); font-size: 13px; line-height: 1.55; }
+.composer textarea { min-height: 58px; padding: var(--space-1) 2px var(--space-2); color: var(--color-text); font-size: var(--conversation-font-size, 13px); line-height: 1.55; }
 .composer textarea::placeholder { color: var(--color-text-faint); }
 .composer-footer { min-height: 34px; }
 .composer-footer > span { color: var(--color-text-faint); }

@@ -3,8 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultWorkAnimatorTiming, presetFrames } from "../../shared/work-animator.js";
+import { DEFAULT_FONT_SETTINGS, type AppFontSettings } from "../../shared/font-settings.js";
 
-const mock = vi.hoisted(() => ({ root: "", paths: [] as string[] }));
+const mock = vi.hoisted(() => ({ root: "", paths: [] as string[], failRename: false }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const filesystem = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...filesystem, rename: async (...args: Parameters<typeof filesystem.rename>) => {
+    if (mock.failRename) throw new Error("模拟持久化失败");
+    return filesystem.rename(...args);
+  } };
+});
 vi.mock("electron", () => ({
   app: { getPath: () => mock.root },
   BrowserWindow: { getFocusedWindow: () => null },
@@ -22,7 +30,70 @@ async function harness(): Promise<AppConfigService> {
 }
 afterEach(async () => {
   mock.paths = [];
+  mock.failRename = false;
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe("AppConfigService fonts", () => {
+  it("keeps existing appearance for old config and normalizes each malformed field", async () => {
+    const service = await harness();
+    expect((await service.load()).fonts).toEqual(DEFAULT_FONT_SETTINGS);
+    await writeFile(service.configFilePath, JSON.stringify({ theme: null }));
+    expect((await service.load()).fonts).toEqual(DEFAULT_FONT_SETTINGS);
+    await writeFile(service.configFilePath, JSON.stringify({ fonts: {
+      uiFamily: "  思源黑体  ", codeFamily: "Consolas; color:red", conversationSize: 13.5, codeSize: 9,
+    } }));
+    expect((await service.load()).fonts).toEqual({ uiFamily: "思源黑体", codeFamily: null, conversationSize: 13.5, codeSize: null });
+  });
+
+  it("persists custom families and half-pixel sizes, preserves other settings and restores defaults", async () => {
+    const service = await harness();
+    await service.saveConversationNicknames({ assistant: "助手", user: "用户" });
+    const fonts: AppFontSettings = { uiFamily: "思源黑体", codeFamily: "JetBrains Mono", conversationSize: 19.5, codeSize: 14.5 };
+    expect((await service.saveFontSettings(fonts)).fonts).toEqual(fonts);
+    const reloaded = await new AppConfigService({ onChanged: () => undefined, onError: () => undefined }).load();
+    expect(reloaded.fonts).toEqual(fonts);
+    expect(reloaded.conversationIdentity.assistant.nickname).toBe("助手");
+    await service.saveWorkAnimatorDisplay({ scalePercent: 100, offsetX: 0, offsetY: 0 });
+    expect((await service.load()).fonts).toEqual(fonts);
+    await service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS });
+    expect((await service.load()).fonts).toEqual(DEFAULT_FONT_SETTINGS);
+  });
+
+  it("rejects invalid fonts and sizes without changing disk, cache or broadcasting", async () => {
+    await harness();
+    const changed = vi.fn();
+    const service = new AppConfigService({ onChanged: changed, onError: () => undefined });
+    const before = await service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS });
+    const stored = await readFile(service.configFilePath, "utf8");
+    changed.mockClear();
+    const invalid: Partial<AppFontSettings>[] = [
+      { uiFamily: "" }, { uiFamily: "x".repeat(101) }, { codeFamily: 'url("https://fonts.test")' },
+      { codeFamily: "Consolas\nArial" }, { conversationSize: 11.5 }, { conversationSize: 24.5 },
+      { conversationSize: 14.25 }, { codeSize: 9.5 }, { codeSize: 22.5 }, { codeSize: Number.NaN },
+    ];
+    for (const patch of invalid) await expect(service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS, ...patch })).rejects.toThrow();
+    expect(await service.getSnapshot()).toEqual(before);
+    expect(await readFile(service.configFilePath, "utf8")).toBe(stored);
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it("keeps the saved configuration and cache on atomic-write failure and allows retry", async () => {
+    await harness();
+    const changed = vi.fn();
+    const service = new AppConfigService({ onChanged: changed, onError: () => undefined });
+    const before = await service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS });
+    const stored = await readFile(service.configFilePath, "utf8");
+    changed.mockClear();
+    mock.failRename = true;
+    await expect(service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS, conversationSize: 18 })).rejects.toThrow("模拟持久化失败");
+    expect(await readFile(service.configFilePath, "utf8")).toBe(stored);
+    expect(await service.getSnapshot()).toEqual(before);
+    expect(changed).not.toHaveBeenCalled();
+    expect((await readdir(mock.root)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    mock.failRename = false;
+    expect((await service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS, conversationSize: 18 })).fonts.conversationSize).toBe(18);
+  });
 });
 
 describe("AppConfigService work animator", () => {

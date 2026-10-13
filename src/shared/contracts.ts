@@ -49,6 +49,7 @@ export const IPC_CHANNELS = {
   settingsEvent: "settings:event",
   event: "agent:event",
   getAppConfig: "app-config:get",
+  saveFontSettings: "app-config:save-fonts",
   chooseAppIcon: "app-config:choose-icon",
   clearAppIcon: "app-config:clear-icon",
   chooseConversationAvatar: "app-config:choose-conversation-avatar",
@@ -377,6 +378,7 @@ export interface ProjectGitStatus {
 }
 
 import type { AppConfigSnapshot, AppConfigChangedEvent, AppThemeColors } from "./app-config-contracts.js";
+import type { AppFontSettings } from "./font-settings.js";
 
 export interface ConfirmationDialogRequest {
   message: string;
@@ -427,6 +429,7 @@ export interface DesktopApi {
   getProjectGitStatus(): Promise<ProjectGitStatus>;
   pushProject(): Promise<ProjectGitStatus>;
   getAppConfig(): Promise<AppConfigSnapshot>;
+  saveFontSettings(value: AppFontSettings): Promise<AppConfigSnapshot>;
   saveWorkAnimator(status: WorkAnimatorStatus, update: WorkAnimatorUpdate): Promise<AppConfigSnapshot>;
   saveWorkAnimatorDisplay(display: WorkAnimatorDisplay): Promise<AppConfigSnapshot>;
   addWorkAnimatorImages(status: WorkAnimatorStatus): Promise<AppConfigSnapshot>;
