@@ -32,6 +32,8 @@ async function fixture() {
 }
 
 afterEach(async () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -112,6 +114,46 @@ describe("recent project recommendations", () => {
     expect(transcript).toContain("TASK_0_END");
     expect(transcript).toContain("TASK_19_END");
     expect(transcript).not.toContain("TASK_20_END");
+    test.recommendations.cancel();
+  });
+
+  it.each(["success", "timeout"])("gives the model its own 120-second budget: %s", async (outcome) => {
+    const test = await fixture();
+    const session = await test.save("slow", [entry("user", null, "user", "Recent work", Date.now())]);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Native AbortSignal.timeout uses Node's internal timers; adapt just that boundary to the test clock.
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+      const deadline = new AbortController();
+      setTimeout(() => deadline.abort(new DOMException("Timed out", "TimeoutError")), milliseconds);
+      return deadline.signal;
+    });
+    let finish!: (value: typeof response) => void;
+    test.completeSimple.mockImplementationOnce((_model: unknown, _request: unknown, options: { signal: AbortSignal }) =>
+      new Promise<typeof response>((resolve) => {
+        finish = resolve;
+        options.signal.addEventListener("abort", () => resolve({ ...response, stopReason: "aborted" }), { once: true });
+      }));
+    test.start([session]);
+    expect(timeout).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(test.completeSimple).toHaveBeenCalledOnce());
+    expect(timeout).toHaveBeenCalledWith(120_000);
+    const signal = test.completeSimple.mock.calls[0]?.[2].signal as AbortSignal;
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(signal.aborted).toBe(false);
+    expect(test.recommendations.state.status).toBe("loading");
+    if (outcome === "success") {
+      finish(response);
+      await vi.waitFor(() => expect(test.recommendations.state.status).toBe("ready"));
+      expect(test.recommendations.state.suggestions).toEqual(result.suggestions);
+    } else {
+      await vi.advanceTimersByTimeAsync(88_000);
+      expect(signal.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(signal.aborted).toBe(true);
+      await vi.waitFor(() => expect(test.recommendations.state.status).toBe("error"));
+      expect(test.recommendations.state.error).toBe("近期工作总结超过 120 秒，请稍后重新进入项目再次生成。");
+    }
+    expect(test.changed).toHaveBeenCalledOnce();
     test.recommendations.cancel();
   });
 
