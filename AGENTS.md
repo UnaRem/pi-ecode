@@ -46,6 +46,8 @@ src/main      windows, native dialogs, pi SDK, filesystem/session lifecycle
 - IPC contracts live in `src/shared/`. Main, preload, and renderer must use those shared types.
 - Do not send class instances over IPC. Map SDK values and events to small serializable view models.
 - Keep one selected project and one foreground session per window. `ProjectSessionService` owns independent `AgentService` instances, allows at most two executing sessions, and never disposes an executing session just because the foreground changes. Project replacement and shutdown must await every runtime and managed-process cleanup; retain failed registrations for retry.
+- Only the two most recently viewed idle child runtimes are retained for fast session switching; executing runtimes and runtimes with owned background resources are protected from eviction. Project replacement and shutdown still await cleanup of every retained runtime.
+- Session summaries reuse scans while JSONL inventory, sizes and modification metadata are unchanged. Read-only snapshots reuse the service's published summary list; writes and session lifecycle events refresh it. A transition publishes one authoritative snapshot without rereading it a second time.
 - New Git conversations use retained worktrees outside the project, based on HEAD at creation; do not copy uncommitted changes, merge results, or delete worktrees automatically. Non-Git or unborn repositories remain single-session. Historical sessions sharing the original cwd may be viewed during background work, but must not execute concurrently in that same cwd.
 - The active working directory is explicit state. Never silently fall back to the app repository or home directory after the user selected another project.
 
@@ -58,6 +60,8 @@ src/main      windows, native dialogs, pi SDK, filesystem/session lifecycle
 - Title generation uses the selected model in a separate bounded request after the first user message is persisted. Persist the attempt, preserve user renames, and cancel requests when their runtime is disposed.
 - Tool advice is transient request context. Match capabilities before ranking local samples; fewer than five completed calls is insufficient evidence. Record execution success/failure, cancellation, blocking and nested calls separately; none of these proves task completion. Store only aggregate counts and the latest 128 durations, outside the project, using a shared atomic writer keyed by device, hostname, OS and architecture.
 - On startup or project change, renderer requests one snapshot and then applies ordered events.
+- Empty conversations show local project suggestions derived from bounded reads of README, AGENTS and package metadata. Clicking a suggestion appends to that session's composer draft; it never starts an agent run automatically.
+- Destructive UI confirmations use a bounded typed IPC request and a main-owned message box attached to the requesting window. Avoid renderer `window.confirm`; restore renderer keyboard focus only while the owner remains focused.
 - Treat the final SDK `message_end` payload as authoritative. Streaming deltas are temporary display state.
 - Correlate tool activity by `toolCallId`; updates replace prior partial output, and end events finalize it.
 - A prompt accepted while idle starts immediately. While streaming, the default send action is `steer`; stopping clears queued work before aborting.
@@ -96,6 +100,8 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 - Conversation content has a readable maximum width; chrome may span the window.
 - User messages are visually compact. Assistant responses prioritize readable prose and code.
 - Tool calls are collapsed summaries by default and reveal command/output on demand.
+- The inspector has separate Tools, MCP and Validation tabs. MCP directory and local tool statistics live under MCP; the whole MCP directory starts collapsed. Execution list and output follow independently while at the bottom and pause when the user scrolls upward.
+- Ordinary conversation notices expire after five seconds; non-actionable errors and compaction failures expire after eight seconds. Recovery actions remain visible, and dismiss/exit cleanup must complete without animation events.
 - The composer is the visual anchor. `Enter` sends, `Shift+Enter` inserts a newline, and the stop action occupies the send button while streaming.
 - Every icon-only control needs an accessible name and visible hover/focus state.
 - Respect `prefers-reduced-motion`; animation must not communicate unique state.
@@ -134,7 +140,7 @@ npm test
 npm run build
 ```
 
-For UI changes, manually verify project selection, session switching, send/stream/stop, keyboard input, long tool output, error states and reduced motion. The owner launches the development runtime; do not automatically start dev or preview servers. Tests should cover pure event reducers and SDK-to-view-model mapping before pixel-level component snapshots.
+For UI changes, manually verify project selection, session switching, send/stream/stop, keyboard input, long tool output, error states and reduced motion. The owner launches the development runtime; do not automatically start dev or preview servers. Do not invoke a browser MCP merely to discover whether an app is running: the call can launch an automation browser. Tests should cover pure event reducers and SDK-to-view-model mapping before pixel-level component snapshots.
 
 ## Delivery workflow
 

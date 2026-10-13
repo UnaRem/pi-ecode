@@ -2,6 +2,7 @@ import { Check, CircleAlert, LoaderCircle, X } from "lucide-react";
 import { useEffect, useRef, useState, type AnimationEvent } from "react";
 import type { CompactionReason, CompactionStatus } from "@shared/contracts";
 import { useI18n, type Translate } from "../i18n/i18n";
+import { useBannerExit } from "./ConversationBanners";
 import type { MessageKey } from "../i18n/messages";
 
 const ROTATING_MESSAGE_KEYS: MessageKey[] = [
@@ -109,11 +110,13 @@ export function CompactionStatusPanel({ status, onCancel }: CompactionStatusPane
       const timeout = window.setTimeout(() => setLeaving(true), 5_000);
       return () => window.clearTimeout(timeout);
     }
-    if (status.status === "cancelled") {
-      const timeout = window.setTimeout(() => setLeaving(true), 3_000);
+    if (status.status === "cancelled" || status.status === "failed") {
+      const timeout = window.setTimeout(() => setLeaving(true), status.status === "failed" ? 8_000 : 3_000);
       return () => window.clearTimeout(timeout);
     }
   }, [status.status]);
+
+  useBannerExit(leaving, () => { setVisible(false); setLeaving(false); });
 
   if (!visible || status.status === "idle") return null;
 
