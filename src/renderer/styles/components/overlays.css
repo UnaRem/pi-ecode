@@ -1,6 +1,9 @@
 @keyframes panel-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes panel-leave { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(3px); } }
 .transient-panel.leaving { pointer-events: none; animation-name: panel-leave; animation-duration: var(--duration-fast); animation-timing-function: var(--ease-exit); animation-fill-mode: both; }
+.error-banner.transient-panel, .notice-banner.transient-panel { display: flex; align-items: flex-start; gap: var(--space-2); }
+.transient-panel > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.transient-panel .banner-dismiss { flex: 0 0 auto; min-width: 24px; min-height: 24px; padding: 3px; color: inherit; background: transparent; }
 
 .loading-screen, .project-gate, .startup-screen { color: var(--color-text); background: var(--color-app-bg); }
 .loading-screen { color: var(--color-text-muted); }

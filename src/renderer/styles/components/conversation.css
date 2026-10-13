@@ -13,6 +13,18 @@
 .welcome-icon { border-color: var(--color-accent-border); border-radius: var(--radius-lg); color: var(--color-accent); background: var(--color-accent-soft); box-shadow: var(--shadow-sm); }
 .welcome h1 { color: var(--color-text); }
 .welcome p { color: var(--color-text-muted); }
+.conversation-inner.empty { display: flex; flex-direction: column; justify-content: safe center; align-items: center; gap: var(--space-4); padding-bottom: var(--space-6); }
+.project-welcome { width: 100%; max-width: 760px; animation: panel-enter 180ms var(--ease-standard) both; }
+.project-welcome .project-welcome-stack { margin-top: var(--space-2); font-size: 11px; }
+.project-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--space-3); margin-top: var(--space-6); }
+.project-suggestions > button { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); color: var(--color-text); background: var(--color-surface); text-align: left; cursor: pointer; transition: border-color 120ms ease, background-color 120ms ease; }
+.project-suggestions small { color: var(--color-accent); font-size: 10px; }
+.project-suggestions strong { font-size: 13px; line-height: 1.5; }
+.project-suggestions span { color: var(--color-text-muted); font-size: 12px; line-height: 1.6; }
+.project-suggestions > button:hover:not(:disabled) { border-color: var(--color-accent-border-strong); background: var(--color-accent-soft); }
+.project-suggestions > button:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.project-suggestions > button:disabled { opacity: .55; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .project-welcome { animation: none; } .project-suggestions > button { transition: none; } }
 
 .message { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); margin-bottom: var(--space-5); scroll-margin-top: var(--space-5); }
 .message.user.turn-start { margin-top: var(--space-3); }

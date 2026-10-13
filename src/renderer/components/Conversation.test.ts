@@ -41,13 +41,15 @@ describe("Conversation", () => {
 
   it("keeps a pending plan visible but disabled during streaming and a local user echo", () => {
     vi.spyOn(confirmation, "findPendingConfirmation").mockReturnValue({ requestId: "request-1", title: "方案标题", message: "方案详情" });
-    expect(renderConfirmationConversation({ isStreaming: true }).match(/disabled=""/g)).toHaveLength(3);
+    // Welcome cards have independent disabled states; check only the pending plan's controls.
+    const disabledControls = (markup: string) => markup.match(/<section class="confirmation-prompt"[\s\S]*?<\/section>/u)?.[0].match(/disabled=""/gu);
+    expect(disabledControls(renderConfirmationConversation({ isStreaming: true }))).toHaveLength(3);
     const markup = renderConfirmationConversation({ timeline: [{
       kind: "message", id: "pending-user-1",
       message: { id: "pending-user-1", role: "user", text: "确认", timestamp: 1 },
     }] });
     expect(markup).toContain("方案标题");
-    expect(markup.match(/disabled=""/g)).toHaveLength(3);
+    expect(disabledControls(markup)).toHaveLength(3);
   });
 
   it("does not show confirmation controls when the timeline has no pending request", () => {
@@ -331,7 +333,8 @@ describe("Conversation", () => {
       }),
     ));
     expect(markup).toContain("502 Bad Gateway");
-    expect(markup).toContain("error-banner transient-panel recoverable");
+    const bannerClasses = markup.match(/<div class="([^"]+)" role="alert"/u)?.[1]?.split(/\s+/u);
+    expect(bannerClasses).toEqual(expect.arrayContaining(["error-banner", "transient-panel", "recoverable"]));
     expect(markup).toContain(">Continue</button>");
   });
 });

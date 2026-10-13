@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type AnimationEvent, type RefObject } from "react";
-import { ArrowDown, Sparkles } from "lucide-react";
-import type { ChangeReview, ConversationItem, ValidationState } from "@shared/contracts";
+import { ArrowDown } from "lucide-react";
+import type { ChangeReview, ConversationItem, ProjectProfile, ValidationState } from "@shared/contracts";
 import type { ConversationIdentity } from "@shared/app-config-contracts";
 import { confirmationDisplayText, findPendingConfirmation } from "../../shared/confirmation.js";
 import { ConfirmationPrompt } from "./ConfirmationPrompt";
+import { ConversationBanners } from "./ConversationBanners";
 import { ConversationOutline } from "./ConversationOutline";
 import { ImageGallery } from "./ImageGallery";
 import { Markdown } from "./Markdown";
 import { groupConsecutiveTools, ToolBatch, type ConversationRenderGroup } from "./ToolBatch";
 import { MessageRoleLabel, type MessageNicknames, type MessageRole, useMessageNicknames } from "./MessageRoleLabel";
 import { PastedTextAttachments } from "./PastedTextAttachments";
+import { ProjectWelcome } from "./ProjectWelcome";
 import { useI18n } from "../i18n/i18n";
 import { useScrollFollow } from "../hooks/use-scroll-follow";
 
@@ -20,6 +22,8 @@ interface ConversationProps {
   isStreaming: boolean;
   workingStartedAt: number | null;
   projectName: string;
+  projectProfile?: ProjectProfile | undefined;
+  onSelectSuggestion?: ((prompt: string) => void) | undefined;
   error: string | null;
   canContinue: boolean;
   notice: string | null;
@@ -85,62 +89,6 @@ function ChangedFilesSummary({ review }: { review: ChangeReview }) {
         <span><b>+{file.additions ?? "?"}</b> <em>−{file.deletions ?? "?"}</em></span>
       </div>)}
     </section>
-  );
-}
-
-function ConversationErrorBanner(props: Pick<ConversationBodyProps, "error" | "canContinue" | "isStreaming" | "onContinue">) {
-  const { t } = useI18n();
-  const [visibleError, setVisibleError] = useState(() => props.error ? { message: props.error, canContinue: props.canContinue } : null);
-  const [leaving, setLeaving] = useState(false);
-
-  useEffect(() => {
-    if (props.error) {
-      setVisibleError({ message: props.error, canContinue: props.canContinue });
-      setLeaving(false);
-    } else if (visibleError) {
-      setLeaving(true);
-    }
-  }, [props.canContinue, props.error]);
-
-  if (!visibleError) return null;
-  return (
-    <div
-      className={`error-banner transient-panel ${visibleError.canContinue ? "recoverable" : ""} ${leaving ? "leaving" : ""}`}
-      role="alert"
-      inert={leaving ? true : undefined}
-      onAnimationEnd={(event: AnimationEvent<HTMLDivElement>) => {
-        if (leaving && event.animationName === "panel-leave") setVisibleError(null);
-      }}
-    >
-      <span>{visibleError.message}</span>
-      {visibleError.canContinue && <button onClick={props.onContinue} disabled={props.isStreaming}>{t("conversation.continue")}</button>}
-    </div>
-  );
-}
-
-function ConversationNoticeBanner({ notice }: { notice: string | null }) {
-  const [visibleNotice, setVisibleNotice] = useState(notice);
-  const [leaving, setLeaving] = useState(false);
-
-  useEffect(() => {
-    if (notice) {
-      setVisibleNotice(notice);
-      setLeaving(false);
-    } else if (visibleNotice) {
-      setLeaving(true);
-    }
-  }, [notice]);
-
-  if (!visibleNotice) return null;
-  return (
-    <div
-      className={`notice-banner transient-panel ${leaving ? "leaving" : ""}`}
-      role="status"
-      inert={leaving ? true : undefined}
-      onAnimationEnd={(event: AnimationEvent<HTMLDivElement>) => {
-        if (leaving && event.animationName === "panel-leave") setVisibleNotice(null);
-      }}
-    >{visibleNotice}</div>
   );
 }
 
@@ -249,11 +197,7 @@ function ConversationBody(props: ConversationBodyProps) {
   return (
     <div ref={props.contentRef} className={`conversation-inner ${isEmpty ? "empty" : ""}`}>
       {isEmpty ? (
-        <section className="welcome">
-          <div className="welcome-icon"><Sparkles size={21} /></div>
-          <h1>{t("conversation.welcomeTitle")}</h1>
-          <p>{t("conversation.welcomeBody", { project: props.projectName })}</p>
-        </section>
+        <ProjectWelcome projectName={props.projectName} profile={props.projectProfile} disabled={props.isStreaming} onChoose={props.onSelectSuggestion} />
       ) : (
         <>
           {props.hasOlderTimeline && (
@@ -320,8 +264,7 @@ function ConversationBody(props: ConversationBodyProps) {
         disabled={props.isStreaming || hasPendingUser}
         onSend={props.onSendConfirmation}
       />}
-      <ConversationErrorBanner {...props} />
-      <ConversationNoticeBanner notice={props.notice} />
+      <ConversationBanners error={props.error} notice={props.notice} canContinue={props.canContinue} isStreaming={props.isStreaming} onContinue={props.onContinue} />
     </div>
   );
 }
