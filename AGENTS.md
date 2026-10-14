@@ -108,6 +108,7 @@ Keep files focused. When a component exceeds roughly 250 lines or mixes orchestr
 - Every icon-only control needs an accessible name and visible hover/focus state.
 - Respect `prefers-reduced-motion`; animation must not communicate unique state.
 - 设置 → 外观提供应用级字体与字号：界面字体、正文/输入框12–24px与独立代码字体/字号10–22px（步长0.5px），保存于app-config.json。字体仅使用本机已安装名称，缺失时沿默认字体栈回退；默认null保留每个区域原有字号。选择自动保存，名称/数字在失焦或Enter保存，失败保留草稿；字体变化不添加动效。
+- 同一区域提供界面缩放80%、90%、100%、110%、125%、150%，默认100%，作为fonts.zoomPercent持久化。主进程在保存后和窗口显示前使用Electron页面缩放，覆盖文字、按钮、图标和间距；保留正文/代码独立字号，缩放直接生效，不加补间动效。旧配置或不支持的比例回退100%，renderer不直接控制webContents。
 
 ## Code conventions
 

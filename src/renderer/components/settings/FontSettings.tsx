@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
-  CODE_FONT_PRESETS, DEFAULT_FONT_SETTINGS, UI_FONT_PRESETS, fontFamilyCss,
+  APP_ZOOM_PRESETS, CODE_FONT_PRESETS, DEFAULT_FONT_SETTINGS, UI_FONT_PRESETS, fontFamilyCss,
   isFontFamily, isFontSize, type AppFontSettings,
 } from "@shared/font-settings";
 import { useI18n } from "../../i18n/i18n";
@@ -156,6 +156,21 @@ export function FontSettings({ settings, onSave }: {
         }}>{t("settings.font.reset")}</button>
     </div>
     <p className="appearance-hint">{t("settings.font.hint")}</p>
+    <div className="font-setting-field">
+      <label><span>{t("settings.font.zoom")}</span>
+        <select value={preview.zoomPercent} aria-disabled={pending} onChange={(event) => {
+          if (pending) return;
+          const zoomPercent = Number(event.currentTarget.value);
+          stage({ zoomPercent });
+          void save({ zoomPercent });
+        }} onBlur={() => {
+          if (!pending) void save({ zoomPercent: preview.zoomPercent });
+        }}>
+          {APP_ZOOM_PRESETS.map((percent) => <option value={percent} key={percent}>{percent}%</option>)}
+        </select>
+      </label>
+      <small>{t("settings.font.zoomHint")}</small>
+    </div>
     <div className="font-settings-grid" key={resetVersion}>
       <FontFamilyField label={t("settings.font.uiFamily")} value={settings.uiFamily} presets={UI_FONT_PRESETS}
         pending={pending} onPreview={(uiFamily) => stage({ uiFamily })} onSave={(uiFamily) => save({ uiFamily })} />

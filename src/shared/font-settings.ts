@@ -3,12 +3,14 @@ export interface AppFontSettings {
   codeFamily: string | null;
   conversationSize: number | null;
   codeSize: number | null;
+  zoomPercent: number;
 }
 
 // null restores each surface's existing font stack and size, including compact logs.
 export const DEFAULT_FONT_SETTINGS: Readonly<AppFontSettings> = {
-  uiFamily: null, codeFamily: null, conversationSize: null, codeSize: null,
+  uiFamily: null, codeFamily: null, conversationSize: null, codeSize: null, zoomPercent: 100,
 };
+export const APP_ZOOM_PRESETS: readonly number[] = [80, 90, 100, 110, 125, 150];
 export const UI_FONT_PRESETS = ["Segoe UI", "Microsoft YaHei", "Microsoft YaHei UI", "SimSun", "Arial"] as const;
 export const CODE_FONT_PRESETS = ["Cascadia Code", "Consolas", "JetBrains Mono", "Fira Code", "Courier New"] as const;
 
@@ -27,7 +29,8 @@ export function isAppFontSettings(value: unknown): value is AppFontSettings {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
   return isFontFamily(candidate.uiFamily) && isFontFamily(candidate.codeFamily)
-    && isFontSize(candidate.conversationSize, 12, 24) && isFontSize(candidate.codeSize, 10, 22);
+    && isFontSize(candidate.conversationSize, 12, 24) && isFontSize(candidate.codeSize, 10, 22)
+    && typeof candidate.zoomPercent === "number" && APP_ZOOM_PRESETS.includes(candidate.zoomPercent);
 }
 
 export function normalizeFontSettings(value: unknown): AppFontSettings {
@@ -38,6 +41,8 @@ export function normalizeFontSettings(value: unknown): AppFontSettings {
     codeFamily: isFontFamily(candidate.codeFamily) ? candidate.codeFamily?.trim() ?? null : null,
     conversationSize: isFontSize(candidate.conversationSize, 12, 24) ? candidate.conversationSize : null,
     codeSize: isFontSize(candidate.codeSize, 10, 22) ? candidate.codeSize : null,
+    zoomPercent: typeof candidate.zoomPercent === "number" && APP_ZOOM_PRESETS.includes(candidate.zoomPercent)
+      ? candidate.zoomPercent : DEFAULT_FONT_SETTINGS.zoomPercent,
   };
 }
 

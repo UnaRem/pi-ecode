@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultWorkAnimatorTiming, presetFrames } from "../../shared/work-animator.js";
-import { DEFAULT_FONT_SETTINGS, type AppFontSettings } from "../../shared/font-settings.js";
+import { APP_ZOOM_PRESETS, DEFAULT_FONT_SETTINGS, type AppFontSettings } from "../../shared/font-settings.js";
 
 const mock = vi.hoisted(() => ({ root: "", paths: [] as string[], failRename: false }));
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -43,19 +43,44 @@ describe("AppConfigService fonts", () => {
     await writeFile(service.configFilePath, JSON.stringify({ fonts: {
       uiFamily: "  思源黑体  ", codeFamily: "Consolas; color:red", conversationSize: 13.5, codeSize: 9,
     } }));
-    expect((await service.load()).fonts).toEqual({ uiFamily: "思源黑体", codeFamily: null, conversationSize: 13.5, codeSize: null });
+    expect((await service.load()).fonts).toEqual({ uiFamily: "思源黑体", codeFamily: null, conversationSize: 13.5, codeSize: null, zoomPercent: 100 });
   });
 
   it("persists custom families and half-pixel sizes, preserves other settings and restores defaults", async () => {
     const service = await harness();
     await service.saveConversationNicknames({ assistant: "助手", user: "用户" });
-    const fonts: AppFontSettings = { uiFamily: "思源黑体", codeFamily: "JetBrains Mono", conversationSize: 19.5, codeSize: 14.5 };
+    const fonts: AppFontSettings = { uiFamily: "思源黑体", codeFamily: "JetBrains Mono", conversationSize: 19.5, codeSize: 14.5, zoomPercent: 125 };
     expect((await service.saveFontSettings(fonts)).fonts).toEqual(fonts);
     const reloaded = await new AppConfigService({ onChanged: () => undefined, onError: () => undefined }).load();
     expect(reloaded.fonts).toEqual(fonts);
     expect(reloaded.conversationIdentity.assistant.nickname).toBe("助手");
     await service.saveWorkAnimatorDisplay({ scalePercent: 100, offsetX: 0, offsetY: 0 });
     expect((await service.load()).fonts).toEqual(fonts);
+    await service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS });
+    expect((await service.load()).fonts).toEqual(DEFAULT_FONT_SETTINGS);
+  });
+
+  it("defaults legacy or unsupported zoom to 100 without losing existing font sizes", async () => {
+    const service = await harness();
+    const legacyFonts = { uiFamily: "Segoe UI", codeFamily: "Consolas", conversationSize: 24, codeSize: 22 };
+    await writeFile(service.configFilePath, JSON.stringify({ fonts: legacyFonts }));
+    expect((await service.load()).fonts).toEqual({ ...legacyFonts, zoomPercent: 100 });
+    await writeFile(service.configFilePath, JSON.stringify({ fonts: { ...legacyFonts, zoomPercent: 999 } }));
+    expect((await service.load()).fonts).toEqual({ ...legacyFonts, zoomPercent: 100 });
+  });
+
+  it("persists every supported zoom, publishes it only after saving and restores 100", async () => {
+    await harness();
+    const changed = vi.fn();
+    const service = new AppConfigService({ onChanged: changed, onError: () => undefined });
+    const fonts = { ...DEFAULT_FONT_SETTINGS, conversationSize: 18, codeSize: 22 };
+    for (const zoomPercent of APP_ZOOM_PRESETS) {
+      const next = { ...fonts, zoomPercent };
+      await service.saveFontSettings(next);
+      expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ snapshot: expect.objectContaining({ fonts: next }) }));
+      const reopened = new AppConfigService({ onChanged: () => undefined, onError: () => undefined });
+      expect((await reopened.load()).fonts).toEqual(next);
+    }
     await service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS });
     expect((await service.load()).fonts).toEqual(DEFAULT_FONT_SETTINGS);
   });
@@ -71,6 +96,8 @@ describe("AppConfigService fonts", () => {
       { uiFamily: "" }, { uiFamily: "x".repeat(101) }, { codeFamily: 'url("https://fonts.test")' },
       { codeFamily: "Consolas\nArial" }, { conversationSize: 11.5 }, { conversationSize: 24.5 },
       { conversationSize: 14.25 }, { codeSize: 9.5 }, { codeSize: 22.5 }, { codeSize: Number.NaN },
+      { zoomPercent: 0 }, { zoomPercent: 79 }, { zoomPercent: 151 }, { zoomPercent: 125.5 },
+      { zoomPercent: Number.NaN }, { zoomPercent: Number.POSITIVE_INFINITY },
     ];
     for (const patch of invalid) await expect(service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS, ...patch })).rejects.toThrow();
     expect(await service.getSnapshot()).toEqual(before);
@@ -86,7 +113,7 @@ describe("AppConfigService fonts", () => {
     const stored = await readFile(service.configFilePath, "utf8");
     changed.mockClear();
     mock.failRename = true;
-    await expect(service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS, conversationSize: 18 })).rejects.toThrow("模拟持久化失败");
+    await expect(service.saveFontSettings({ ...DEFAULT_FONT_SETTINGS, conversationSize: 18, zoomPercent: 150 })).rejects.toThrow("模拟持久化失败");
     expect(await readFile(service.configFilePath, "utf8")).toBe(stored);
     expect(await service.getSnapshot()).toEqual(before);
     expect(changed).not.toHaveBeenCalled();

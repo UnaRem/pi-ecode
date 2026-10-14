@@ -9,6 +9,7 @@ import { cleanupSubagentHistory } from "./history/subagent-history-cleanup.js";
 import { IPC_CHANNELS } from "../shared/contracts.js";
 
 const APP_ID = "com.piecode.desktop";
+let appZoomFactor = 1;
 const IS_BRANDED_DEVELOPMENT_RUNTIME = process.env.PI_ECODE_DEVELOPMENT_RUNTIME === "1";
 if (process.platform === "win32" && !IS_BRANDED_DEVELOPMENT_RUNTIME) app.setAppUserModelId(APP_ID);
 
@@ -37,8 +38,11 @@ const settings = new SettingsService({
 });
 const appConfig = new AppConfigService({
   onChanged: (event) => {
+    appZoomFactor = event.snapshot.fonts.zoomPercent / 100;
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) window.webContents.send(IPC_CHANNELS.appConfigEvent, event);
+      if (window.isDestroyed()) continue;
+      window.webContents.setZoomFactor(appZoomFactor);
+      window.webContents.send(IPC_CHANNELS.appConfigEvent, event);
     }
   },
   onError: (message) => service.reportError(message),
@@ -88,6 +92,7 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      zoomFactor: appZoomFactor,
     },
   });
 
@@ -103,6 +108,8 @@ function createWindow(): void {
     window.setAppDetails({ appId: APP_ID, appIconPath: iconPath, appIconIndex: 0 });
   }
   window.webContents.once("did-finish-load", () => {
+    // Chromium's origin zoom can survive navigation; restore our saved value before showing.
+    window.webContents.setZoomFactor(appZoomFactor);
     window.show();
     // Hand keyboard focus to the renderer after showing the initially hidden window.
     window.focus();
@@ -137,7 +144,7 @@ if (!hasSingleInstanceLock) {
     await service.initialize();
     await projectSessions.initialize();
     await settings.start();
-    await appConfig.load();
+    appZoomFactor = (await appConfig.load()).fonts.zoomPercent / 100;
     unsubscribeAgent = projectSessions.subscribe((event) => {
       if (!shutdown && ((event.type === "state" && event.patch.isStreaming === false)
         || (event.type === "parallel" && event.parallel.runningCount === 0)

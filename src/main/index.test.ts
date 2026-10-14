@@ -1,10 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AppConfigChangedEvent, AppConfigSnapshot } from "../shared/app-config-contracts.js";
+import { DEFAULT_FONT_SETTINGS } from "../shared/font-settings.js";
+import { defaultWorkAnimator } from "../shared/work-animator.js";
 
 const harness = vi.hoisted(() => ({
   listeners: new Map<string, (event: { preventDefault: () => void }) => void>(),
   hasLock: true,
   ready: false,
-  windows: [] as { listeners: Map<string, (event: { preventDefault: () => void }) => void>; visible: boolean; destroyed: boolean }[],
+  windows: [] as {
+    listeners: Map<string, (event: { preventDefault: () => void }) => void>;
+    visible: boolean;
+    destroyed: boolean;
+    zoomAtShow: number | null;
+    webContents: { setZoomFactor: (factor: number) => void; send: (channel: string, event: unknown) => void };
+  }[],
+  zoomPercent: 100,
+  initialZoomFactors: [] as number[],
+  appConfigChanged: undefined as ((event: AppConfigChangedEvent) => void) | undefined,
   unregisterIpc: vi.fn(),
   settingsDispose: vi.fn<() => Promise<void>>(),
   serviceDispose: vi.fn<() => Promise<void>>(),
@@ -28,15 +40,23 @@ vi.mock("electron", () => ({
     listeners = new Map<string, (event: { preventDefault: () => void }) => void>();
     visible = false;
     destroyed = false;
+    zoomAtShow: number | null = null;
     webContents = {
       once: (_name: string, callback: () => void) => callback(),
       focus: vi.fn(),
       setWindowOpenHandler: vi.fn(),
+      setZoomFactor: vi.fn<(factor: number) => void>(),
       send: vi.fn(),
     };
-    constructor() { harness.windows.push(this); }
+    constructor(options: { webPreferences: { zoomFactor: number } }) {
+      harness.initialZoomFactors.push(options.webPreferences.zoomFactor);
+      harness.windows.push(this);
+    }
     on(name: string, listener: (event: { preventDefault: () => void }) => void) { this.listeners.set(name, listener); }
-    show() { this.visible = true; }
+    show() {
+      this.zoomAtShow = this.webContents.setZoomFactor.mock.lastCall?.[0] ?? null;
+      this.visible = true;
+    }
     focus() {}
     isDestroyed() { return this.destroyed; }
     setMenuBarVisibility() {}
@@ -65,8 +85,27 @@ vi.mock("./settings/settings-service.js", () => ({
     dispose = harness.settingsDispose;
   },
 }));
-vi.mock("./app-config/app-config-service.js", () => ({ AppConfigService: class { load() { return Promise.resolve(); } } }));
+vi.mock("./app-config/app-config-service.js", () => ({ AppConfigService: class {
+  constructor(options: { onChanged: (event: AppConfigChangedEvent) => void }) {
+    harness.appConfigChanged = options.onChanged;
+  }
+  load() { return Promise.resolve(configSnapshot(harness.zoomPercent)); }
+} }));
 vi.mock("./ipc/register-ipc.js", () => ({ registerIpc: () => harness.unregisterIpc }));
+
+function configSnapshot(zoomPercent: number): AppConfigSnapshot {
+  return {
+    iconPath: null, iconUrl: null,
+    theme: { accent: null, accentSoft: null, danger: null, background: null },
+    backgroundImagePath: null, backgroundImageUrl: null,
+    conversationIdentity: {
+      assistant: { nickname: "PiECode", avatarPath: null, avatarUrl: null },
+      user: { nickname: "你", avatarPath: null, avatarUrl: null },
+    },
+    workAnimator: defaultWorkAnimator(),
+    fonts: { ...DEFAULT_FONT_SETTINGS, zoomPercent },
+  };
+}
 
 function deferred() {
   let resolve = (): void => undefined;
@@ -112,11 +151,39 @@ beforeEach(() => {
   harness.hasLock = true;
   harness.ready = false;
   harness.windows.length = 0;
+  harness.zoomPercent = 100;
+  harness.initialZoomFactors.length = 0;
+  harness.appConfigChanged = undefined;
   harness.unregisterIpc.mockReset();
   harness.settingsDispose.mockReset().mockResolvedValue(undefined);
   harness.serviceDispose.mockReset().mockResolvedValue(undefined);
   harness.reportError.mockReset();
   harness.quit.mockReset();
+});
+
+describe("应用界面缩放", () => {
+  it("启动时将保存的比例用于窗口创建，并在显示前应用页面缩放", async () => {
+    harness.zoomPercent = 125;
+    await openWindow();
+    expect(harness.initialZoomFactors).toEqual([1.25]);
+    expect(harness.windows[0]?.zoomAtShow).toBe(1.25);
+    expect(harness.windows[0]?.webContents.setZoomFactor).toHaveBeenCalledWith(1.25);
+  });
+
+  it("保存后缩放存活窗口并广播配置，恢复100%且不操作已销毁窗口", async () => {
+    await openWindow();
+    const window = harness.windows[0]!;
+    const event: AppConfigChangedEvent = { type: "app-config-changed", snapshot: configSnapshot(150) };
+    harness.appConfigChanged?.(event);
+    expect(window.webContents.setZoomFactor).toHaveBeenLastCalledWith(1.5);
+    expect(window.webContents.send).toHaveBeenLastCalledWith("app-config:event", event);
+    harness.appConfigChanged?.({ ...event, snapshot: configSnapshot(100) });
+    expect(window.webContents.setZoomFactor).toHaveBeenLastCalledWith(1);
+    const callsBeforeDestroy = vi.mocked(window.webContents.setZoomFactor).mock.calls.length;
+    window.destroyed = true;
+    harness.appConfigChanged?.(event);
+    expect(window.webContents.setZoomFactor).toHaveBeenCalledTimes(callsBeforeDestroy);
+  });
 });
 
 describe("应用退出清理门", () => {
