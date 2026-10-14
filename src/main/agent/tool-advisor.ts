@@ -28,10 +28,14 @@ const TOOL_SELECTION_GUIDANCE = `Tool selection guidance:
 - Check current availability, permissions and required indexes before execution. Do not initialize indexes, add retries or bypass confirmation or permission failures.
 - Execution observations below are unranked feedback, not tool candidates. Compare them only after tools fit the same concrete operation; keep direct and nested samples separate. Fewer than 5 completed samples is insufficient evidence, speed is secondary, and execution success does not prove task success.`;
 
-export function toolSelectionAdvice(tools: ToolInfo[], activeToolNames: string[], statistics: ToolStatistic[]): string {
+export function declaredToolStatistics(tools: ToolInfo[], activeToolNames: string[], statistics: ToolStatistic[]): ToolStatistic[] {
   const active = new Set(activeToolNames);
   const declared = new Set(tools.filter((tool) => tool.exposure !== "hidden" && active.has(tool.name)).map((tool) => tool.name));
-  const observations = statistics.filter((entry) => declared.has(entry.name))
+  return statistics.filter((entry) => declared.has(entry.name));
+}
+
+export function toolSelectionAdvice(tools: ToolInfo[], activeToolNames: string[], statistics: ToolStatistic[]): string {
+  const observations = declaredToolStatistics(tools, activeToolNames, statistics)
     .toSorted((left, right) => left.name.localeCompare(right.name) || Number(left.nested) - Number(right.nested))
     .map((entry) => `${entry.name}: samples=${entry.successes + entry.failures}, sampleMode=${entry.nested ? "nested" : "direct"}, execution successes=${entry.successes}, failures=${entry.failures}, cancelled=${entry.cancelled}, blocked=${entry.blocked}, medianMs=${entry.medianMs ?? "unknown"}`);
   return [TOOL_SELECTION_GUIDANCE, ...(observations.length ? ["Local execution observations for currently declared tools (unranked):", ...observations] : [])].join("\n");

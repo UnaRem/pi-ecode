@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ToolInfo } from "@earendil-works/pi-coding-agent";
 import { ToolStatisticsStore } from "./tool-statistics.js";
-import { toolCapability, toolSelectionAdvice } from "./tool-advisor.js";
+import { declaredToolStatistics, toolCapability, toolSelectionAdvice } from "./tool-advisor.js";
 
 describe("local tool statistics", () => {
   it("persists concurrent results, separates nested calls and excludes cancellations from latency", async () => {
@@ -65,6 +65,7 @@ describe("local tool statistics", () => {
       { ...entry, name: "read", nested: true, successes: 20, failures: 0, medianMs: 1 }];
     const advice = toolSelectionAdvice(tools, ["read"], statistics);
     expect(advice).toContain("currently declared tools (unranked)");
+    expect(declaredToolStatistics(tools, ["read"], statistics)).toEqual(statistics);
     expect(advice.split("\n").filter((line) => line.startsWith("read:"))).toEqual([
       "read: samples=10, sampleMode=direct, execution successes=9, failures=1, cancelled=0, blocked=0, medianMs=10",
       "read: samples=20, sampleMode=nested, execution successes=20, failures=0, cancelled=0, blocked=0, medianMs=1",
@@ -81,7 +82,11 @@ describe("local tool statistics", () => {
       name, capability: "file-read" as const, nested: false, successes: 0, failures: 0,
       blocked: 1, cancelled: 2, medianMs: null, p95Ms: null, adjustment: "collect" as const,
     }));
-    const advice = toolSelectionAdvice(tools, ["read", "mcp__hidden__read_file", "withdrawn_tool"], statistics);
+    const active = ["read", "mcp__hidden__read_file", "withdrawn_tool"];
+    expect(declaredToolStatistics(tools, active, statistics)).toEqual([statistics[0]]);
+    expect(declaredToolStatistics([], active, statistics)).toEqual([]);
+    expect(statistics).toHaveLength(4);
+    const advice = toolSelectionAdvice(tools, active, statistics);
     expect(advice).toContain("read: samples=0, sampleMode=direct, execution successes=0, failures=0, cancelled=2, blocked=1, medianMs=unknown");
     expect(advice).not.toContain("mcp__fastctx__read_file");
     expect(advice).not.toContain("mcp__hidden__read_file");
@@ -95,6 +100,9 @@ describe("local tool statistics", () => {
     ["ask_user_question", "Ask questions. Examples include library choices.", "other"],
     ["mcp__fastctx__read_file", "Read a local file", "file-read"],
     ["mcp__git__git_status", "Shows the working tree status", "git"],
+    ["mcp__fastctx__glob", "Find files by glob pattern", "file-search"],
+    ["mcp__fastctx__grep", "Search file contents", "file-search"],
+    ["mcp__chrome_devtools__evaluate_script", "Evaluate JavaScript in a page", "browser"],
   ])("classifies %s without confusing providers with generic verbs", (name, description, capability) => {
     expect(toolCapability({ name, description })).toBe(capability);
   });

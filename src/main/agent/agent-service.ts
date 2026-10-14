@@ -61,7 +61,9 @@ import { ValidationToolService } from "./validation-tool.js";
 import { ManagedProcessService } from "../processes/managed-process-service.js";
 import { ManagedProcessToolService } from "./managed-process-tool.js";
 import { toolStatisticsStore, type ToolStatisticsStore } from "./tool-statistics.js";
-import { toolAdvisorExtension } from "./tool-advisor.js";
+import { declaredToolStatistics, toolAdvisorExtension } from "./tool-advisor.js";
+import type { McpToolSummary } from "../../shared/mcp-contracts.js";
+import type { ToolStatistic } from "../../shared/tool-statistics.js";
 import { SessionTitleService } from "./session-title.js";
 import { readProjectProfile } from "./project-profile.js";
 import { configuredCompactionReserveTokens, contextBudgetReserveTokens } from "./context-budget.js";
@@ -460,7 +462,7 @@ export class AgentService {
       taskPlan: this.taskPlan.current,
       processes: this.managedProcesses.current,
       mcpTools: this.sessionMcp.get(session)?.current ?? [],
-      toolStatistics: this.statistics?.current ?? [],
+      toolStatistics: this.currentToolStatistics(session),
       extensionUi: this.extensionUi.current,
       history,
       validation: { ...this.validation.getState(), isSelfProject: this.options.allowSelfUpdate !== false && this.validation.getState().isSelfProject },
@@ -842,7 +844,7 @@ export class AgentService {
     return async ({ cwd: targetCwd, sessionManager, sessionStartEvent }) => {
       let owner: AgentSession | undefined;
       const mcp = new NativeMcp((tools) => {
-        if (owner && this.runtime?.session === owner) this.emit({ type: "mcp-tools", tools });
+        if (owner) this.publishMcpTools(owner, tools);
       });
       const services = await createAgentSessionServices({
         cwd: targetCwd,
@@ -900,6 +902,18 @@ export class AgentService {
     };
   }
 
+  private currentToolStatistics(session = this.runtime?.session): ToolStatistic[] {
+    if (!session || !this.statistics) return [];
+    return declaredToolStatistics(session.getAllTools(), session.getActiveToolNames(), this.statistics.current);
+  }
+
+  private publishMcpTools(session: AgentSession, tools: McpToolSummary[]): void {
+    if (this.runtime?.session !== session) return;
+    this.emit({ type: "mcp-tools", tools });
+    // Withdrawal changes availability without completing another tool call.
+    this.emit({ type: "tool-statistics", statistics: this.currentToolStatistics(session) });
+  }
+
   private async installToolStatistics(settings: Pick<SettingsManager, "getOrCreateDeviceId">): Promise<void> {
     this.unsubscribeStatistics?.();
     this.statistics = undefined;
@@ -909,7 +923,7 @@ export class AgentService {
       const statistics = toolStatisticsStore(join(getAgentDir(), "state", "pi-ecode-tool-statistics", `${fileName}.json`));
       await statistics.initialize();
       this.statistics = statistics;
-      this.unsubscribeStatistics = statistics.subscribe(() => this.emit({ type: "tool-statistics", statistics: statistics.current }));
+      this.unsubscribeStatistics = statistics.subscribe(() => this.emit({ type: "tool-statistics", statistics: this.currentToolStatistics() }));
     } catch (error) {
       this.statisticsError = `本机工具统计不可用，已停用记录并保留原文件：${error instanceof Error ? error.message : String(error)}`;
       this.reportError(this.statisticsError);
