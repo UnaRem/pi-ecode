@@ -33,7 +33,8 @@ async function harness() {
   roots.push(cwd);
   const { client, server } = createInMemoryTransportPair();
   const inputSchema = { type: "object", properties: { pattern: { type: "string" }, path: { type: "string" },
-    encoding: { type: "string" }, fallback_encoding: { type: "string" } }, required: ["pattern"] };
+    encoding: { type: "string" }, fallback_encoding: { type: "string" },
+    glob: { type: "array", items: { type: "string" } } }, required: ["pattern"] };
   const offered: Tool[] = ["grep", "lookup"].map((name) => ({ name, description: name, inputSchema }));
   const calls: JsonRpcRequest[] = [];
   server.onMessage((message) => {
@@ -43,11 +44,12 @@ async function harness() {
     const input = parameters?.arguments;
     const conflict = input?.path === "directory" ? input.encoding !== undefined : input?.fallback_encoding !== undefined;
     const invalidPattern = input?.pattern === "";
+    const invalidGlob = Array.isArray(input?.glob) && (input.glob.length === 0 || input.glob.includes("["));
     const result = message.method === "initialize"
       ? { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo: { name: "fixture", version: "1" } }
       : message.method === "tools/list" ? { tools: offered }
-      : message.method === "tools/call" ? { content: [{ type: "text", text: conflict ? "encoding target conflict" : invalidPattern ? "empty pattern" : "matched" }],
-        isError: conflict || invalidPattern } : {};
+      : message.method === "tools/call" ? { content: [{ type: "text", text: conflict ? "encoding target conflict" : invalidPattern ? "empty pattern" : invalidGlob ? "invalid glob" : "matched" }],
+        isError: conflict || invalidPattern || invalidGlob } : {};
     void server.send({ jsonrpc: "2.0", id: message.id, result });
   });
   await server.start();
@@ -118,6 +120,54 @@ describe("FastCtx grep input normalization", () => {
     expect(sentArguments(calls).at(-1)).toEqual({ pattern: "nested" });
     const schema = session.getAllTools().find((tool) => tool.name === "mcp__fastctx__grep")!.parameters;
     expect(schema).toMatchObject({ required: ["pattern"] });
+  });
+
+  it("omits empty glob filters for direct and nested calls while preserving nonempty filters", async () => {
+    const { session, calls } = await harness();
+    const emptyInput = { pattern: "needle", glob: [] };
+    const filteredInput = { pattern: "needle", glob: ["**/*.ts", "!**/*.test.ts"] };
+    const results = await directCalls(session, [
+      grepCall("empty", emptyInput),
+      grepCall("omitted", { pattern: "needle" }),
+      grepCall("null", { pattern: "needle", glob: null }),
+      grepCall("filtered", filteredInput),
+    ]);
+    expect(results).toHaveLength(4);
+    expect(results.every((result) => !result.isError)).toBe(true);
+    expect(emptyInput).toEqual({ pattern: "needle", glob: [] });
+    expect(sentArguments(calls)).toEqual([
+      { pattern: "needle" }, { pattern: "needle" }, { pattern: "needle" }, filteredInput,
+    ]);
+    const context = session.extensionRunner!.createToolContext("empty", undefined);
+    const nested = await context.executeTool("mcp__fastctx__grep", { pattern: "nested", glob: [] });
+    expect(nested.isError).toBe(false);
+    expect(sentArguments(calls).at(-1)).toEqual({ pattern: "nested" });
+    const filtered = await context.executeTool("mcp__fastctx__grep", filteredInput);
+    expect(filtered.isError).toBe(false);
+    expect(sentArguments(calls).at(-1)).toEqual(filteredInput);
+  });
+
+  it("preserves invalid nonempty globs, schema validation and empty globs on other tools", async () => {
+    const { session, calls } = await harness();
+    const results = await directCalls(session, [
+      grepCall("invalid", { pattern: "needle", glob: ["["] }),
+      grepCall("wrong-type", { pattern: "needle", glob: "*.ts" }),
+      grepCall("wrong-item", { pattern: "needle", glob: [{}] }),
+      { type: "toolCall", id: "other", name: "mcp__fastctx__lookup", arguments: { pattern: "needle", glob: [] } },
+    ]);
+    expect(results).toHaveLength(4);
+    expect(results.every((result) => result.isError)).toBe(true);
+    expect(sentArguments(calls)).toEqual([
+      { pattern: "needle", glob: ["["] }, { pattern: "needle", glob: [] },
+    ]);
+    expect(results.find((result) => result.toolCallId === "invalid")?.content).toEqual([
+      expect.objectContaining({ text: "invalid glob" }),
+    ]);
+    for (const id of ["wrong-type", "wrong-item"]) {
+      expect(results.find((result) => result.toolCallId === id)?.content).toEqual([
+        expect.objectContaining({ text: expect.stringContaining("glob") }),
+      ]);
+    }
   });
 
   it("preserves nonempty conflicts, empty patterns, required validation and other tools", async () => {

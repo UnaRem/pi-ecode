@@ -17,6 +17,8 @@ function prepareFastctxGrepArguments(input: unknown): unknown {
   for (const name of ["encoding", "fallback_encoding"]) {
     if (parameters[name] === "") delete parameters[name];
   }
+  // An empty optional filter list means no filtering, but FastCtx rejects it if supplied.
+  if (Array.isArray(parameters.glob) && parameters.glob.length === 0) delete parameters.glob;
   return parameters;
 }
 
