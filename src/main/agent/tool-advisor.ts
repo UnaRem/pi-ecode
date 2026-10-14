@@ -26,6 +26,7 @@ const TOOL_SELECTION_GUIDANCE = `Tool selection guidance:
 - Before using a general shell, check declared dedicated tools. If no suitable declared tool is evident, use tool_search when available to discover alternatives with concrete operation and parameter terms (for example, "git working tree status", not just "git").
 - tool_search loads inactive deferred/codemode tools for the next model call; compare already declared tools using their definitions. Use the shell when dedicated tools are unavailable or do not support the required operation or parameters.
 - Check current availability, permissions and required indexes before execution. Do not initialize indexes, add retries or bypass confirmation or permission failures.
+- Omit optional parameters that do not apply; if a strict schema requires a nullable field, use null for omission, not an empty string. For FastCtx grep, encoding applies only to files and fallback_encoding only to directories; omit both for auto-detection. After a parameter error, correct the input instead of repeating the same incompatible combination.
 - Execution observations below are unranked feedback, not tool candidates. Compare them only after tools fit the same concrete operation; keep direct and nested samples separate. Fewer than 5 completed samples is insufficient evidence, speed is secondary, and execution success does not prove task success.`;
 
 export function declaredToolStatistics(tools: ToolInfo[], activeToolNames: string[], statistics: ToolStatistic[]): ToolStatistic[] {
